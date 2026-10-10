@@ -5,6 +5,8 @@
 - Python modules compile and frontend JavaScript passes Node syntax checking.
 - Panel template tests cover Settings, Plan, History, season-control banners and
   HTML escaping. They do not verify the browser DOM or visual rendering.
+- Add Room click-handler tests cover native UUIDs, HTTP-compatible random bytes,
+  absent Web Crypto, distinct valid UUIDs, defaults and preservation of unsaved settings.
 - A synthetic 75-minute scheduling case passes, as does a cross-day bridging case.
 - SQLite volume was measured with 86,400 samples, retention and full compaction.
 - Live HA installation, HACS validation, hassfest and real-device behavior are

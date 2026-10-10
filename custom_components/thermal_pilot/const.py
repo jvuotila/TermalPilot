@@ -1,6 +1,6 @@
 """ThermalPilot constants; scheduled heating remains simulated in this release."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 DEFAULTS = {
     'price_entity': '', 'price_format': 'quarterly', 'price_unit': 'c/kWh',

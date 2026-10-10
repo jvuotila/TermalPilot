@@ -1,6 +1,17 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ThermalPilot – preview</title><body style="margin:0"><thermal-pilot-panel></thermal-pilot-panel><script>/* Native custom panel. All data is escaped; settings are validated server-side. */
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const timeLabel = value => new Date(value).toLocaleString('en-GB',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
+function roomId(){
+  const crypto=globalThis.crypto;
+  if(typeof crypto?.randomUUID==='function')return crypto.randomUUID();
+  const bytes=new Uint8Array(16);
+  if(typeof crypto?.getRandomValues==='function')crypto.getRandomValues(bytes);
+  // Room identifiers are not credentials; support browsers without Web Crypto too.
+  else for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256);
+  bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+  const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
 class ThermalPilotPanel extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;}
   set hass(value){this._hass=value;if(this.isConnected && !this.loaded && !this.loading)this.load();}
@@ -63,7 +74,7 @@ class ThermalPilotPanel extends HTMLElement {
     <header><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav>${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main>${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>`;
     this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.tab;this.loaded=false;this.load();});
     this.shadowRoot.querySelector('#toggle-active')?.addEventListener('click',async()=>{try{await this.call('save',{settings:{...this.settings,heating_enabled:!this.settings.heating_enabled}});this.settings.heating_enabled=!this.settings.heating_enabled;this.message='Activity setting saved. Effective status updates shortly.';this.render();}catch(error){this.message=error.message;this.render();}});
-    this.shadowRoot.querySelector('#add')?.addEventListener('click',()=>{this.capture();this.settings.rooms.push({...this.info.room_defaults,id:crypto.randomUUID()});this.render();});
+    this.shadowRoot.querySelector('#add')?.addEventListener('click',()=>{this.capture();this.settings.rooms.push({...this.info.room_defaults,id:roomId()});this.render();});
     this.shadowRoot.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{this.capture();this.settings.rooms.splice(Number(b.dataset.remove),1);this.render();});
     this.shadowRoot.querySelectorAll('[data-reset]').forEach(b=>b.onclick=async()=>{if(!confirm('Reset the learned parameters for this room? Observation history will be retained.'))return;try{await this.call('reset',{room_id:b.dataset.reset});this.message='Room learning reset.';}catch(e){this.message=e.message;}this.capture();this.render();});
     this.shadowRoot.querySelector('#settings')?.addEventListener('submit',async e=>{e.preventDefault();this.capture();try{await this.call('save',{settings:this.settings});this.message='Settings saved. Suggestions will update shortly.';}catch(error){this.message=error.message||String(error);}this.render();});

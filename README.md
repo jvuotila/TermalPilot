@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.1 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.2 — experimental simulation-first Home Assistant custom integration**.
 
 ThermalPilot proposes room-by-room heating schedules using electricity prices,
 weather forecasts and observed thermal response. It is designed initially for
