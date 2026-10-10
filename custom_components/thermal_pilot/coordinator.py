@@ -29,6 +29,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.forecast_updated = None
         self.forecast_entity = None
         self.forecast_type = None
+        self.forecast_error = None
         self.config_fingerprint = {}
         self.suggested_runs = {}
         self.season = {}
@@ -143,8 +144,9 @@ class PilotCoordinator(DataUpdateCoordinator):
         if not entity:
             self.forecast = []
             self.forecast_type = None
+            self.forecast_error = 'No weather forecast source is selected.'
             return []
-        if entity == self.forecast_entity and self.forecast_updated is not None and (now-self.forecast_updated).total_seconds() < 3600:
+        if entity == self.forecast_entity and self.forecast_updated is not None and (now-self.forecast_updated).total_seconds() < (3600 if self.forecast else 300):
             return self.forecast
         def usable(rows, kind):
             if not isinstance(rows, list):
@@ -153,16 +155,20 @@ class PilotCoordinator(DataUpdateCoordinator):
                     number(row.get('templow',row.get('temperature')) if kind=='daily' else row.get('temperature')) is not None]
         self.forecast = []
         self.forecast_type = None
+        errors = []
+        previous_error = self.forecast_error
         for kind in ('hourly','twice_daily','daily'):
             try:
                 result = await self.hass.services.async_call('weather', 'get_forecasts',
                     {'entity_id':entity, 'type':kind}, blocking=True, return_response=True)
-                rows = (result or {}).get(entity, {}).get('forecast', [])
-                rows = usable(rows,kind)
+                raw_rows = (result or {}).get(entity, {}).get('forecast', [])
+                rows = usable(raw_rows,kind)
                 if rows:
                     self.forecast, self.forecast_type = rows, kind
                     break
-            except Exception:
+                errors.append(f'{kind}: no usable timestamped temperature rows returned')
+            except Exception as error:
+                errors.append(f'{kind}: {type(error).__name__}: {error}')
                 _LOGGER.debug('Forecast type %s unavailable for %s',kind,entity,exc_info=True)
         if not self.forecast:
             state = self.hass.states.get(entity)
@@ -170,6 +176,9 @@ class PilotCoordinator(DataUpdateCoordinator):
             kind = 'daily' if isinstance(rows,list) and any(isinstance(row,dict) and 'templow' in row for row in rows) else 'hourly'
             self.forecast = usable(rows,kind)
             self.forecast_type = kind if self.forecast else None
+        self.forecast_error = None if self.forecast else f'{entity}: '+ '; '.join(errors)
+        if self.forecast_error and self.forecast_error != previous_error:
+            _LOGGER.warning('Weather forecast unavailable: %s', self.forecast_error)
         self.forecast_updated = now
         self.forecast_entity = entity
         return self.forecast
@@ -228,7 +237,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             warnings.append('No continuous prices from now: no heating plan is available.')
         forecasts = await self.get_forecast(now)
         if not forecasts:
-            warnings.append('No weather forecast: current outdoor temperature is held constant.')
+            warnings.append('No weather forecast: current outdoor temperature is held constant. '+(self.forecast_error or 'No usable forecast was returned.'))
         outdoors = []
         for slot in slots:
             points = []

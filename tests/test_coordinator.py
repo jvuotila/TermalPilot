@@ -85,6 +85,20 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         await self.c.check_temperature_sensors(now+timedelta(hours=22),True)
         self.assertEqual(self.c.sensor_health['last_notification_day'],'2026-01-03')
 
+    async def test_failed_forecast_reports_reason_and_retries_after_five_minutes(self):
+        self.c.settings['weather_entity']='weather.forecast_koti'
+        self.hass.services.async_call.side_effect=RuntimeError('Forecast service unavailable')
+        self.assertEqual(await self.c.get_forecast(now),[])
+        self.assertIn('weather.forecast_koti',self.c.forecast_error)
+        self.assertIn('RuntimeError: Forecast service unavailable',self.c.forecast_error)
+        self.assertEqual(self.hass.services.async_call.await_count,3)
+        await self.c.get_forecast(now+timedelta(minutes=4))
+        self.assertEqual(self.hass.services.async_call.await_count,3)
+        self.hass.services.async_call.side_effect=None
+        self.hass.services.async_call.return_value={'weather.forecast_koti':{'forecast':[{'datetime':now.isoformat(),'temperature':3.7}]}}
+        rows=await self.c.get_forecast(now+timedelta(minutes=5))
+        self.assertEqual(len(rows),1);self.assertIsNone(self.c.forecast_error)
+
     async def test_forecast_prefers_hourly_and_caches_by_source(self):
         self.c.settings['weather_entity']='weather.home'
         row={'datetime':now.isoformat(),'temperature':-10}

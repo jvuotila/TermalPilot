@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.12 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.13 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -9,6 +9,9 @@ labels share aligned input rows, and dropdown arrows are inset from the border.
 Shared settings use four equal columns and wrap additional fields onto the next
 row; narrower screens use fewer columns. Plan and History have tinted headings,
 chart surfaces and shaded tables, with subtle shadows and stronger borders.
+Room rows alternate teal and blue backgrounds. Failed forecast requests show their
+underlying errors and retry after five minutes; successful forecasts are cached
+for an hour.
 Room accordions start open and remember their state during the panel session.
 Simulation status is split into labeled blocks. Empty timing tables show a clear
 message and are separated from each other. Smaller screens retain a single-column
