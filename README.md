@@ -1,0 +1,2 @@
+# TermalPilot
+Adaptive heating planner for Home Assistant with price-aware scheduling, room-level learning, and a simulation mode.
