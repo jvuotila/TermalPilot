@@ -1,9 +1,10 @@
 # ThermalPilot
 
-Version **0.1.9 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.10 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
-wide screens, and Plan and History show two room cards per row. Wrapped setting
+wide screens, with Rooms matching the width of either shared-settings container.
+Plan and History show two room cards per row. Wrapped setting
 labels share aligned input rows, and dropdown arrows are inset from the border.
 Smaller screens retain a single-column layout.
 

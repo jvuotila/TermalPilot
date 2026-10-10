@@ -200,7 +200,6 @@ class ThermalPilotPanel extends HTMLElement {
 }
 @media(min-width:1400px){
  #settings{grid-template-columns:repeat(2,minmax(0,1fr))}
- #settings>.settings-rooms{grid-column:1/-1}
 }
 @media(max-width:600px){
  .settings-layout{padding:12px}
