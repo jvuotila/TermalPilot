@@ -1,6 +1,11 @@
 # ThermalPilot
 
-Version **0.1.8 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.9 — experimental simulation-first Home Assistant custom integration**.
+
+The panel uses a compact responsive layout: shared settings sit side by side on
+wide screens, and Plan and History show two room cards per row. Wrapped setting
+labels share aligned input rows, and dropdown arrows are inset from the border.
+Smaller screens retain a single-column layout.
 
 ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
 with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
