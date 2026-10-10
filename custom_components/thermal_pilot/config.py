@@ -15,7 +15,7 @@ SOURCE_FIELDS = [
  ('water_entity','Supply water temperature source','sensor,climate',{'kind':'water'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
- ('simulation_enabled','Enable simulation for all rooms','bool'),
+ ('simulation_enabled','Enable simulation','bool'),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
  ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),

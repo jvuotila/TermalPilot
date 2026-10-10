@@ -4,7 +4,7 @@ const timeLabel = value => new Date(value).toLocaleString('en-GB',{day:'numeric'
 const entityLabel = state => state?.attributes?.friendly_name || (state?.entity_id?.split('.').slice(1).join('.').replace(/_/g,' ')) || 'Unavailable entity';
 const sourceSettingGroups = [
   ['Electricity price settings',['price_entity','price_unit','pricing_mode']],
-  ['Weather settings',['weather_entity','outdoor_entity']],
+  ['Weather and forecast settings',['weather_entity','outdoor_entity']],
   ['Heating settings',['minimum_run_minutes','fireplace_entity','fireplace_active_state']],
   ['Integration settings',['heating_enabled','simulation_enabled']],
 ];
@@ -92,7 +92,10 @@ class ThermalPilotPanel extends HTMLElement {
       input=`<select data-field="${name}"><option value="">— Select / not used —</option>${retained}${entities.map(s=>`<option value="${escapeHTML(s.entity_id)}" ${s.entity_id===value?'selected':''}>${escapeHTML(entityLabel(s))}</option>`).join('')}</select>`;
     }
     if(key==='fireplace_reduction')input=`<span class="number-unit">${input}<span>%</span></span><small>Negative values reduce estimated heat loss while the fireplace is active; −20% means a 20% reduction.</small>`;
-    return `<label><span>${escapeHTML(label)}</span>${input}</label>`;
+    const simulationHelp='Simulation calculates heating suggestions without applying the scheduled targets to thermostats. Disabling simulation pauses suggestions; observation and learning can continue while ThermalPilot is active. Live heating schedule control is not available in this version.';
+    const helpId=`help-${prefix}-${key}`;
+    const help=key==='simulation_enabled'?` <span class="setting-help"><button type="button" class="setting-info" aria-label="About simulation" aria-describedby="${helpId}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle class="info-dot" cx="12" cy="7" r="1"/></svg></button><span id="${helpId}" class="setting-tooltip" role="tooltip">${escapeHTML(simulationHelp)}</span></span>`:'';
+    return `<label><span>${escapeHTML(label)}${help}</span>${input}</label>`;
   }
   settingsGroups(groups){
     const fields=new Map(this.info.source_fields.map(field=>[field[0],field]));
@@ -312,6 +315,14 @@ section{margin-bottom:30px}
 
 .plan-layout .observation-content>.timing-table{margin-bottom:20px}
 .observation-card td.empty-table{padding:16px;color:var(--secondary-text-color,#526671);white-space:normal;text-align:center}
+
+.setting-help{position:relative;display:inline-flex;vertical-align:middle}
+.setting-help .setting-info{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0 0 0 3px;padding:1px;border:0;border-radius:50%;background:transparent;color:var(--primary-color,#087c85);cursor:help}
+.setting-info svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+.setting-info .info-dot{fill:currentColor;stroke:none}
+.setting-info:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:2px}
+.setting-tooltip{display:none;position:absolute;left:0;bottom:calc(100% + 8px);z-index:30;width:280px;max-width:calc(100vw - 48px);padding:12px;border-radius:8px;background:var(--primary-text-color,#213547);color:var(--card-background-color,white);font-size:13px;line-height:1.45;font-weight:normal;box-shadow:0 3px 12px #0003}
+.setting-help:hover .setting-tooltip,.setting-help:focus-within .setting-tooltip{display:block}
 </style>
     <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav>${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
     this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.tab;this.loaded=false;this.load();});
