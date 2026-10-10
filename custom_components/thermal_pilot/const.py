@@ -1,6 +1,6 @@
 """ThermalPilot constants; scheduled heating remains simulated in this release."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.15'
+VERSION = '0.1.16'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7

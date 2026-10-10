@@ -26,7 +26,7 @@ SOURCE_FIELDS = [
  ('lag_hours','Estimated thermal response lag (hours)','number',.25,12),
  ('curve_warm_temp','Heating-hours curve warm outdoor temperature (°C)','number',-40,25),
  ('curve_cold_temp','Heating-hours curve cold outdoor temperature (°C)','number',-40,25),
- ('apply_season_setpoints','Apply Active/Passive season setpoints to real thermostats','bool'),
+ ('apply_season_setpoints','Apply season setpoints','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
 ]
 ROOM_FIELDS = [
