@@ -21,6 +21,7 @@ async def async_setup_entry(hass, entry):
             websocket_api.async_register_command(hass, handler)
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
+    entry.async_on_unload(coordinator.cancel_command_timer)
     await coordinator.load()
     domain[entry.entry_id] = coordinator
     await coordinator.async_config_entry_first_refresh()

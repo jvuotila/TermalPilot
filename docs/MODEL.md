@@ -3,7 +3,8 @@
 ## Initial conditions
 
 The two curve endpoints represent daily required heating hours under a room design
-temperature. They seed a loss coefficient `k = 0.007 per hour`, a full-heating gain
+temperature (taken from the room target). The outdoor endpoints, response lag
+and reference water temperature are shared across rooms. They seed a loss coefficient `k = 0.007 per hour`, a full-heating gain
 `g`, and a non-negative constant background gain `b`:
 
 ```
@@ -54,7 +55,8 @@ confidence interval; there is no claim of statistically validated predictive acc
 ## Planner
 
 The rolling horizon searches two setpoint choices: winter target plus boost, or
-winter target minus setback. Boost is capped by the user maximum. Every candidate
+winter target minus setback. Boost and setback are shared settings applied to
+every room. Boost is capped by the user maximum. Every candidate
 propagates temperature and delayed heating response.
 
 Ranking first minimizes temperature-bound violations in degree-hours, then a
@@ -80,4 +82,13 @@ configurable minimum run length. No raw quarter-hour information can be recovere
 from an already averaged hourly source.
 
 UTC timestamps are used internally, with HA local time selecting the tariff.
-Monthly fixed charges are informational and excluded from scheduling objectives.
+Monthly fixed charges are omitted because they do not change with heating schedules.
+
+## Thermostat command timing
+
+Shared offsets advance the raise/lower target commands relative to intended
+heat-delivery sessions. Adjacent heating slots are merged, and overlapping
+boosted-target intervals are combined to avoid contradictory commands.
+Thermostat-state publications at command boundaries do not rerun learning or
+operate devices. Price/temperature trajectories still model intended heat
+delivery, rather than a measured hydraulic/pump response to each command.

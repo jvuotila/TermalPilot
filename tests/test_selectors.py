@@ -13,7 +13,7 @@ class SelectorTests(unittest.TestCase):
     def test_semantic_types(self):
         for case in CASES:
             state=types.SimpleNamespace(**{key:case[key] for key in ('entity_id','state','attributes')})
-            for kind in ('temperature','power','price','target','activity'):
+            for kind in ('temperature','power','price','target','activity','relay','water'):
                 with self.subTest(entity=state.entity_id,kind=kind):
                     self.assertEqual(entity_matches(state,{'kind':kind}),kind in case['matches'])
 

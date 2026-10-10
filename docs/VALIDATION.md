@@ -1,6 +1,6 @@
 # Validation status
 
-- 44 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 54 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - HA adapter tests use minimal doubles; there is no installed HA runtime here.
 - Python modules compile and frontend JavaScript passes Node syntax checking.
 - Panel template tests cover Settings, Plan, History, season-control banners and
@@ -12,6 +12,12 @@
   setup filters and retention of existing selections are covered.
 - Alphabetical room tests cover Settings, Plan, History, stable IDs, editing
   and deletion of the correct room after sorting.
+- Shared boost/setback adapter coverage verifies all rooms receive the same
+  global adjustments even when old room-specific settings are still stored.
+- Adapter tests cover relay on/off states, thermostat fallback, climate-based
+  supply-water measurement and shared thermal parameters overriding legacy fields.
+- Offset tests cover contiguous sessions, midnight, zero and non-quarter-hour
+  offsets, exact command transitions, timer cancellation and no device writes.
 - A synthetic 75-minute scheduling case passes, as does a cross-day bridging case.
 - SQLite volume was measured with 86,400 samples, retention and full compaction.
 - Live HA installation, HACS validation, hassfest and real-device behavior are

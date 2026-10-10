@@ -6,6 +6,7 @@ slab delay; it is not a physical measurement of the slab's stored energy.
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import math
+from .const import DEFAULTS
 
 
 def number(value, default=None):
@@ -99,19 +100,21 @@ accepted solely on regular 24-hour days. Gaps stop the usable horizon.
 
 
 def curve_hours(room, outdoor):
+    room = {**DEFAULTS, **room}
     fraction = (room['curve_warm_temp']-outdoor)/(room['curve_warm_temp']-room['curve_cold_temp'])
     return room['curve_min_hours'] + max(0, min(1, fraction))*(room['curve_max_hours']-room['curve_min_hours'])
 
 
 def initial_model(room):
+    room = {**DEFAULTS, **room}
     # At the cold design point, full heating balances daily losses at curve_max_hours.
     loss = 0.007
     span = room['curve_max_hours']-room['curve_min_hours']
     if span > .1:
         gain = loss*24*(room['curve_warm_temp']-room['curve_cold_temp'])/span
-        base_gain = loss*(room['design_room_temp']-room['curve_warm_temp'])-gain*room['curve_min_hours']/24
+        base_gain = loss*(room['baseline']-room['curve_warm_temp'])-gain*room['curve_min_hours']/24
     else:
-        gain = loss*(room['design_room_temp']-room['curve_cold_temp'])*24/room['curve_max_hours']
+        gain = loss*(room['baseline']-room['curve_cold_temp'])*24/room['curve_max_hours']
         base_gain = 0.0
     base_gain = max(0.0,base_gain)
     return {'loss': loss, 'gain': gain, 'base_gain':base_gain, 'samples': 0, 'heated_hours': 0.0,
@@ -132,6 +135,7 @@ def learn(model, room, previous, current, enabled=True):
 Returns a one-step validation prediction even when learning is paused. No
 multi-day counterfactual cost savings are asserted from these observations.
 """
+    room = {**DEFAULTS, **room}
     dt = (current['time']-previous['time'])/3600
     if not 0.05 <= dt <= 0.5 or previous.get('activity') is None:
         return None
@@ -166,6 +170,41 @@ multi-day counterfactual cost savings are asserted from these observations.
     return prediction
 
 
+def thermostat_timing(rows, settings, baseline, now):
+    """Separate intended heat-delivery sessions from advance thermostat commands."""
+    sessions = []
+    for row in rows:
+        if not row['heat']:
+            continue
+        if sessions and sessions[-1]['end'] == row['start']:
+            sessions[-1]['end'] = row['end']
+        else:
+            sessions.append({'start':row['start'], 'end':row['end']})
+    windows = []
+    for session in sessions:
+        start = stamp(session['start']) - timedelta(minutes=settings['start_offset_minutes'])
+        end = stamp(session['end']) - timedelta(minutes=settings['stop_offset_minutes'])
+        if end <= start:
+            continue  # A clipped session may already be past its closing command.
+        if windows and start <= stamp(windows[-1]['end']):
+            windows[-1]['end'] = max(stamp(windows[-1]['end']),end).isoformat()
+        else:
+            windows.append({'start':start.isoformat(), 'end':end.isoformat()})
+    boosted = min(settings['maximum'],baseline+settings['boost'])
+    reduced = baseline-settings['setback']
+    commands = [command for window in windows for command in (
+        {'time':window['start'],'setpoint':boosted,'action':'raise'},
+        {'time':window['end'],'setpoint':reduced,'action':'lower'})]
+    timing = {'sessions':sessions,'thermostat_windows':windows,'commands':commands,
+              'boosted_setpoint':boosted,'reduced_setpoint':reduced}
+    return {**timing, **thermostat_state(timing,now)}
+
+
+def thermostat_state(timing, now):
+    active = any(stamp(window['start']) <= now < stamp(window['end']) for window in timing['thermostat_windows'])
+    return {'heat':active, 'setpoint':round(timing['boosted_setpoint'] if active else timing['reduced_setpoint'],2)}
+
+
 def plan(room, model, temperature, outdoor, slots, now, baseline, water_factor=1.0, fireplace=False):
     """Beam-search rolling horizon. Comfort violations dominate monetary ranking.
 
@@ -173,6 +212,7 @@ Not an exact optimizer; price cost is normalized to one kW of heating input.
 The first slot uses only its remaining duration. Terminal reserve penalizes
 ending the known-price horizon with insufficient estimated thermal reserve.
 """
+    room = {**DEFAULTS, **room}
     if not slots:
         return None
     loss, gain = model['loss'], model['gain']
@@ -225,7 +265,8 @@ ending the known-price horizon with insufficient estimated thermal reserve.
     if not rows:
         return None
     risk = best[0] > .01 or terminal(best)[0] > .01
-    return {'slots': rows, 'heat': rows[0]['heat'], 'setpoint': rows[0]['setpoint'],
+    timing = thermostat_timing(rows,room,baseline,now)
+    return {'slots': rows, 'scheduled_heat':rows[0]['heat'], **timing,
             'reason': ('Temperature limit risk: review model assumptions and heating capacity.' if risk else
                        'Heat storage or a bridging run ahead of predicted cooling.' if rows[0]['heat'] else
                        'Estimated stored heat is sufficient; no setpoint boost is suggested now.'),

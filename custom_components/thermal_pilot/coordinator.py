@@ -3,12 +3,14 @@ from datetime import timedelta
 from copy import deepcopy
 import logging
 from zoneinfo import ZoneInfo
+from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS
 from .history import HistoryDatabase
-from .model import number, stamp, initial_model, learn, price_slots, plan, collection_state
+from .model import number, stamp, initial_model, learn, price_slots, plan, collection_state, thermostat_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +30,30 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.suggested_runs = {}
         self.season = {}
         self.applied_season_targets = {}
+        self._command_timer = None
+
+    def cancel_command_timer(self):
+        if self._command_timer is not None:
+            self._command_timer()
+            self._command_timer = None
+
+    def arm_command_timer(self, data, now):
+        self.cancel_command_timer()
+        future = [stamp(command['time']) for room in data.get('rooms',{}).values()
+                  for command in (room.get('plan') or {}).get('commands',[]) if stamp(command['time']) > now]
+        if future:
+            self._command_timer = async_track_point_in_utc_time(self.hass,self.update_command_state,min(future))
+
+    @callback
+    def update_command_state(self, now):
+        """Publish offset transitions without replanning, learning or device writes."""
+        data = deepcopy(self.data or {})
+        for room in data.get('rooms',{}).values():
+            if room.get('plan'):
+                room['plan'].update(thermostat_state(room['plan'],now))
+        data['updated'] = now.isoformat()
+        self.async_set_updated_data(data)
+        self.arm_command_timer(data,now)
 
     async def load(self):
         saved = await self.store.async_load() or {}
@@ -51,10 +77,10 @@ class PilotCoordinator(DataUpdateCoordinator):
         if not room['activity_entity']:
             value = state.attributes.get('hvac_action')
             return 1.0 if value == 'heating' else 0.0 if value in ('idle','off') else None
-        value = state.attributes.get(room['activity_attribute']) if room['activity_attribute'] else state.state
+        value = state.state
         if value is None or str(value) in ('unknown','unavailable'):
             return None
-        return 1.0 if str(value) == room['active_value'] else 0.0
+        return 1.0 if value == 'on' else 0.0 if value == 'off' else None
 
     async def get_forecast(self, now):
         entity = self.settings['weather_entity']
@@ -76,6 +102,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         return self.forecast
 
     async def _async_update_data(self):
+        self.cancel_command_timer()
         now = dt_util.utcnow()
         outdoor = self.value(self.settings['outdoor_entity'])
         source = self.hass.states.get(self.settings['price_entity'])
@@ -138,19 +165,23 @@ class PilotCoordinator(DataUpdateCoordinator):
                     points.append((date, temp))
             earlier = [p for p in points if p[0] <= slot.start]
             outdoors.append(max(earlier, key=lambda p:p[0])[1] if earlier else outdoor)
-        water = self.value(self.settings['water_entity'])
+        water_state = self.hass.states.get(self.settings['water_entity']) if self.settings['water_entity'] else None
+        water = number(water_state.attributes.get('current_temperature') if self.settings['water_entity'].startswith('climate.') else water_state.state) if water_state else None
         fireplace_state = self.hass.states.get(self.settings['fireplace_entity']) if self.settings['fireplace_entity'] else None
         fireplace = bool(fireplace_state and fireplace_state.state == self.settings['fireplace_active_state'])
         readings, room_data = [], {}
-        for room in self.settings['rooms']:
+        for configured_room in self.settings['rooms']:
+            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','water_reference','boost','setback')}}
             if not room['enabled']:
                 continue
             rid = room['id']
             temperature = self.value(room['temperature_entity'])
             baseline = self.value(room['baseline_entity']) if room['baseline_entity'] else room['baseline']
+            if baseline is not None:
+                room['baseline'] = baseline
             model = self.models.setdefault(rid, initial_model(room))
             # Reset only affected model when heat source / room / activity / lag mapping changes.
-            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','activity_attribute','active_value','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','design_room_temp','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity']]
+            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity']]
             if rid in self.config_fingerprint and fingerprint != self.config_fingerprint[rid]:
                 model = self.models[rid] = initial_model(room)
                 self.previous.pop(rid, None)
@@ -182,13 +213,15 @@ class PilotCoordinator(DataUpdateCoordinator):
                 if slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':self.settings['terminal_reserve_hours'],
+                        'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
+                        'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
                         'previous_suggested_heat':run.get('heat',False),
                         'previous_run_hours':max(0,(now.timestamp()-run.get('since',now.timestamp()))/3600)}
                     result['plan'] = await self.hass.async_add_executor_job(plan, settings, deepcopy(model),
                         temperature, outdoors, slots, now, baseline, water_factor, fireplace)
                 if result['plan']:
-                    heat = result['plan']['heat']
+                    heat = result['plan']['scheduled_heat']
                     old = self.suggested_runs.get(rid,{})
                     self.suggested_runs[rid] = {'heat':heat,'since':old.get('since',now.timestamp()) if old.get('heat')==heat else now.timestamp()}
                 result['model'] = deepcopy(model)
@@ -215,9 +248,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                                            'applied_season_targets':self.applied_season_targets,'fingerprints':self.config_fingerprint}, 20)
         archives = await self.hass.async_add_executor_job(self.history_db.summaries)
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
-        return {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
+        data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 'power':self.value(self.settings['power_entity']),
                 'rooms':room_data}
+        self.arm_command_timer(data,now)
+        return data
 
     async def apply_season_targets(self, heating_active):
         errors = []

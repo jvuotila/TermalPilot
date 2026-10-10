@@ -13,8 +13,6 @@ SOURCE_FIELDS = [
  ('minimum_run_minutes','Minimum flexible heating run, minutes','number',15,360),
  ('prices_include_vat','Source prices include VAT','bool'),
  ('vat_percent','VAT to add to untaxed source prices, %','number',0,100),
- ('transfer_monthly_fee','Grid standing charge, EUR/month (does not affect scheduling)','number',0,1000),
- ('energy_monthly_fee','Electricity standing charge, EUR/month (does not affect scheduling)','number',0,1000),
  ('prices_include_transfer','Source lists include grid charges','bool'),
  ('transfer_day','Day grid tariff including electricity tax, ct/kWh','number',0,100),
  ('transfer_night','Night grid tariff including electricity tax, ct/kWh','number',0,100),
@@ -24,21 +22,29 @@ SOURCE_FIELDS = [
  ('weather_entity','Weather forecast source','weather'),
  ('forecast_type','Forecast type','select:hourly,daily'),
  ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
- ('water_entity','Supply water temperature (optional)','sensor',{'kind':'temperature'}),
+ ('water_entity','Supply water temperature source (optional)','sensor,climate',{'kind':'water'}),
  ('power_entity','Heating electrical power W/kW (optional)','sensor',{'kind':'power'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('learning_enabled','Enable learning','bool'),
  ('horizon_hours','Maximum planning horizon, hours','number',6,72),
  ('terminal_reserve_hours','Reserve beyond known prices, hours','number',0,12),
- ('summer_setpoint','Shared summer thermostat setpoint, C','number',5,25),
+ ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
+ ('boost','Heating setpoint boost (°C)','number',0,5),
+ ('setback','Idle setpoint reduction (°C)','number',0,5),
+ ('start_offset_minutes','Raise thermostat before heating starts, minutes','number',0,30),
+ ('stop_offset_minutes','Lower thermostat before heating stops, minutes','number',0,30),
+ ('lag_hours','Estimated thermal response lag, hours','number',.25,12),
+ ('curve_warm_temp','Heating-hours curve warm outdoor temperature (°C)','number',-40,25),
+ ('curve_cold_temp','Heating-hours curve cold outdoor temperature (°C)','number',-40,25),
+ ('water_reference','Reference supply water temperature (°C)','number',20,55),
  ('apply_season_setpoints','Apply Active/Passive season setpoints to real thermostats','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
  ('activation_entity','Existing heating-enabled helper (optional)','input_boolean,binary_sensor,switch'),
  ('activation_active_state','Helper state that permits operation','text'),
  ('collection_mode','Collection mode: follow activity / outdoor season / always / paused','select:manual,automatic,always,paused'),
- ('season_start_temperature','Start heating-season collection below, C','number',-20,25),
- ('season_stop_temperature','Stop heating-season collection above, C','number',-20,30),
+ ('season_start_temperature','Start heating-season collection below (°C)','number',-20,25),
+ ('season_stop_temperature','Stop heating-season collection above (°C)','number',-20,30),
  ('season_smoothing_hours','Outdoor temperature smoothing, hours','number',1,72),
  ('season_archive_enabled','Compact observations at heating-season end','bool'),
  ('archive_keep_days','Recent raw observations retained after compaction, days','number',0,30),
@@ -47,22 +53,13 @@ SOURCE_FIELDS = [
 ROOM_FIELDS = [
  ('name','Room name','text'), ('thermostat','Thermostat','climate'),
  ('temperature_entity','Room temperature sensor','sensor',{'kind':'temperature'}),
- ('activity_entity','Actual heating activity sensor (optional)','sensor,binary_sensor,switch',{'kind':'activity'}),
- ('activity_attribute','Activity attribute (empty = entity state)','text'),
- ('active_value','Active value (e.g. on or heating)','text'),
+ ('activity_entity','Thermostat relay (optional)','binary_sensor,switch',{'kind':'relay'}),
  ('baseline_entity','Heating-season target helper (optional)','input_number,number,sensor',{'kind':'target'}),
- ('baseline','Heating-season target temperature, C','number',5,30),
- ('minimum','Minimum allowed temperature, C','number',5,30),
- ('maximum','Maximum allowed temperature, C','number',5,35),
- ('boost','Heating setpoint boost, C','number',0,5),
- ('setback','Idle setpoint reduction, C','number',0,5),
- ('lag_hours','Estimated thermal response lag, hours','number',.25,12),
- ('curve_warm_temp','Heating-hours curve warm outdoor temperature, C','number',-40,25),
- ('curve_cold_temp','Heating-hours curve cold outdoor temperature, C','number',-40,25),
- ('curve_min_hours','Curve minimum heating hours','number',.5,24),
- ('curve_max_hours','Curve maximum heating hours','number',.5,24),
- ('design_room_temp','Curve design room temperature, C','number',5,30),
- ('water_reference','Reference supply water temperature, C','number',20,55),
+ ('baseline','Target temperature (°C)','number',5,30),
+ ('minimum','Minimum allowed temperature (°C)','number',5,30),
+ ('maximum','Maximum allowed temperature (°C)','number',5,35),
+ ('curve_min_hours','Initial minimum heating hours','number',.5,24),
+ ('curve_max_hours','Initial maximum heating hours','number',.5,24),
  ('fireplace_reduction','Estimated fireplace heat-loss offset, %','number',0,80),
  ('enabled','Enable room simulation','bool'),
 ]
@@ -76,6 +73,10 @@ def entity_matches(state, rule, settings=None):
     device_class = attrs.get('device_class')
     unit = str(attrs.get('unit_of_measurement') or '').strip().lower()
     temperature = device_class == 'temperature' or (not device_class and unit in ('°c', '°f', 'c', 'f', 'k', '°k'))
+    if kind == 'relay':
+        return domain in ('binary_sensor', 'switch')
+    if kind == 'water':
+        return (domain == 'climate' and 'current_temperature' in attrs) or (domain == 'sensor' and temperature)
     if kind == 'temperature':
         return temperature
     if kind == 'power':
@@ -87,6 +88,8 @@ def entity_matches(state, rule, settings=None):
     if kind == 'activity':
         if domain in ('binary_sensor', 'switch'):
             return True
+        if domain != 'sensor':
+            return False
         attribute = (settings or {}).get('activity_attribute')
         if attribute and attribute in attrs:
             return True
@@ -137,10 +140,12 @@ def validate(payload, hass=None):
                     if hass is not None and hass.states.get(value) is None:
                         raise ValueError(f'{label}: entity {value} was not found.')
     check(result, SOURCE_FIELDS)
-    for key in ('day_start','day_end','horizon_hours','history_days','minimum_run_minutes','archive_keep_days'):
+    for key in ('day_start','day_end','horizon_hours','history_days','minimum_run_minutes','archive_keep_days','start_offset_minutes','stop_offset_minutes'):
         if result[key] != int(result[key]):
             raise ValueError(f'{key}: use an integer.')
         result[key] = int(result[key])
+    if result['curve_cold_temp'] >= result['curve_warm_temp']:
+        raise ValueError('Cold curve temperature must be below warm curve temperature.')
     if result['season_start_temperature'] >= result['season_stop_temperature']:
         raise ValueError('Collection start temperature must be below stop temperature.')
     if result['minimum_run_minutes'] % 15:
@@ -171,7 +176,7 @@ def validate(payload, hass=None):
         ids.add(room['id']); thermostats.add(room['thermostat'])
         if not room['minimum'] <= room['baseline'] <= room['maximum']:
             raise ValueError(f"{room['name']}: normal temperature must be within the allowed temperature range.")
-        if room['curve_cold_temp'] >= room['curve_warm_temp'] or room['curve_min_hours'] > room['curve_max_hours']:
+        if room['curve_min_hours'] > room['curve_max_hours']:
             raise ValueError(f"{room['name']}: check the heating-hours curve limits.")
         rooms.append(room)
     result['rooms'] = rooms

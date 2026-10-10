@@ -8,7 +8,8 @@
     },
     "matches": [
       "temperature",
-      "target"
+      "target",
+      "water"
     ]
   },
   {
@@ -19,7 +20,8 @@
     },
     "matches": [
       "temperature",
-      "target"
+      "target",
+      "water"
     ]
   },
   {
@@ -128,7 +130,8 @@
     },
     "matches": [
       "temperature",
-      "target"
+      "target",
+      "water"
     ]
   },
   {
@@ -173,7 +176,8 @@
     "state": "on",
     "attributes": {},
     "matches": [
-      "activity"
+      "activity",
+      "relay"
     ]
   },
   {
@@ -181,7 +185,27 @@
     "state": "off",
     "attributes": {},
     "matches": [
-      "activity"
+      "activity",
+      "relay"
     ]
+  },
+  {
+    "entity_id": "climate.panasonic_heat_pump_main_z1_temp",
+    "state": "heat",
+    "attributes": {
+      "current_temperature": 28,
+      "temperature": 35
+    },
+    "matches": [
+      "water"
+    ]
+  },
+  {
+    "entity_id": "climate.no_measurement",
+    "state": "heat",
+    "attributes": {
+      "temperature": 35
+    },
+    "matches": []
   }
 ]

@@ -34,4 +34,5 @@ class PilotHeating(CoordinatorEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self):
         p = self._plan or {}
-        return {'simulation_only':True, 'reason':p.get('reason'), 'comfort_risk':p.get('comfort_risk')}
+        return {'simulation_only':True, 'reason':p.get('reason'), 'comfort_risk':p.get('comfort_risk'),
+                'scheduled_heat':p.get('scheduled_heat'), 'thermostat_commands':p.get('commands',[])}

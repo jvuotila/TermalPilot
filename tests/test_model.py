@@ -56,7 +56,7 @@ class PriceTests(unittest.TestCase):
 
 class PlannerTests(unittest.TestCase):
     def room(self, **kw):
-        return {**ROOM_DEFAULTS,'minimum':19,'maximum':23,'minimum_run_minutes':60,'terminal_reserve_hours':2,**kw}
+        return {**ROOM_DEFAULTS,'boost':DEFAULTS['boost'],'setback':DEFAULTS['setback'],'minimum':19,'maximum':23,'minimum_run_minutes':60,'terminal_reserve_hours':2,**kw}
     def slots(self, prices, minutes=60):
         return [Slot(NOW+timedelta(minutes=i*minutes),NOW+timedelta(minutes=(i+1)*minutes),p) for i,p in enumerate(prices)]
     def test_cross_day_gap_requires_bridge_heating(self):
@@ -124,7 +124,7 @@ if __name__=='__main__':unittest.main()
 
 class FlexibleRunExampleTests(unittest.TestCase):
     def test_can_choose_75_minute_run(self):
-        room={**ROOM_DEFAULTS,'lag_hours':.5,'minimum_run_minutes':60,'terminal_reserve_hours':3}
+        room={**ROOM_DEFAULTS,'boost':DEFAULTS['boost'],'setback':DEFAULTS['setback'],'lag_hours':.5,'minimum_run_minutes':60,'terminal_reserve_hours':3}
         model={**initial_model(room),'gain':1.0,'loss':.02,'base_gain':0}
         slots=[Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),1 if i<5 else 40) for i in range(32)]
         result=plan(room,model,19.1,[-10]*32,slots,NOW,20)

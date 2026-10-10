@@ -47,7 +47,7 @@ console.log('Add Room click tests passed (native UUID, HTTP-compatible crypto, n
 const cases=JSON.parse(fs.readFileSync(path.join(__dirname,'entity_selector_cases.json'),'utf8'));
 const matches=vm.runInContext('entityMatches',context);
 for(const item of cases){
-  for(const kind of ['temperature','power','price','target','activity'])assert.equal(matches(item,{kind}),item.matches.includes(kind),`${item.entity_id}: ${kind}`);
+  for(const kind of ['temperature','power','price','target','activity','relay','water'])assert.equal(matches(item,{kind}),item.matches.includes(kind),`${item.entity_id}: ${kind}`);
 }
 const filterPanel=new Component();filterPanel._hass={states:Object.fromEntries(cases.map(item=>[item.entity_id,item]))};
 for(const [key,domain,kind,expected] of [
@@ -55,6 +55,7 @@ for(const [key,domain,kind,expected] of [
   ['power_entity','sensor','power',['sensor.power','sensor.power_template']],
   ['price_entity','sensor','price',['sensor.price','sensor.price_legacy']],
   ['baseline_entity','input_number,number,sensor','target',['input_number.target','number.target','sensor.room','sensor.template','sensor.temperature_state']],
+  ['water_entity','sensor,climate','water',['sensor.room','sensor.template','sensor.temperature_state','climate.panasonic_heat_pump_main_z1_temp']],
   ['activity_entity','sensor,binary_sensor,switch','activity',['sensor.state','sensor.custom_state','sensor.digital','binary_sensor.heat','switch.valve']],
 ]){
  const html=filterPanel.field([key,key,domain,{kind}],{[key]:''},'source');
@@ -70,6 +71,8 @@ const sortedPanel=new Component();sortedPanel._hass={states:{}};sortedPanel.tab=
 sortedPanel.settings={rooms:[{id:'z',name:'Zulu'},{id:'b',name:'beta'},{id:'a',name:'Alpha'},{id:'new',name:''}]};
 sortedPanel.info={source_fields:[],room_fields:[['name','Room name','text']],room_defaults:{},data:{rooms:{z:{name:'Zulu'},b:{name:'beta'},a:{name:'Alpha'}}}};
 const settingsHTML=sortedPanel.settingsView();
+assert.doesNotMatch(settingsHTML,/<details[^>]*\bopen\b/);
+assert.equal((settingsHTML.match(/<details>/g)||[]).length,4);
 assert.ok(settingsHTML.indexOf('<summary>Alpha')<settingsHTML.indexOf('<summary>beta'));
 assert.ok(settingsHTML.indexOf('<summary>beta')<settingsHTML.indexOf('<summary>Zulu'));
 assert.ok(settingsHTML.indexOf('<summary>Zulu')<settingsHTML.indexOf('<summary>New room'));
@@ -87,3 +90,41 @@ sortedPanel.render();removalButtons.find(b=>b.dataset.remove==='2').onclick();
 assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','new']);
 assert.equal(sortedPanel.settings.rooms[0].name,'Zulu edited');
 console.log('Alphabetical room tests passed (Settings, Plan, History, stable IDs, editing and removal).');
+
+const namePanel=new Component();namePanel._hass={states:{
+ 'sensor.bedroom_temperature':{entity_id:'sensor.bedroom_temperature',attributes:{device_class:'temperature',friendly_name:'Bedroom temperature'}},
+ 'sensor.other':{entity_id:'sensor.other',attributes:{device_class:'temperature',friendly_name:'Bedroom temperature'}},
+ 'sensor.humidity':{entity_id:'sensor.humidity',attributes:{device_class:'humidity',friendly_name:'Bedroom humidity'}},
+}};
+const friendlyHTML=namePanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.bedroom_temperature'},'room0');
+assert.match(friendlyHTML,/<option value="sensor.bedroom_temperature" selected>Bedroom temperature<\/option>/);
+assert.match(friendlyHTML,/<option value="sensor.other" >Bedroom temperature<\/option>/);
+const visibleLabels=[...friendlyHTML.matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map(m=>m[1]);
+assert.ok(visibleLabels.every(label=>!label.includes('sensor.')&&!label.includes(' · ')));
+const retainedName=namePanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.humidity'},'room0');
+assert.match(retainedName,/>Bedroom humidity \(does not match filter\)<\/option>/);
+console.log('Friendly-name selector tests passed (selected names, distinct IDs for duplicate names, retained names).');
+
+const groupedPanel=new Component();groupedPanel._hass={states:{}};
+groupedPanel.settings={boost:1.5,setback:1,lag_hours:3,water_reference:32,price_entity:'',rooms:[]};
+groupedPanel.info={source_fields:[['price_entity','Price','sensor',{kind:'price'}],['boost','Boost','number',0,5],['setback','Reduction','number',0,5],['lag_hours','Lag','number',.25,12],['water_reference','Reference','number',20,55]],room_fields:[]};
+const groupedHTML=groupedPanel.settingsView();
+const sharedSection=groupedHTML.match(/<section><h2>Shared room settings<\/h2>[\s\S]*?<\/section>/)[0];
+for(const key of ['boost','setback','lag_hours','water_reference']){
+ assert.match(sharedSection,new RegExp(`data-field="source.${key}"`));
+ assert.equal(groupedHTML.split(`data-field="source.${key}"`).length-1,1);
+}
+assert.ok(!sharedSection.includes('source.price_entity'));
+console.log('Shared-room section tests passed (global controls grouped once, source fields separate).');
+
+const preview=fs.readFileSync(path.join(__dirname,'../PREVIEW.html'),'utf8');
+const previewInfo=JSON.parse(preview.match(/const demo=([\s\S]*?);const states=/)[1]);
+const previewPanel=new Component();previewPanel._hass={states:{}};previewPanel.settings=previewInfo.settings;previewPanel.info=previewInfo;
+const previewSettings=previewPanel.settingsView();
+assert.match(previewSettings,/Shared room settings/);
+assert.match(previewSettings,/source.start_offset_minutes/);assert.match(previewSettings,/source.stop_offset_minutes/);
+assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute|room\d+\.active_value|room\d+\.design_room_temp/i);
+for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
+assert.match(previewSettings,/Target temperature \(°C\)/);
+const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
+console.log('Version 0.1.4 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
