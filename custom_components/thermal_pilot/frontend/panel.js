@@ -3,7 +3,7 @@ const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&am
 const timeLabel = value => new Date(value).toLocaleString('en-GB',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
 const entityLabel = state => state?.attributes?.friendly_name || (state?.entity_id?.split('.').slice(1).join('.').replace(/_/g,' ')) || 'Unavailable entity';
 const sourceSettingGroups = [
-  ['Electricity price settings',['price_entity','price_format','price_unit','pricing_mode']],
+  ['Electricity price settings',['price_entity','price_unit','pricing_mode']],
   ['Weather settings',['weather_entity','outdoor_entity']],
   ['Heating settings',['minimum_run_minutes','fireplace_entity','fireplace_active_state']],
   ['Integration settings',['heating_enabled','simulation_enabled']],
@@ -61,7 +61,7 @@ function compareRoomNames(a,b){
   return first.localeCompare(second,undefined,{sensitivity:'base',numeric:true});
 }
 class ThermalPilotPanel extends HTMLElement {
-  constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;}
+  constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;this.roomDisclosureState=new Map();}
   set hass(value){this._hass=value;for(const card of this.historyCards||[])card.hass=value;if(this.isConnected && !this.loaded && !this.loading)this.load();}
   set panel(value){this._panel=value;if(this.isConnected && this._hass && !this.loaded)this.load();}
   connectedCallback(){if(this._hass)this.load();this.timer=setInterval(()=>{if(this.tab!=='settings')this.load();},60000);}
@@ -129,15 +129,24 @@ class ThermalPilotPanel extends HTMLElement {
     const label=alternate?'Measured temperature':'Predicted temperature under the suggested plan';
     return `<div class="chart-legend"><span><i style="background:#1976d2"></i>${label}</span>${alternate?'<span><i style="background:#e49025"></i>Model prediction using actual heating</span>':''}</div><div class="temperature-chart"><svg viewBox="0 0 800 195" role="img" aria-label="${label}${alternate?' and model prediction using actual heating':''}">${grid}${ticks.join('')}<polyline points="${points(key)}" fill="none" stroke="#1976d2" stroke-width="3"/>${alternate?`<polyline points="${points(alternate)}" fill="none" stroke="#e49025" stroke-width="2" stroke-dasharray="6 4"/>`:''}</svg></div><small>${escapeHTML(timeLabel(first*1000))} – ${escapeHTML(timeLabel(last*1000))}</small>`;
   }
+  roomDisclosureOpen(id){return this.roomDisclosureState.get(`${this.tab}:${id}`)!==false;}
   overview(){
     const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));
-    return `<section class="status-card"><h2>Simulation status</h2><button id="toggle-active" class="primary">${this.settings.heating_enabled?'Set passive':'Set active'}</button><p>Effective operation: <strong>${data.heating_active===false?'Passive':'Active'}</strong>. Active enables observation and learning; Passive stops them.</p><p>Stored samples: ${data.history_info?.rows??0} · local database ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</p><p>Collection: <strong>${data.collection?.collecting?'Active':'Paused'}</strong></p><p>Updated ${escapeHTML(data.updated?timeLabel(data.updated):'—')} · outdoors ${escapeHTML(data.outdoor)} °C · supply water ${escapeHTML(data.water??'—')} °C</p>${(data.warnings||[]).map(w=>`<p class="warning">${escapeHTML(w)}</p>`).join('')}</section>${!rooms.length?'<section>Add rooms on the Settings page.</section>':''}
-    <div class="observation-cards">${rooms.map(([id,r])=>{const p=r.plan,m=r.model||{};return `<section class="observation-card"><h2>${escapeHTML(r.name)} <small>${p?(p.heat?'Boosted thermostat target':'Reduced thermostat target'):'No suggestion'}</small></h2><div class="metrics"><div>Measured<strong>${escapeHTML(r.temperature??'—')} °C</strong></div><div>Suggested thermostat target<strong>${escapeHTML(p?.setpoint??'—')} °C</strong></div><div>Actual heating<strong>${heatingLabel(r.actual_activity)}</strong></div><div>Short-term prediction error<strong>${m.mae==null?'—':m.mae.toFixed(3)+' °C'}</strong></div></div><p>${escapeHTML(r.error||p?.reason||'Waiting for data.')}</p><p>${escapeHTML(r.learning_note)} · samples ${m.samples||0} · heating ${(m.heated_hours||0).toFixed(1)} h / idle ${(m.idle_hours||0).toFixed(1)} h</p>
-    ${p?`<h3>Thermostat timing</h3><p>Target changes include the shared start/stop offsets. The temperature forecast models the planned heating period; actual valve and heat-pump delays must be checked against observations.</p><div class="scroll"><table><thead><tr><th>Planned heating starts</th><th>Planned heating ends</th></tr></thead><tbody>${(p.sessions||[]).map(s=>`<tr><td>${escapeHTML(timeLabel(s.start))}</td><td>${escapeHTML(timeLabel(s.end))}</td></tr>`).join('')}</tbody></table><table><thead><tr><th>Change target at</th><th>Action</th><th>Target (°C)</th></tr></thead><tbody>${(p.commands||[]).map(c=>`<tr><td>${escapeHTML(timeLabel(c.time))}</td><td>${c.action==='raise'?'Raise':'Lower'}</td><td>${c.setpoint}</td></tr>`).join('')}</tbody></table></div>${this.chart(p.slots,'temperature')}<p>Blue: predicted temperature under the proposed plan. This outcome has not been observed.</p><div class="scroll"><table><thead><tr><th>Starts</th><th>Price ct/kWh</th><th>Suggestion</th><th>Setpoint °C</th><th>Prediction °C</th></tr></thead><tbody>${p.slots.map(s=>`<tr class="${s.heat?'heat':''}"><td>${escapeHTML(timeLabel(s.start))}</td><td>${s.price.toFixed(2)}</td><td>${s.heat?'Store heat':'Idle'}</td><td>${s.setpoint}</td><td>${s.temperature.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;}).join('')}</div>`;
+    return `<section class="status-card"><div class="status-heading"><h2>Simulation status</h2><button id="toggle-active" class="primary">${this.settings.heating_enabled?'Set passive':'Set active'}</button></div>
+    <dl class="status-grid">
+      <div class="status-block"><dt>Operation</dt><dd><span class="status-pill ${data.heating_active===false?'paused':'active'}">${data.heating_active===false?'Passive':'Active'}</span></dd><small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
+      <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span></dd><small>Room observations for learning.</small></div>
+      <div class="status-block"><dt>Stored history</dt><dd>${escapeHTML(Number(data.history_info?.rows??0).toLocaleString())}<span class="status-unit"> samples</span></dd><small>Local database: ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</small></div>
+      <div class="status-block"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd><small>Current outdoor reading.</small></div>
+      <div class="status-block"><dt>Supply water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd><small>Measured heating-water temperature.</small></div>
+      <div class="status-block"><dt>Last update</dt><dd class="status-time">${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><small>Latest calculation and observation.</small></div>
+    </dl>${(data.warnings||[]).map(w=>`<p class="warning">${escapeHTML(w)}</p>`).join('')}</section>${!rooms.length?'<section>Add rooms on the Settings page.</section>':''}
+    <div class="observation-cards">${rooms.map(([id,r])=>{const p=r.plan,m=r.model||{};return `<section class="observation-card"><details class="observation-accordion" data-room-accordion="${escapeHTML(id)}" ${this.roomDisclosureOpen(id)?'open':''}><summary><h2>${escapeHTML(r.name)} <small>${p?(p.heat?'Boosted thermostat target':'Reduced thermostat target'):'No suggestion'}</small></h2></summary><div class="observation-content"><div class="metrics"><div>Measured<strong>${escapeHTML(r.temperature??'—')} °C</strong></div><div>Suggested thermostat target<strong>${escapeHTML(p?.setpoint??'—')} °C</strong></div><div>Actual heating<strong>${heatingLabel(r.actual_activity)}</strong></div><div>Short-term prediction error<strong>${m.mae==null?'—':m.mae.toFixed(3)+' °C'}</strong></div></div><p>${escapeHTML(r.error||p?.reason||'Waiting for data.')}</p><p>${escapeHTML(r.learning_note)} · samples ${m.samples||0} · heating ${(m.heated_hours||0).toFixed(1)} h / idle ${(m.idle_hours||0).toFixed(1)} h</p>
+    ${p?`<h3>Thermostat timing</h3><p>Target changes include the shared start/stop offsets. The temperature forecast models the planned heating period; actual valve and heat-pump delays must be checked against observations.</p><div class="scroll timing-table"><table><thead><tr><th>Planned heating starts</th><th>Planned heating ends</th></tr></thead><tbody>${(p.sessions||[]).map(s=>`<tr><td>${escapeHTML(timeLabel(s.start))}</td><td>${escapeHTML(timeLabel(s.end))}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="2">No heating sessions planned.</td></tr>'}</tbody></table></div><div class="scroll timing-table"><table><thead><tr><th>Change target at</th><th>Action</th><th>Target (°C)</th></tr></thead><tbody>${(p.commands||[]).map(c=>`<tr><td>${escapeHTML(timeLabel(c.time))}</td><td>${c.action==='raise'?'Raise':'Lower'}</td><td>${c.setpoint}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="3">No thermostat target changes planned.</td></tr>'}</tbody></table></div>${this.chart(p.slots,'temperature')}<p>Blue: predicted temperature under the proposed plan. This outcome has not been observed.</p><div class="scroll"><table><thead><tr><th>Starts</th><th>Price ct/kWh</th><th>Suggestion</th><th>Setpoint °C</th><th>Prediction °C</th></tr></thead><tbody>${p.slots.map(s=>`<tr class="${s.heat?'heat':''}"><td>${escapeHTML(timeLabel(s.start))}</td><td>${s.price.toFixed(2)}</td><td>${s.heat?'Store heat':'Idle'}</td><td>${s.setpoint}</td><td>${s.temperature.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`:''}</div></details></section>`;}).join('')}</div>`;
   }
   historyView(){
     return `<div class="history-summary"><section><h2>Observations and suggestions</h2><label>Period<select id="history-hours">${[24,48,168,720].map(h=>`<option value="${h}" ${h===this.historyHours?'selected':''}>${h} hours</option>`).join('')}</select></label><p>Each chart compares measured room temperature with the model’s prediction using observed heating demand. It does not show the simulated outcome of ThermalPilot’s suggested schedule. Suggested On means a boosted thermostat target; actual On means the observed relay or thermostat is requesting heat. These can differ.</p></section>
-    <section><h2>Season archives</h2><p>Learned parameters and season aggregates are retained when old observations are compacted.</p>${(this.info.data?.season_summaries||[]).map(a=>`<p>${escapeHTML(a.season)} · ${escapeHTML(this.settings.rooms.find(r=>r.id===a.room_id)?.name||a.room_id)} · ${a.statistics?.samples||0} observations · loss ${(a.model?.loss||0).toFixed(4)} · heating gain ${(a.model?.gain||0).toFixed(3)}</p>`).join('')||'<p>No completed heating season yet.</p>'}</section></div><div class="observation-cards">${[...this.settings.rooms].sort(compareRoomNames).map(room=>{const rows=(this.history||[]).filter(r=>r.room_id===room.id);const recent=quarterHourObservations(rows).slice(-288);return `<section class="observation-card"><h2>${escapeHTML(room.name)}</h2><h3>Suggested heating and relay history</h3><div data-room-history="${escapeHTML(room.id)}"><p>Loading Home Assistant history…</p></div><p>Suggested On means the boosted target window, including valve timing offsets. Relay On means observed demand; it does not guarantee heat flow.</p>${this.chart(rows,'temperature','prediction')}<div class="scroll"><table><thead><tr><th>15-minute interval</th><th>Suggested heating window</th><th>Actual thermostat demand</th><th>Measured temperature (°C)</th><th>Suggested thermostat target (°C)</th></tr></thead><tbody>${recent.reverse().map(r=>`<tr><td title="Latest observation: ${escapeHTML(timeLabel(r.time*1000))}">${escapeHTML(timeLabel(r.interval_start*1000))}</td><td>${heatingLabel(r.suggested_heat)}</td><td>${heatingLabel(r.activity)}</td><td>${r.temperature}</td><td>${r.suggested_setpoint??'—'}</td></tr>`).join('')}</tbody></table></div><p>Each row shows the latest observation within its 15-minute interval, not an average. Suggested thermostat target is the setting ThermalPilot would apply, not a room-temperature forecast. Table shows up to 288 intervals. Original observations remain stored internally. Short chart views use 15-minute time labels; longer views use wider intervals.</p></section>`;}).join('')}</div>`;
+    <section><h2>Season archives</h2><p>Learned parameters and season aggregates are retained when old observations are compacted.</p>${(this.info.data?.season_summaries||[]).map(a=>`<p>${escapeHTML(a.season)} · ${escapeHTML(this.settings.rooms.find(r=>r.id===a.room_id)?.name||a.room_id)} · ${a.statistics?.samples||0} observations · loss ${(a.model?.loss||0).toFixed(4)} · heating gain ${(a.model?.gain||0).toFixed(3)}</p>`).join('')||'<p>No completed heating season yet.</p>'}</section></div><div class="observation-cards">${[...this.settings.rooms].sort(compareRoomNames).map(room=>{const rows=(this.history||[]).filter(r=>r.room_id===room.id);const recent=quarterHourObservations(rows).slice(-288);return `<section class="observation-card"><details class="observation-accordion" data-room-accordion="${escapeHTML(room.id)}" ${this.roomDisclosureOpen(room.id)?'open':''}><summary><h2>${escapeHTML(room.name)}</h2></summary><div class="observation-content"><h3>Suggested heating and relay history</h3><div data-room-history="${escapeHTML(room.id)}"><p>Loading Home Assistant history…</p></div><p>Suggested On means the boosted target window, including valve timing offsets. Relay On means observed demand; it does not guarantee heat flow.</p>${this.chart(rows,'temperature','prediction')}<div class="scroll"><table><thead><tr><th>15-minute interval</th><th>Suggested heating window</th><th>Actual thermostat demand</th><th>Measured temperature (°C)</th><th>Suggested thermostat target (°C)</th></tr></thead><tbody>${recent.reverse().map(r=>`<tr><td title="Latest observation: ${escapeHTML(timeLabel(r.time*1000))}">${escapeHTML(timeLabel(r.interval_start*1000))}</td><td>${heatingLabel(r.suggested_heat)}</td><td>${heatingLabel(r.activity)}</td><td>${r.temperature}</td><td>${r.suggested_setpoint??'—'}</td></tr>`).join('')}</tbody></table></div><p>Each row shows the latest observation within its 15-minute interval, not an average. Suggested thermostat target is the setting ThermalPilot would apply, not a room-temperature forecast. Table shows up to 288 intervals. Original observations remain stored internally. Short chart views use 15-minute time labels; longer views use wider intervals.</p></div></details></section>`;}).join('')}</div>`;
   }
   historyGraphConfig(room){
     const mapping=this.info.room_entities?.[room.id]||{};
@@ -184,7 +193,7 @@ class ThermalPilotPanel extends HTMLElement {
 #settings .settings-group{margin-top:16px}
 #settings .settings-group+.settings-group{padding-top:12px}
 #settings .settings-group h3{margin:0 0 12px}
-#settings .grid{grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px 16px}
+#settings .grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px}
 #settings .grid>label{min-width:0}
 #settings .grid>label>span:first-child{min-height:2.5em;line-height:1.25}
 #settings input,#settings select{min-width:0;max-width:100%;padding:8px 10px}
@@ -201,8 +210,10 @@ class ThermalPilotPanel extends HTMLElement {
 @media(min-width:1400px){
  #settings{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+@media(max-width:1000px){#settings .settings-group>.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){
  .settings-layout{padding:12px}
+ #settings .settings-group>.grid{grid-template-columns:minmax(0,1fr)}
  #settings>section{padding:16px}
  #settings .room-fields{grid-template-columns:minmax(0,1fr)}
 }
@@ -234,8 +245,75 @@ select{appearance:none;-webkit-appearance:none;padding-right:36px;background-ima
  .page-layout{padding:12px}
  .observation-cards>section,.history-summary>section,.status-card{padding:16px}
 }
+
+/* History has distinct surfaces for room headings, charts and observations. */
+.history-layout .history-summary>section:first-child{background:linear-gradient(#2196f312,#2196f312),var(--card-background-color,white)}
+.history-layout .history-summary>section:last-child{background:linear-gradient(#e4902512,#e4902512),var(--card-background-color,white)}
+.observation-layout .observation-card{background:linear-gradient(#00857709,#00857709),var(--card-background-color,white);box-shadow:0 2px 8px #00000008}
+.observation-layout .observation-card .observation-accordion>summary{padding:12px 14px;border-left:4px solid var(--primary-color,#087c85);border-radius:8px;background:linear-gradient(#00857718,#00857718),var(--card-background-color,white)}
+.observation-layout .observation-card>h3{color:var(--secondary-text-color,#526671)}
+.history-layout [data-room-history],.observation-layout .temperature-chart{padding:12px;border:1px solid var(--divider-color,#dce4e8);border-radius:10px;background:var(--card-background-color,white)}
+.history-layout [data-room-history]{--ha-card-background:var(--card-background-color,white);--ha-card-border-width:0px;--ha-card-box-shadow:none}
+.observation-layout .chart-legend{padding:10px 12px;border-radius:8px;background:linear-gradient(#2196f30c,#2196f30c),var(--card-background-color,white)}
+.observation-layout .observation-card .observation-content>.scroll{margin-top:12px;border:1px solid var(--divider-color,#dce4e8);border-radius:10px;background:var(--card-background-color,white)}
+.observation-layout th{position:sticky;top:0;z-index:1;background:linear-gradient(#00857720,#00857720),var(--card-background-color,white);padding:10px}
+.observation-layout tbody tr:nth-child(even){background:#0085770a}
+.observation-layout tbody tr:hover{background:#2196f314}
+.observation-layout tbody tr:last-child td{border-bottom:0}
+.observation-layout .observation-card .observation-content>p{color:var(--secondary-text-color,#526671);font-size:14px}
+
+.plan-layout .status-card{background:linear-gradient(#2196f312,#2196f312),var(--card-background-color,white)}
+.plan-layout .metrics>div{padding:12px 14px;border:1px solid var(--divider-color,#dce4e8);border-radius:10px;background:var(--card-background-color,white)}
+.plan-layout .metrics>div:nth-child(2){background:linear-gradient(#00857712,#00857712),var(--card-background-color,white)}
+.plan-layout .metrics>div:nth-child(4){background:linear-gradient(#e4902512,#e4902512),var(--card-background-color,white)}
+.plan-layout .metrics strong{color:var(--primary-text-color,#213547)}
+.plan-layout .observation-card tbody tr.heat{background:#00857720}
+
+/* A gentle elevation separates cards and their inset content surfaces. */
+section,.room-card,.plan-layout .metrics>div,.observation-layout .temperature-chart,.history-layout [data-room-history],.observation-layout .observation-card .observation-content>.scroll{box-shadow:0 2px 6px #0000000a,0 1px 2px #00000008}
+
+/* Stronger outlines keep container boundaries visible in light and dark themes. */
+section,.room-card,.plan-layout .metrics>div,.observation-layout .temperature-chart,.history-layout [data-room-history],.observation-layout .observation-card .observation-content>.scroll{border-color:#91a5ad}
+@supports(color:color-mix(in srgb,white,black)){
+ section,.room-card,.plan-layout .metrics>div,.observation-layout .temperature-chart,.history-layout [data-room-history],.observation-layout .observation-card .observation-content>.scroll{border-color:color-mix(in srgb,var(--primary-text-color,#213547) 34%,var(--card-background-color,white))}
+}
+
+/* Increase spacing between containers without spreading out individual fields. */
+section{margin-bottom:30px}
+#settings,.observation-cards,.history-summary{gap:24px}
+.history-summary,.status-card{margin-bottom:24px}
+#settings .room-cards{gap:24px;margin:24px 0}
+
+.observation-accordion{border:0;padding:0}
+.observation-accordion>summary{display:flex;align-items:center;gap:10px;list-style:none;margin:0}
+.observation-accordion>summary::-webkit-details-marker{display:none}
+.observation-accordion>summary::before{content:"▸";font-size:18px;transform:rotate(0);flex:none}
+.observation-accordion[open]>summary::before{transform:rotate(90deg)}
+.observation-card .observation-accordion>summary h2{flex:1;min-width:0;margin:0;font-size:21px}
+.observation-accordion>summary:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:3px}
+.observation-content{padding-top:16px;min-width:0}
+
+.status-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.status-heading h2{margin:0}
+.status-heading button{margin:0}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:0}
+.status-block{min-width:0;padding:14px;border:1px solid #91a5ad;border-radius:10px;background:var(--card-background-color,white);box-shadow:0 2px 6px #0000000a,0 1px 2px #00000008}
+.status-block dt{font-size:14px;color:var(--secondary-text-color,#526671);margin-bottom:10px}
+.status-block dd{margin:0 0 8px;font-size:24px;font-weight:650;overflow-wrap:anywhere}
+.status-block small{font-size:13px;line-height:1.4;color:var(--secondary-text-color,#526671)}
+.status-unit{font-size:14px;font-weight:normal}
+.status-block .status-time{font-size:20px}
+.status-pill{display:inline-flex;padding:5px 10px;border-radius:7px;font-size:16px;background:var(--secondary-background-color,#eef2f4)}
+.status-pill.active{background:#00857720;color:var(--primary-text-color,#213547);border-left:3px solid #087c85}
+.status-pill.paused{background:#e4902520;color:var(--primary-text-color,#213547);border-left:3px solid #b77918}
+@supports(color:color-mix(in srgb,white,black)){.status-block{border-color:color-mix(in srgb,var(--primary-text-color,#213547) 34%,var(--card-background-color,white))}}
+@media(max-width:600px){.status-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.status-block{padding:12px}.status-block dd{font-size:21px}}
+@media(max-width:380px){.status-grid{grid-template-columns:minmax(0,1fr)}}
+
+.plan-layout .observation-content>.timing-table{margin-bottom:20px}
+.observation-card td.empty-table{padding:16px;color:var(--secondary-text-color,#526671);white-space:normal;text-align:center}
 </style>
-    <header class="page-layout ${this.tab==='settings'?'settings-layout':''}"><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav>${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main class="page-layout ${this.tab==='settings'?'settings-layout':''}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
+    <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav>${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
     this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.tab;this.loaded=false;this.load();});
     this.shadowRoot.querySelector('#toggle-active')?.addEventListener('click',async()=>{try{await this.call('save',{settings:{...this.settings,heating_enabled:!this.settings.heating_enabled}});this.settings.heating_enabled=!this.settings.heating_enabled;this.message='Activity setting saved. Effective status updates shortly.';this.render();}catch(error){this.message=error.message;this.render();}});
     this.shadowRoot.querySelector('#add')?.addEventListener('click',()=>{this.message='';this.capture();this.settings.rooms.push({...this.info.room_defaults,id:roomId()});this.render();});
@@ -265,6 +343,8 @@ select{appearance:none;-webkit-appearance:none;padding-right:36px;background-ima
       catch(error){this.message=`Settings were not saved: ${error.message||String(error)}`;}
       finally{this.saving=false;this.render();}
     });
+    const disclosureTab=this.tab;
+    this.shadowRoot.querySelectorAll('[data-room-accordion]').forEach(details=>details.addEventListener('toggle',()=>{this.roomDisclosureState.set(`${disclosureTab}:${details.dataset.roomAccordion}`,details.open);}));
     if(this.tab==='history')this.mountHistoryGraphs();
     this.shadowRoot.querySelector('#history-hours')?.addEventListener('change',e=>{this.historyHours=Number(e.target.value);this.load();});
   }

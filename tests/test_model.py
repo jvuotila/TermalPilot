@@ -23,6 +23,23 @@ class PriceTests(unittest.TestCase):
         prices=[1,2,3,4]*24
         slots=price_slots({'today':prices},self.config(pricing_mode='hourly'),NOW,UTC)
         self.assertEqual(len(slots),24);self.assertEqual(slots[0].price,2.5)
+    def test_hourly_lists_detected_without_setting(self):
+        for legacy in ('hourly', 'quarterly'):
+            slots=price_slots({'today':list(range(24))},self.config(price_format=legacy),NOW,UTC)
+            self.assertEqual(len(slots),96)
+            self.assertEqual([slot.price for slot in slots[:5]],[0,0,0,0,1])
+    def test_resolution_detected_independently_for_each_day(self):
+        slots=price_slots({'today':[10]*24,'tomorrow':[20]*96},self.config(),NOW,UTC)
+        self.assertEqual(len(slots),192)
+        self.assertEqual(slots[95].price,10);self.assertEqual(slots[96].price,20)
+    def test_incomplete_or_unsupported_lists_rejected(self):
+        for count in (23,25,48,94,95,97):
+            with self.subTest(count=count),self.assertRaisesRegex(ValueError,'24 hourly or 96 quarter-hour'):
+                price_slots({'today':[10]*count},self.config(),NOW,UTC)
+    def test_timestamped_prices_preferred_over_plain_list(self):
+        raw=[{'start':NOW.isoformat(),'end':(NOW+timedelta(hours=1)).isoformat(),'value':7}]
+        slots=price_slots({'raw_today':raw,'today':[100]*94},self.config(),NOW,UTC)
+        self.assertEqual(len(slots),4);self.assertEqual(slots[0].price,7)
     def test_final_quarter_prices_are_not_marked_up(self):
         slots=price_slots({'today':[10]*96},self.config(pricing_mode='flexible',prices_include_transfer=False,margin=.456),NOW,UTC)
         self.assertAlmostEqual(slots[0].price,10)

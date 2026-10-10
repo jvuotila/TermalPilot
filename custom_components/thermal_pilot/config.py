@@ -7,7 +7,6 @@ from .model import number
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
  ('price_entity','Price sensor with additional costs','sensor',{'kind':'price'}),
- ('price_format','Source list resolution','select:hourly,quarterly'),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
  ('pricing_mode','Scheduling mode','select:hourly,quarterly,flexible'),
  ('minimum_run_minutes','Minimum flexible heating run, minutes','number',15,360,15),

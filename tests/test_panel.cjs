@@ -45,6 +45,19 @@ assert.doesNotMatch(readableHistory,/>Idle<|>Inactive<|>Heating</);
 const chartWithLargePrediction=historyPanel.chart([{time:hour,temperature:20,prediction:25}],'temperature','prediction');
 assert.match(chartWithLargePrediction,/25.1 °C/);assert.match(chartWithLargePrediction,/stroke-dasharray/);
 console.log('Readable history tests passed (quarter-hour latest observations, legends, On/Off/Unknown, scale includes both lines).');
+
+const accordionPanel=new Component();accordionPanel.settings={rooms:[{id:'room-a',name:'Study'}],heating_enabled:true};
+accordionPanel.info={data:{rooms:{'room-a':{name:'Study'}}}};accordionPanel.tab='overview';
+assert.match(accordionPanel.overview(),/data-room-accordion="room-a" open/);
+accordionPanel.roomDisclosureState.set('overview:room-a',false);
+assert.doesNotMatch(accordionPanel.overview(),/data-room-accordion="room-a" open/);
+accordionPanel.tab='history';assert.match(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+accordionPanel.roomDisclosureState.set('history:room-a',false);
+assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+accordionPanel.roomDisclosureState.set('history:room-a',true);
+assert.match(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+console.log('Room accordion tests passed (open by default, remembered independently on Plan and History).');
+
 (async()=>{
  let ToastPanel,nextTimer=0;const timers=new Map(),callbacks=[];
  const toastContext={...context,customElements:{get:()=>undefined,define:(_,value)=>ToastPanel=value},
@@ -231,4 +244,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.10 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.11 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

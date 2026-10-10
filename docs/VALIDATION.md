@@ -1,9 +1,11 @@
 # Validation status
 
-- 65 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 69 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
+- Price tests cover automatic interval detection, independent daily resolutions,
+  legacy setting independence, incomplete lists and timestamped-source preference.
 - Forecast tests cover automatic hourly/twice-daily/daily selection and caching.
 - Native history-card tests cover registered entity names, selected relays, selected
   periods and the full History link. Embedded cards require Home Assistant dashboard
@@ -14,6 +16,8 @@
 - Python modules compile and frontend JavaScript passes Node syntax checking.
 - History tests cover quarter-hour selection, legends, On/Off/Unknown states,
   and temperature-axis bounds including both measured and predicted values.
+- Panel tests cover open-by-default room accordions and independently remembered
+  Plan/History disclosure states.
 - Panel tests cover save feedback, five-second notifications, repeated saves,
   cancelled/confirmed room actions, and global simulation controls.
 - Python tests cover Active/Passive collection and negative fireplace compensation

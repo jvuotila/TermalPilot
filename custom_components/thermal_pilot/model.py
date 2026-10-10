@@ -36,7 +36,8 @@ def price_slots(attributes, config, now, tz):
     """Normalize timestamped prices to elapsed UTC hours; reject ambiguous lists.
 
 Raw arrays are preferred and handle 23/25-hour days. List-only sources are
-accepted solely on regular 24-hour days. Gaps stop the usable horizon.
+accepted solely on regular 24-hour days, with their interval detected from
+    24 or 96 entries per day. Gaps stop the usable horizon.
 """
     factor = 100.0 if config['price_unit'] == '€/kWh' else 1.0
     raw = []
@@ -53,7 +54,6 @@ accepted solely on regular 24-hour days. Gaps stop the usable horizon.
                 raise ValueError('Invalid price or timestamp in source list.')
             segments.append((start.astimezone(timezone.utc), end.astimezone(timezone.utc), value * factor))
     else:
-        step = 15 if config['price_format'] == 'quarterly' else 60
         for offset, key in enumerate(('today', 'tomorrow')):
             values = attributes.get(key) or []
             if not values:
@@ -64,8 +64,9 @@ accepted solely on regular 24-hour days. Gaps stop the usable horizon.
             start, end = local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
             if (end-start).total_seconds() != 86400:
                 raise ValueError('DST transition days require timestamped raw_today/raw_tomorrow data.')
-            if len(values) != 24 * 60 // step:
-                raise ValueError(f'{key}: price count does not match the selected source resolution.')
+            if not isinstance(values, (list, tuple)) or len(values) not in (24, 96):
+                raise ValueError(f'{key}: expected 24 hourly or 96 quarter-hour prices for a complete day.')
+            step = 60 if len(values) == 24 else 15
             for i, value in enumerate(values):
                 value = number(value)
                 if value is None:

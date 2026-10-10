@@ -1,12 +1,18 @@
 # ThermalPilot
 
-Version **0.1.10 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.11 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
 Plan and History show two room cards per row. Wrapped setting
 labels share aligned input rows, and dropdown arrows are inset from the border.
-Smaller screens retain a single-column layout.
+Shared settings use four equal columns and wrap additional fields onto the next
+row; narrower screens use fewer columns. Plan and History have tinted headings,
+chart surfaces and shaded tables, with subtle shadows and stronger borders.
+Room accordions start open and remember their state during the panel session.
+Simulation status is split into labeled blocks. Empty timing tables show a clear
+message and are separated from each other. Smaller screens retain a single-column
+room-card layout.
 
 ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
 with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
@@ -28,6 +34,8 @@ service per configuration entry. This classification follows the
 - A dedicated **ThermalPilot** sidebar panel with **Plan**, **History**
   and **Settings** pages, in English.
 - Room names, thermostats, temperature sensors and actual heating-activity sources.
+- Automatic detection of source price intervals: timestamped rows are preferred;
+  plain lists use 24 hourly or 96 quarter-hour prices per regular day.
 - Internal hourly averaging of quarter-hour prices.
 - Hourly, quarter-hour and flexible-run planning. Flexible runs start/end on
   quarter-hour boundaries and have a configurable minimum length, default 60 minutes.
