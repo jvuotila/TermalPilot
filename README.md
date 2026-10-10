@@ -1,6 +1,11 @@
 # ThermalPilot
 
-Version **0.1.5 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.6 — experimental simulation-first Home Assistant custom integration**.
+
+ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
+with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
+interested, but I cannot promise that it will be useful or suitable for other users
+or heating systems.
 
 ThermalPilot proposes room-by-room heating schedules using electricity prices,
 weather forecasts and observed thermal response. It is designed initially for
@@ -30,8 +35,8 @@ service per configuration entry. This classification follows the
 - Conservative online adaptation using actual heating activity and temperature changes.
 - Five-minute SQLite observation history, CSV export, native HA suggested-heating
   binary sensors and suggested-setpoint/forecast/error sensors.
-- An Active/Passive master switch and optional existing activation helper.
-- Optional outdoor-season collection gating, full-season accumulators, compact
+- One Active/Passive master switch for planning, collection and learning.
+- Active/Passive collection, full-season accumulators, compact
   season archives and retained learned parameters for the following season.
 - A **shared summer setpoint**, default 10 C, and optional actual season setpoint
   application. Scheduled heating decisions always remain simulated in version 0.1.
@@ -47,10 +52,18 @@ estimates are internal model seeds. Each room has a target temperature; minimum
 and maximum allowed temperatures are shared across the house. Learning collects
 valid observations automatically while active collection is enabled.
 
+A shared **Enable simulation for all rooms** toggle controls suggested plans for
+every room. Disabling it does not enable live heating schedules. Observation and
+learning continue while ThermalPilot is Active.
+
 Room settings use two columns of collapsible cards, with two columns of fields
 inside each card on wider screens. Boolean settings use keyboard-accessible toggles.
 Trash and learning-reset icons require confirmation. Editing clears the preceding
-save message; successful saves show a fresh timestamp.
+save message; successful saves show a fresh timestamp in a bottom notification that disappears
+after five seconds. Settings sections use distinct subtle background colors.
+Fireplace heating compensation uses -100% to 0%; -20% reduces estimated heat
+loss by 20% while the fireplace is active. Existing positive compensation
+values are converted when loading settings to preserve their effect.
 
 ## Entity selection
 
@@ -89,8 +102,8 @@ Your existing heating automation continues controlling the building.
 The optional **Apply Active/Passive season setpoints to real thermostats** setting
 has a narrow physical effect:
 
-- Effective Passive: set enabled rooms' thermostats to the shared summer setpoint.
-- Effective Active: set each enabled room's thermostat to its configured target temperature.
+- Effective Passive: set configured rooms' thermostats to the shared summer setpoint.
+- Effective Active: set each room's thermostat to its configured target temperature.
 - Commands are issued on a target/mode change, not repeatedly to overwrite an
   existing automation's heating boost. Failed commands are retried and reported.
 - Thermostat on/off mode is not changed. The pump is never commanded.
@@ -176,8 +189,6 @@ flexible quarter-hour planning. Source prices must be numeric lists or timestamp
 | Outdoor sensor | `sensor.outdoor_lowest_temperature` |
 | Forecast source | `weather.forecast_koti` |
 | Forecast type | hourly if supported; otherwise daily |
-| Activation helper | `input_boolean.heating_nordpool_control`, active value `on` |
-| Collection mode | manual (follows effective Active/Passive) |
 | Shared summer setpoint | 10 C |
 | Actual season setpoint application | disabled for the first shadow trial |
 
@@ -204,21 +215,16 @@ water-reference assumptions reset that room's live learned coefficients.
 The integration exposes a native HA switch, **ThermalPilot active**.
 The same setting can be changed from Plan or Settings.
 
-If an activation helper is configured, both the master switch and helper must
-permit operation. This fits an existing winter/summer automation: setting
-`input_boolean.heating_nordpool_control` off makes ThermalPilot passive.
-Changing thermostat temperatures to 10 C alone is not used as an implicit mode
-signal; connect the existing explicit helper instead.
+Use ThermalPilot's own Active/Passive switch to start or end the heating season.
 
 Passive mode stops planning, collection and learning. It preserves learned models
 and, when enabled, archives the ending season. On reactivation, existing learned
 coefficients remain the starting point; transient slab response is reinitialized.
 
-Optional `automatic` collection uses an exponentially smoothed outdoor temperature
-with start/stop hysteresis, initially 8/12 C and 24 hours. It only gates collection
-and learning; the master Active/Passive setting gates the entire function.
-`always` collects whenever the master/helper permits; `paused` stops collection
-but allows a shadow plan. Unknown outdoor temperature prevents usable learning.
+Collection and learning automatically follow Active/Passive. Missing outdoor
+temperature prevents valid observations; there are no automatic season thresholds
+or external activation helpers. The planning reserve is an internal six-hour
+default, and compaction retains seven days of recent raw observations.
 
 ## Data and season compaction
 

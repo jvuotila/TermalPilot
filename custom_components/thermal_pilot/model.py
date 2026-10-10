@@ -212,7 +212,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
         return None
     loss, gain = model['loss'], model['gain']
     if fireplace:
-        loss *= 1 - room['fireplace_reduction']/100
+        loss *= 1 + room['fireplace_reduction']/100
     # violation-degree-hours, objective, temperature, response, last_on, path
     minimum_run = room.get('minimum_run_minutes',60)/60
     last_on = room.get('previous_suggested_heat',False)
@@ -270,21 +270,9 @@ ending the known-price horizon with insufficient estimated thermal reserve.
 
 
 def collection_state(previous, outdoor, timestamp, config):
-    """Seasonal collection gate with exponential smoothing and hysteresis."""
+    """Collection follows the master switch and requires a valid outdoor reading."""
     state = dict(previous or {})
-    old_time, average = state.get('time'), state.get('average')
-    if outdoor is not None:
-        if average is None or old_time is None or timestamp-old_time > 12*3600:
-            average = outdoor
-        else:
-            alpha = 1-math.exp(-max(0,timestamp-old_time)/(3600*config['season_smoothing_hours']))
-            average += alpha*(outdoor-average)
-        active = state.get('active', average <= config['season_start_temperature'])
-        if average <= config['season_start_temperature']:
-            active = True
-        elif average >= config['season_stop_temperature']:
-            active = False
-        state.update(time=timestamp,average=average,active=active)
-    mode = config['collection_mode']
-    state['collecting'] = bool(outdoor is not None and (mode in ('manual','always') or mode=='automatic' and state.get('active',False)))
+    state.pop('average', None)
+    state.update(time=timestamp, active=bool(config['heating_enabled']),
+                 collecting=bool(config['heating_enabled'] and outdoor is not None))
     return state

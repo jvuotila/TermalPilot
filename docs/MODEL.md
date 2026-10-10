@@ -34,7 +34,8 @@ is not equivalent to forcibly disabling a heating circuit.
 
 The optional water factor scales gain relative to the difference between supply
 water and room temperature, bounded 0.25–2. Fireplace compensation temporarily
-reduces effective losses in planning; fireplace observations do not train the model.
+reduces effective losses in planning: compensation ranges from -100% to 0%,
+where -20% multiplies estimated loss by 0.8. Fireplace observations do not train the model.
 
 The lag is configured, not identified. The delayed response is a proxy for stored
 heat and cannot identify slab energy uniquely from room temperature alone.

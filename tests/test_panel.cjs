@@ -5,10 +5,26 @@ class Element {
   attachShadow(){this.shadowRoot={innerHTML:'',querySelectorAll:()=>[],querySelector:()=>null};}
 }
 const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(name,value)=>{Component=value;}},
-  structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout,confirm:()=>true};
+  structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout,clearTimeout,confirm:()=>true};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
 const panel=new Component();
+(async()=>{
+ let ToastPanel,nextTimer=0;const timers=new Map(),callbacks=[];
+ const toastContext={...context,customElements:{get:()=>undefined,define:(_,value)=>ToastPanel=value},
+  setTimeout:(callback,delay)=>{assert.equal(delay,5000);callbacks.push(callback);timers.set(++nextTimer,callback);return nextTimer;},clearTimeout:id=>timers.delete(id)};
+ vm.createContext(toastContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),toastContext);
+ const toastPanel=new ToastPanel();toastPanel._hass={states:{}};toastPanel.settings={rooms:[]};toastPanel.info={source_fields:[],room_fields:[]};toastPanel.tab='settings';
+ const handlers={},form={addEventListener:(name,handler)=>handlers[name]=handler,querySelector:()=>null,querySelectorAll:()=>[]};let removed=0;
+ toastPanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:selector==='.save-toast'?{remove:()=>removed++}:null;
+ toastPanel.call=async()=>{};toastPanel.render();await handlers.submit({preventDefault(){}});
+ assert.match(toastPanel.shadowRoot.innerHTML,/<div class="message save-toast" role="status"/);
+ assert.match(toastPanel.shadowRoot.innerHTML,/position:fixed;bottom:/);
+ assert.equal(timers.size,1);
+ await handlers.submit({preventDefault(){}});assert.equal(timers.size,1);
+ const timer=[...timers.values()][0];timer();assert.equal(toastPanel.message,'');assert.equal(removed,1);
+ console.log('Save notification tests passed (bottom overlay, five-second dismissal, replacement on repeat save).');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 // Saving feedback must describe the current attempt, including repeated saves and failure.
 (async()=>{
  const savePanel=new Component();savePanel._hass={states:{}};
@@ -150,7 +166,7 @@ const groupedPanel=new Component();groupedPanel._hass={states:{}};
 groupedPanel.settings={boost:1.5,setback:1,lag_hours:3,water_reference:32,price_entity:'',rooms:[]};
 groupedPanel.info={source_fields:[['price_entity','Price','sensor',{kind:'price'}],['boost','Boost','number',0,5],['setback','Reduction','number',0,5],['lag_hours','Lag','number',.25,12],['water_reference','Reference','number',20,55]],room_fields:[]};
 const groupedHTML=groupedPanel.settingsView();
-const sharedSection=groupedHTML.match(/<section><h2>Shared room settings<\/h2>[\s\S]*?<\/section>/)[0];
+const sharedSection=groupedHTML.match(/<section class="settings-shared"><h2>Shared room settings<\/h2>[\s\S]*?<\/section>/)[0];
 for(const key of ['boost','setback','lag_hours','water_reference']){
  assert.match(sharedSection,new RegExp(`data-field="source.${key}"`));
  assert.equal(groupedHTML.split(`data-field="source.${key}"`).length-1,1);
@@ -168,4 +184,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.5 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.6 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

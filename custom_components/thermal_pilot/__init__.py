@@ -8,7 +8,7 @@ from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import callback
 from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS
-from .config import validate, SOURCE_FIELDS, ROOM_FIELDS
+from .config import validate, stored_settings, SOURCE_FIELDS, ROOM_FIELDS
 from .coordinator import PilotCoordinator
 
 
@@ -36,7 +36,7 @@ async def async_setup_entry(hass, entry):
 
 async def _options_updated(hass, entry):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    coordinator.settings = {**DEFAULTS, **entry.data, **entry.options}
+    coordinator.settings = stored_settings(entry.data, entry.options)
     await coordinator.async_request_refresh()
     # Re-create entities when rooms change; entities derive stable IDs from room UUIDs.
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

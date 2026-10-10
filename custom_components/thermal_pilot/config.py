@@ -18,7 +18,7 @@ SOURCE_FIELDS = [
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('horizon_hours','Maximum planning horizon, hours','number',6,72),
- ('terminal_reserve_hours','Reserve beyond known prices, hours','number',0,12),
+ ('simulation_enabled','Enable simulation for all rooms','bool'),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
  ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),
@@ -32,14 +32,7 @@ SOURCE_FIELDS = [
  ('water_reference','Reference supply water temperature (°C)','number',20,55),
  ('apply_season_setpoints','Apply Active/Passive season setpoints to real thermostats','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
- ('activation_entity','Existing heating-enabled helper (optional)','input_boolean,binary_sensor,switch'),
- ('activation_active_state','Helper state that permits operation','text'),
- ('collection_mode','Collection mode: follow activity / outdoor season / always / paused','select:manual,automatic,always,paused'),
- ('season_start_temperature','Start heating-season collection below (°C)','number',-20,25),
- ('season_stop_temperature','Stop heating-season collection above (°C)','number',-20,30),
- ('season_smoothing_hours','Outdoor temperature smoothing, hours','number',1,72),
  ('season_archive_enabled','Compact observations at heating-season end','bool'),
- ('archive_keep_days','Recent raw observations retained after compaction, days','number',0,30),
  ('history_days','Local history retention, days','number',1,90),
 ]
 ROOM_FIELDS = [
@@ -47,8 +40,7 @@ ROOM_FIELDS = [
  ('temperature_entity','Room temperature sensor','sensor',{'kind':'temperature'}),
  ('activity_entity','Thermostat relay (optional)','switch',{'kind':'relay'}),
  ('baseline','Target temperature (°C)','number',5,30,0.1),
- ('fireplace_reduction','Estimated fireplace heat-loss offset, %','number',0,80),
- ('enabled','Enable room simulation','bool'),
+ ('fireplace_reduction','Fireplace heating compensation','number',-100,0,1),
 ]
 
 
@@ -97,6 +89,17 @@ def setup_selector_config(hass, key):
         if not entity_matches(state, rule)]}
 
 
+def stored_settings(data, options):
+    """Convert legacy positive fireplace reductions when loading stored entries."""
+    merged = {**DEFAULTS, **data, **options}
+    settings = deepcopy({key:merged[key] for key in DEFAULTS})
+    for room in settings['rooms']:
+        value = number(room.get('fireplace_reduction'))
+        if value is not None and value > 0:
+            room['fireplace_reduction'] = -min(100, value)
+    return settings
+
+
 def validate(payload, hass=None):
     if not isinstance(payload, dict):
         raise ValueError('Settings must be an object.')
@@ -129,14 +132,12 @@ def validate(payload, hass=None):
     check(result, SOURCE_FIELDS)
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
-    for key in ('horizon_hours','history_days','minimum_run_minutes','archive_keep_days','start_offset_minutes','stop_offset_minutes'):
+    for key in ('horizon_hours','history_days','minimum_run_minutes','start_offset_minutes','stop_offset_minutes'):
         if result[key] != int(result[key]):
             raise ValueError(f'{key}: use an integer.')
         result[key] = int(result[key])
     if result['curve_cold_temp'] >= result['curve_warm_temp']:
         raise ValueError('Cold curve temperature must be below warm curve temperature.')
-    if result['season_start_temperature'] >= result['season_stop_temperature']:
-        raise ValueError('Collection start temperature must be below stop temperature.')
     if result['minimum_run_minutes'] % 15:
         raise ValueError('Minimum heating run must be a multiple of 15 minutes.')
     if not result['price_entity'] or not result['outdoor_entity']:

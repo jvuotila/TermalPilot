@@ -8,8 +8,9 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
-from .const import DOMAIN, DEFAULTS
+from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS
 from .history import HistoryDatabase
+from .config import stored_settings
 from .model import number, stamp, initial_model, learn, price_slots, plan, collection_state, thermostat_state
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class PilotCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(minutes=5))
         self.entry = entry
-        self.settings = {**deepcopy(DEFAULTS), **entry.data, **entry.options}
+        self.settings = stored_settings(entry.data, entry.options)
         self.store = Store(hass, 1, f'{DOMAIN}.{entry.entry_id}')
         self.models = {}
         self.history_db = HistoryDatabase(hass.config.path('.storage', f'{DOMAIN}.{entry.entry_id}.sqlite3'))
@@ -106,8 +107,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         now = dt_util.utcnow()
         outdoor = self.value(self.settings['outdoor_entity'])
         source = self.hass.states.get(self.settings['price_entity'])
-        activation_state = self.hass.states.get(self.settings['activation_entity']) if self.settings['activation_entity'] else None
-        heating_active = self.settings['heating_enabled'] and (not self.settings['activation_entity'] or activation_state is not None and activation_state.state == self.settings['activation_active_state'])
+        heating_active = self.settings['heating_enabled']
         setpoint_errors = await self.apply_season_targets(heating_active)
         previous_season = dict(self.season)
         self.season = collection_state(self.season,outdoor,now.timestamp(),self.settings)
@@ -119,8 +119,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         if self.season['collecting'] and not previous_season.get('collecting'):
             season_id = f'{year}-{year+1}'
         self.season['season_id'] = season_id or f'{year}-{year+1}'
-        if self.settings['season_archive_enabled'] and (previous_season.get('heating_active') and not heating_active or self.settings['collection_mode']=='automatic' and previous_season.get('active') and not self.season.get('active')):
-            keep_since = now.timestamp()-self.settings['archive_keep_days']*86400
+        if self.settings['season_archive_enabled'] and (previous_season.get('heating_active') and not heating_active):
+            keep_since = now.timestamp()-ARCHIVE_KEEP_DAYS*86400
             await self.hass.async_add_executor_job(self.history_db.compact_season,
                 previous_season.get('season_id',self.season['season_id']), deepcopy(self.models),deepcopy(self.config_fingerprint),keep_since)
             self.season['last_compaction'] = now.isoformat()
@@ -138,8 +138,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}
         warnings = list(setpoint_errors)
+        if not self.settings['simulation_enabled']:
+            self.suggested_runs.clear()
+            warnings.append('Simulation is paused for all rooms. Observation and learning follow Active/Passive; live heating schedules are not enabled.')
         if not self.season['collecting']:
-            warnings.append('History collection and learning paused by seasonal settings. Existing model parameters are retained.')
+            warnings.append('History collection and learning paused because outdoor temperature is unavailable. Existing model parameters are retained.')
         slots = []
         if source is None or source.state in ('unknown','unavailable'):
             warnings.append('Price sensor is missing or unavailable.')
@@ -172,8 +175,6 @@ class PilotCoordinator(DataUpdateCoordinator):
         readings, room_data = [], {}
         for configured_room in self.settings['rooms']:
             room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','water_reference','boost','setback','minimum','maximum')}}
-            if not room['enabled']:
-                continue
             rid = room['id']
             temperature = self.value(room['temperature_entity'])
             baseline = room['baseline']
@@ -210,9 +211,9 @@ class PilotCoordinator(DataUpdateCoordinator):
                     self.previous[rid] = current
                 else:
                     self.previous.pop(rid,None)
-                if slots and all(t is not None for t in outdoors):
+                if self.settings['simulation_enabled'] and slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
-                    settings = {**room, 'terminal_reserve_hours':self.settings['terminal_reserve_hours'],
+                    settings = {**room, 'terminal_reserve_hours':RESERVE_HOURS,
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
@@ -231,7 +232,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None})
             if not self.season['collecting']:
-                result['learning_note'] = 'Learning paused outside the collection season.'
+                result['learning_note'] = 'Learning paused while collection is inactive.'
             elif activity is None:
                 result['learning_note'] = 'No observed heating activity: learning is waiting.'
             elif model['heated_hours'] < 12 or model['idle_hours'] < 12:
@@ -258,8 +259,6 @@ class PilotCoordinator(DataUpdateCoordinator):
             self.applied_season_targets.clear()
             return errors
         for room in self.settings['rooms']:
-            if not room['enabled']:
-                continue
             target = room['baseline'] if heating_active else self.settings['summer_setpoint']
             state = self.hass.states.get(room['thermostat'])
             if target is None or state is None or state.state in ('unknown','unavailable'):

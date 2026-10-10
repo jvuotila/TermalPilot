@@ -5,7 +5,7 @@ pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setde
 from thermal_pilot.history import HistoryDatabase
 from thermal_pilot.model import collection_state, initial_model
 from thermal_pilot.const import DEFAULTS as BASE_DEFAULTS,ROOM_DEFAULTS
-DEFAULTS={**BASE_DEFAULTS,"collection_mode":"automatic"}
+DEFAULTS=BASE_DEFAULTS
 
 
 class HistoryTests(unittest.TestCase):
@@ -38,26 +38,17 @@ class HistoryTests(unittest.TestCase):
 
 
 class SeasonTests(unittest.TestCase):
-    def test_warm_start_does_not_collect(self):
-        self.assertFalse(collection_state({},18,0,DEFAULTS)['collecting'])
-    def test_hysteresis(self):
-        s=collection_state({},7,0,DEFAULTS)
-        self.assertTrue(s['collecting'])
-        s=collection_state(s,10,13*3600,DEFAULTS)
-        self.assertTrue(s['collecting'])
-        s=collection_state(s,13,26*3600,DEFAULTS)
-        self.assertFalse(s['collecting'])
-        s=collection_state(s,10,39*3600,DEFAULTS)
-        self.assertFalse(s['collecting'])
-    def test_brief_warm_spell_does_not_stop(self):
-        s=collection_state({},7,0,DEFAULTS)
-        s=collection_state(s,18,300,DEFAULTS)
-        self.assertTrue(s['collecting'])
-    def test_force_and_pause(self):
-        self.assertTrue(collection_state({},25,0,{**DEFAULTS,'collection_mode':'always'})['collecting'])
-        self.assertFalse(collection_state({},-15,0,{**DEFAULTS,'collection_mode':'paused'})['collecting'])
-    def test_manual_mode_collects_in_warm_weather(self):
-        self.assertTrue(collection_state({},25,0,{**DEFAULTS,'collection_mode':'manual'})['collecting'])
-    def test_missing_outdoor_pauses(self):
+    def test_active_collects_in_warm_weather(self):
+        self.assertTrue(collection_state({},25,0,DEFAULTS)['collecting'])
+    def test_passive_does_not_collect_in_cold_weather(self):
+        self.assertFalse(collection_state({},-20,0,{**DEFAULTS,'heating_enabled':False})['collecting'])
+    def test_weather_does_not_change_manual_activity(self):
         s=collection_state({},-10,0,DEFAULTS)
-        self.assertFalse(collection_state(s,None,300,DEFAULTS)['collecting'])
+        s=collection_state(s,25,300,DEFAULTS)
+        self.assertTrue(s['collecting'])
+    def test_legacy_pause_mode_is_ignored(self):
+        self.assertTrue(collection_state({},10,0,{**DEFAULTS,'collection_mode':'paused'})['collecting'])
+    def test_missing_outdoor_pauses(self):
+        self.assertFalse(collection_state({},None,0,DEFAULTS)['collecting'])
+    def test_legacy_average_is_removed(self):
+        self.assertNotIn('average',collection_state({'average':10},5,0,DEFAULTS))

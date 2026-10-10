@@ -65,6 +65,17 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(call.args[0]['setback'],.7)
         self.hass.services.async_call.assert_not_awaited()
 
+    async def test_global_simulation_pause_keeps_observations_without_planning(self):
+        self.c.settings['simulation_enabled']=False
+        with patch('thermal_pilot.coordinator.plan') as planner:
+            result=await self.c._async_update_data()
+        planner.assert_not_called()
+        self.assertTrue(result['rooms'])
+        self.assertTrue(all(room['plan'] is None for room in result['rooms'].values()))
+        self.assertEqual(self.c.history_db.size()['rows'],1)
+        self.assertFalse(self.c.suggested_runs)
+        self.hass.services.async_call.assert_not_awaited()
+
     async def test_read_only_default(self):
         result=await self.c._async_update_data()
         self.assertTrue(result['simulation_only']);self.assertTrue(result['rooms'])
@@ -147,10 +158,10 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.c.settings['heating_enabled']=True
         await self.c._async_update_data()
         self.assertEqual(self.hass.services.async_call.await_args.args[2]['temperature'],20)
-    async def test_helper_blocks_operation(self):
+    async def test_legacy_helper_no_longer_blocks_operation(self):
         self.c.settings['activation_entity']='input_boolean.heating';self.hass.states['input_boolean.heating'].state='off'
         result=await self.c._async_update_data()
-        self.assertFalse(result['heating_active']);self.assertEqual(self.c.history_db.size()['rows'],0)
+        self.assertTrue(result['heating_active']);self.assertEqual(self.c.history_db.size()['rows'],1)
     async def test_missing_room_sensor_suppresses_plan(self):
         self.hass.states.pop('sensor.room')
         result=await self.c._async_update_data()

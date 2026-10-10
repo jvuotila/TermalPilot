@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
 pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
 from thermal_pilot.const import DEFAULTS, ROOM_DEFAULTS
 from thermal_pilot.model import Slot, price_slots, initial_model, learn, plan
-from thermal_pilot.config import validate
+from thermal_pilot.config import validate, stored_settings
 UTC=timezone.utc
 NOW=datetime(2026,1,2,tzinfo=UTC)
 
@@ -100,6 +100,22 @@ class PlannerTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
+    def test_fireplace_compensation_range(self):
+        room={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
+        for value in (-100,-20,0):
+            result=validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[{**room,'fireplace_reduction':value}]})
+            self.assertEqual(result['rooms'][0]['fireplace_reduction'],value)
+        for value in (-101,1):
+            with self.assertRaises(ValueError):
+                validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[{**room,'fireplace_reduction':value}]})
+
+    def test_legacy_fireplace_compensation_preserves_effect(self):
+        original={'rooms':[{**ROOM_DEFAULTS,'fireplace_reduction':20}]}
+        converted=stored_settings(original,{})
+        self.assertEqual(converted['rooms'][0]['fireplace_reduction'],-20)
+        self.assertEqual(original['rooms'][0]['fireplace_reduction'],20)
+        self.assertEqual(stored_settings(converted,{})['rooms'][0]['fireplace_reduction'],-20)
+
     def test_invalid_bounds(self):
         r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
         with self.assertRaises(ValueError):validate({**DEFAULTS,'minimum':22,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r]})

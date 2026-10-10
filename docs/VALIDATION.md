@@ -1,8 +1,12 @@
 # Validation status
 
-- 54 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 57 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - HA adapter tests use minimal doubles; there is no installed HA runtime here.
 - Python modules compile and frontend JavaScript passes Node syntax checking.
+- Panel tests cover save feedback, five-second notifications, repeated saves,
+  cancelled/confirmed room actions, and global simulation controls.
+- Python tests cover Active/Passive collection and negative fireplace compensation
+  validation, including conversion of older positive settings.
 - Panel template tests cover Settings, Plan, History, season-control banners and
   HTML escaping. They do not verify the browser DOM or visual rendering.
 - Add Room click-handler tests cover native UUIDs, HTTP-compatible random bytes,
