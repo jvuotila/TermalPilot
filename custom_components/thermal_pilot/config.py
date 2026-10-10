@@ -24,8 +24,8 @@ SOURCE_FIELDS = [
  ('start_offset_minutes','Raise thermostat before heating starts (minutes)','number',0,30),
  ('stop_offset_minutes','Lower thermostat before heating stops (minutes)','number',0,30),
  ('lag_hours','Estimated thermal response lag (hours)','number',.25,12),
- ('curve_warm_temp','Heating-hours curve warm outdoor temperature (°C)','number',-40,25),
- ('curve_cold_temp','Heating-hours curve cold outdoor temperature (°C)','number',-40,25),
+ ('curve_warm_temp','Warm outdoor endpoint (°C)','number',-40,25),
+ ('curve_cold_temp','Cold outdoor endpoint (°C)','number',-40,25),
  ('apply_season_setpoints','Apply season setpoints','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
 ]
