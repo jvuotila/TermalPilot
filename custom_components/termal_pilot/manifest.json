@@ -1,0 +1,21 @@
+{
+  "domain": "termal_pilot",
+  "name": "TermalPilot",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/jvuotila/TermalPilot",
+  "issue_tracker": "https://github.com/jvuotila/TermalPilot/issues",
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "after_dependencies": [
+    "weather"
+  ],
+  "codeowners": ["@jvuotila"],
+  "requirements": [],
+  "iot_class": "calculated",
+  "integration_type": "helper"
+}
