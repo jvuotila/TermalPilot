@@ -7,11 +7,11 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-ROOT=Path(__file__).resolve().parents[1]/'custom_components/termal_pilot'
-pkg=types.ModuleType('termal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('termal_pilot',pkg)
-from termal_pilot.const import DEFAULTS, ROOM_DEFAULTS
-from termal_pilot.model import Slot, price_slots, initial_model, learn, plan
-from termal_pilot.config import validate
+ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
+pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
+from thermal_pilot.const import DEFAULTS, ROOM_DEFAULTS
+from thermal_pilot.model import Slot, price_slots, initial_model, learn, plan
+from thermal_pilot.config import validate
 UTC=timezone.utc
 NOW=datetime(2026,1,2,tzinfo=UTC)
 

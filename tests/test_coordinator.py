@@ -5,8 +5,8 @@ from datetime import datetime,timezone
 from copy import deepcopy
 from unittest.mock import AsyncMock
 
-ROOT=Path(__file__).resolve().parents[1]/'custom_components/termal_pilot'
-pkg=types.ModuleType('termal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('termal_pilot',pkg)
+ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
+pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
 for name in ['homeassistant','homeassistant.helpers','homeassistant.util']:
     sys.modules.setdefault(name,types.ModuleType(name))
 coord=types.ModuleType('homeassistant.helpers.update_coordinator')
@@ -22,8 +22,8 @@ storage.Store=Store;sys.modules[storage.__name__]=storage
 now=datetime(2026,1,2,0,tzinfo=timezone.utc)
 dt=types.ModuleType('homeassistant.util.dt');dt.utcnow=lambda:now
 sys.modules[dt.__name__]=dt;sys.modules['homeassistant.util'].dt=dt
-from termal_pilot.coordinator import PilotCoordinator
-from termal_pilot.const import DEFAULTS,ROOM_DEFAULTS
+from thermal_pilot.coordinator import PilotCoordinator
+from thermal_pilot.const import DEFAULTS,ROOM_DEFAULTS
 
 class State:
     def __init__(self,state='20',attributes=None):self.state=state;self.attributes=attributes or {}

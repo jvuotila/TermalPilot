@@ -1,0 +1,26 @@
+{
+  "title": "ThermalPilot",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up heating simulation",
+        "description": "Select sources. Configure rooms and all settings in the ThermalPilot sidebar panel. Heating schedules remain simulated; physical season setpoints are optional.",
+        "data": {
+          "price_entity": "Price sensor",
+          "outdoor_entity": "Outdoor temperature sensor"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "ThermalPilot is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ThermalPilot settings",
+        "description": "Open ThermalPilot in the sidebar and select Settings to configure sources, rooms and simulation parameters."
+      }
+    }
+  }
+}

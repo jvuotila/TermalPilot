@@ -106,7 +106,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(self.history_db.append, [], cutoff, self.season['season_id'])
             self.store.async_delay_save(lambda:{'models':self.models,'season':self.season,'applied_season_targets':self.applied_season_targets,'fingerprints':self.config_fingerprint},20)
             return {'updated':now.isoformat(),'simulation_only':not self.settings['apply_season_setpoints'],'heating_active':False,
-                'collection':self.season,'warnings':['Heating simulation is passive. Planning, collection and learning are stopped.']+setpoint_errors,
+                'collection':self.season,'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
                 'rooms':{},'outdoor':outdoor,'water':None,'power':None,
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}

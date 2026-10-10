@@ -1,15 +1,20 @@
-# TermalPilot
+# ThermalPilot
 
-Version **0.1.0 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.1 — experimental simulation-first Home Assistant custom integration**.
 
-TermalPilot proposes room-by-room heating schedules using electricity prices,
+ThermalPilot proposes room-by-room heating schedules using electricity prices,
 weather forecasts and observed thermal response. It is designed initially for
 slow hydronic underfloor heating with a concrete slab. It is not yet a production
 controller for arbitrary heating systems.
 
+ThermalPilot is installed through HACS as a custom integration. Its Home Assistant
+manifest uses `integration_type: service`, representing one heating-planning
+service per configuration entry. This classification follows the
+[Home Assistant manifest documentation](https://developers.home-assistant.io/docs/creating_integration_manifest/#integration-type).
+
 ## What this version includes
 
-- A dedicated **Heating Simulation** sidebar panel with **Plan**, **History**
+- A dedicated **ThermalPilot** sidebar panel with **Plan**, **History**
   and **Settings** pages, in English.
 - Room names, thermostats, temperature sensors and actual heating-activity sources.
 - Internal hourly averaging of quarter-hour prices.
@@ -49,37 +54,67 @@ has a narrow physical effect:
 Keep this setting disabled while conducting a completely read-only shadow trial.
 The panel visibly identifies when physical season-setpoint application is enabled.
 
-## Installation now: local package
+## Installation through HACS
+
+1. Open HACS and its **Custom repositories** dialog.
+2. Add `https://github.com/jvuotila/ThermalPilot` with category **Integration**.
+3. Find **ThermalPilot** in HACS and download it.
+4. Restart Home Assistant.
+5. Go to **Settings > Devices & services > Add integration > ThermalPilot**.
+6. Select the price and outdoor-temperature sources, then configure rooms and
+   all other settings in the **ThermalPilot** sidebar panel.
+
+This is a Home Assistant custom integration distributed through HACS.
+It does not require creating a Home Assistant helper to install it.
+
+## Alternative: local package
 
 1. Unzip the distribution.
-2. Copy `custom_components/termal_pilot` into your Home Assistant configuration
+2. Copy `custom_components/thermal_pilot` into your Home Assistant configuration
    directory's `custom_components` directory.
 3. Restart Home Assistant.
-4. Go to **Settings > Devices & services > Add integration > TermalPilot**.
+4. Go to **Settings > Devices & services > Add integration > ThermalPilot**.
 5. Select the price sensor and outdoor-temperature sensor.
-6. Open **Heating Simulation** in the sidebar, then **Settings**.
+6. Open **ThermalPilot** in the sidebar, then **Settings**.
 7. Configure all sources, price handling and rooms, and save.
 
 If the integration does not appear after a restart, inspect Home Assistant's logs
 and reload the browser. This package has not been run against your HA installation.
 The local test environment does not contain the full Home Assistant runtime.
 
-## Installation through HACS
+## Publication and validation
 
 The repository layout and `hacs.json` are included. HACS custom integrations are
 installed from a GitHub repository, not directly from this local ZIP file.
 
 Before publication:
 
-1. Upload the contents of this directory to
-   [jvuotila/TermalPilot](https://github.com/jvuotila/TermalPilot).
-2. Run HACS validation and Home Assistant hassfest against the repository.
-3. Publish a GitHub release, initially `v0.1.0`.
-4. In HACS, add the repository as a custom repository of type **Integration**,
-   install it, restart HA and add the integration as described above.
+1. Run HACS validation and Home Assistant hassfest against
+   [jvuotila/ThermalPilot](https://github.com/jvuotila/ThermalPilot).
+2. Complete integration tests in an actual Home Assistant environment.
+3. Publish a GitHub release after these checks pass.
 
-The repository metadata is configured for `jvuotila/TermalPilot`.
+The repository metadata is configured for `jvuotila/ThermalPilot`.
 Listing in the HACS default catalog requires a separate submission.
+
+## Upgrading from the original TermalPilot prototype
+
+Version 0.1.1 corrects the integration name and domain to `thermal_pilot`.
+If you already installed the prototype using the `termal_pilot` domain, this
+is a replacement installation, not an automatic domain migration:
+
+1. Back up your Home Assistant configuration and record your room/settings values.
+   Export observation history from the old panel if you want to retain it.
+2. Remove the old TermalPilot integration under **Settings > Devices & services**.
+3. Remove `custom_components/termal_pilot` and install
+   `custom_components/thermal_pilot` through HACS or the local package.
+4. Restart Home Assistant, add **ThermalPilot**, and configure the sources and rooms.
+5. Update dashboards/automations that referenced the old simulation entities.
+
+The old learned models and SQLite history are not automatically imported into
+the new configuration entry. The new installation starts in simulation mode
+with physical season setpoint application disabled. Existing heating automations
+continue to run independently. No migration is needed for a fresh installation.
 
 ## Suggested settings for the supplied system
 
@@ -130,12 +165,12 @@ water-reference assumptions reset that room's live learned coefficients.
 
 ## Active/Passive and collection
 
-The integration exposes a native HA switch, **Heating simulation active**.
+The integration exposes a native HA switch, **ThermalPilot active**.
 The same setting can be changed from Plan or Settings.
 
 If an activation helper is configured, both the master switch and helper must
 permit operation. This fits an existing winter/summer automation: setting
-`input_boolean.heating_nordpool_control` off makes TermalPilot passive.
+`input_boolean.heating_nordpool_control` off makes ThermalPilot passive.
 Changing thermostat temperatures to 10 C alone is not used as an implicit mode
 signal; connect the existing explicit helper instead.
 
@@ -153,7 +188,7 @@ but allows a shadow plan. Unknown outdoor temperature prevents usable learning.
 
 Observations are stored locally at:
 
-`.storage/termal_pilot.<config_entry_id>.sqlite3`
+`.storage/thermal_pilot.<config_entry_id>.sqlite3`
 
 Model state is stored with HA Store under the same integration/entry namespace.
 No external database or cloud service is required.
@@ -212,7 +247,7 @@ See [MODEL.md](docs/MODEL.md) for the equations and assumptions.
 ```sh
 python -m unittest discover -s tests -v
 python -m compileall -q custom_components
-node --check custom_components/termal_pilot/frontend/panel.js
+node --check custom_components/thermal_pilot/frontend/panel.js
 node tests/test_panel.cjs
 ```
 

@@ -7,7 +7,7 @@ class Element {
 const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(name,value)=>{Component=value;}},
   structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout};
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/termal_pilot/frontend/panel.js'),'utf8'),context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
 const panel=new Component();
 panel._hass={states:{'sensor.price':{entity_id:'sensor.price',attributes:{friendly_name:'<script>alert(1)</script>'}}}};
 panel.settings={heating_enabled:true,apply_season_setpoints:false,rooms:[]};

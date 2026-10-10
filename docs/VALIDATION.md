@@ -13,5 +13,5 @@
   tools; no screenshots or visual-validation claims are included.
 
 Repository documentation, issue tracker and codeowner metadata are configured
-for `jvuotila/TermalPilot`. Before publishing, run HACS/hassfest validation plus
+for `jvuotila/ThermalPilot`. Before publishing, run HACS/hassfest validation plus
 HA integration tests in an actual HA environment.

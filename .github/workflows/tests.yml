@@ -13,5 +13,5 @@ jobs:
           node-version: '22'
       - run: python -m unittest discover -s tests -v
       - run: python -m compileall -q custom_components
-      - run: node --check custom_components/termal_pilot/frontend/panel.js
+      - run: node --check custom_components/thermal_pilot/frontend/panel.js
       - run: node tests/test_panel.cjs

@@ -1,10 +1,10 @@
 import sys, types, tempfile, unittest
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]/'custom_components/termal_pilot'
-pkg=types.ModuleType('termal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('termal_pilot',pkg)
-from termal_pilot.history import HistoryDatabase
-from termal_pilot.model import collection_state, initial_model
-from termal_pilot.const import DEFAULTS as BASE_DEFAULTS,ROOM_DEFAULTS
+ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
+pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
+from thermal_pilot.history import HistoryDatabase
+from thermal_pilot.model import collection_state, initial_model
+from thermal_pilot.const import DEFAULTS as BASE_DEFAULTS,ROOM_DEFAULTS
 DEFAULTS={**BASE_DEFAULTS,"collection_mode":"automatic"}
 
 

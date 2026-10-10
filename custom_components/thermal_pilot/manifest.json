@@ -1,0 +1,23 @@
+{
+  "domain": "thermal_pilot",
+  "name": "ThermalPilot",
+  "version": "0.1.1",
+  "config_flow": true,
+  "documentation": "https://github.com/jvuotila/ThermalPilot",
+  "issue_tracker": "https://github.com/jvuotila/ThermalPilot/issues",
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "after_dependencies": [
+    "weather"
+  ],
+  "codeowners": [
+    "@jvuotila"
+  ],
+  "requirements": [],
+  "iot_class": "calculated",
+  "integration_type": "service"
+}

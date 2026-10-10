@@ -33,7 +33,7 @@ SOURCE_FIELDS = [
  ('terminal_reserve_hours','Reserve beyond known prices, hours','number',0,12),
  ('summer_setpoint','Shared summer thermostat setpoint, C','number',5,25),
  ('apply_season_setpoints','Apply Active/Passive season setpoints to real thermostats','bool'),
- ('heating_enabled','Heating simulation active','bool'),
+ ('heating_enabled','ThermalPilot active','bool'),
  ('activation_entity','Existing heating-enabled helper (optional)','input_boolean,binary_sensor,switch'),
  ('activation_active_state','Helper state that permits operation','text'),
  ('collection_mode','Collection mode: follow activity / outdoor season / always / paused','select:manual,automatic,always,paused'),

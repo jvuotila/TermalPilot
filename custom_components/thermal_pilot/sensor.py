@@ -24,7 +24,7 @@ class PilotSensor(CoordinatorEntity, SensorEntity):
         if metric in ('temperature','setpoint'):
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_device_info = {'identifiers':{(DOMAIN,coordinator.entry.entry_id)},
-                                  'name':'TermalPilot', 'manufacturer':'TermalPilot',
+                                  'name':'ThermalPilot', 'manufacturer':'ThermalPilot',
                                   'model':'Simulation only'}
 
     @property

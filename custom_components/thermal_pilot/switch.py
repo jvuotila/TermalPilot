@@ -10,7 +10,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class PilotActive(CoordinatorEntity, SwitchEntity):
     _attr_has_entity_name = True
-    _attr_name = 'Heating simulation active'
+    _attr_name = 'ThermalPilot active'
     _attr_icon = 'mdi:radiator'
     def __init__(self, coordinator):
         super().__init__(coordinator)

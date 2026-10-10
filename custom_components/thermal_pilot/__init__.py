@@ -1,4 +1,4 @@
-"""TermalPilot: simulation-first heating planner with optional season setpoints."""
+"""ThermalPilot: simulation-first heating planner with optional season setpoints."""
 from pathlib import Path
 try:
     import probatio as vol
@@ -16,7 +16,7 @@ async def async_setup_entry(hass, entry):
     domain = hass.data.setdefault(DOMAIN, {})
     if not domain.get('_registered'):
         await hass.http.async_register_static_paths([StaticPathConfig(
-            '/termal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False)])
+            '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False)])
         for handler in (ws_get, ws_save, ws_history, ws_reset):
             websocket_api.async_register_command(hass, handler)
         domain['_registered'] = True
@@ -26,8 +26,8 @@ async def async_setup_entry(hass, entry):
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await panel_custom.async_register_panel(hass, frontend_url_path=DOMAIN,
-        webcomponent_name='termal-pilot-panel', sidebar_title='Heating Simulation',
-        sidebar_icon='mdi:radiator', module_url=f'/termal_pilot/panel.js?v={VERSION}',
+        webcomponent_name='thermal-pilot-panel', sidebar_title='ThermalPilot',
+        sidebar_icon='mdi:radiator', module_url=f'/thermal_pilot/panel.js?v={VERSION}',
         require_admin=True, config={'entry_id':entry.entry_id})
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     return True
@@ -60,7 +60,7 @@ def get_coordinator(hass, connection, msg):
     return coordinator
 
 
-@websocket_api.websocket_command({vol.Required('type'):'termal_pilot/get', vol.Required('entry_id'):str})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/get', vol.Required('entry_id'):str})
 @websocket_api.require_admin
 @callback
 def ws_get(hass, connection, msg):
@@ -69,7 +69,7 @@ def ws_get(hass, connection, msg):
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS})
 
 
-@websocket_api.websocket_command({vol.Required('type'):'termal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_save(hass, connection, msg):
@@ -84,7 +84,7 @@ async def ws_save(hass, connection, msg):
     connection.send_result(msg['id'], {'saved':True})
 
 
-@websocket_api.websocket_command({vol.Required('type'):'termal_pilot/history', vol.Required('entry_id'):str, vol.Optional('hours',default=48):vol.All(vol.Coerce(int),vol.Range(min=1,max=2160))})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/history', vol.Required('entry_id'):str, vol.Optional('hours',default=48):vol.All(vol.Coerce(int),vol.Range(min=1,max=2160))})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_history(hass, connection, msg):
@@ -95,7 +95,7 @@ async def ws_history(hass, connection, msg):
         connection.send_result(msg['id'], rows)
 
 
-@websocket_api.websocket_command({vol.Required('type'):'termal_pilot/reset', vol.Required('entry_id'):str, vol.Required('room_id'):str})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/reset', vol.Required('entry_id'):str, vol.Required('room_id'):str})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_reset(hass, connection, msg):
