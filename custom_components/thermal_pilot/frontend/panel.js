@@ -2,6 +2,20 @@
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const timeLabel = value => new Date(value).toLocaleString('en-GB',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
 const entityLabel = state => state?.attributes?.friendly_name || (state?.entity_id?.split('.').slice(1).join('.').replace(/_/g,' ')) || 'Unavailable entity';
+const settingHelp = {
+  price_entity: 'The price lists must include VAT, grid charges, electricity tax and retailer margin. ThermalPilot uses these final prices directly. Select a source containing today/tomorrow or timestamped raw_today/raw_tomorrow price lists, and choose the matching source price unit.',
+  pricing_mode: 'Hourly average uses fixed hourly averages of the source prices. 15 minutes plans using quarter-hour intervals. Flexible builds heating sessions in 15-minute steps, allowing runs such as 60 or 75 minutes while respecting the minimum flexible heating run.',
+  minimum_run_minutes: 'The shortest planned heating session in flexible scheduling mode. Longer sessions can be chosen in 15-minute steps. This setting applies to flexible runs; valve opening and closing offsets are applied separately.',
+  lag_hours: 'Initial estimate of how slowly heating affects room temperature. A larger value represents a slower system, such as heating pipes embedded in a concrete slab. The model uses this shared delay when estimating room response; it is not the valve opening time.',
+  curve_warm_temp: 'The warm outdoor endpoint of the initial heating-hours curve. At this temperature or warmer, the starting model assumes the lower daily heating need. This curve seeds the model before enough real heating and cooling observations are available.',
+  curve_cold_temp: 'The cold outdoor endpoint of the initial heating-hours curve. At this temperature or colder, the starting model assumes the higher daily heating need. Set it below the warm endpoint. Actual room response is learned from observations.',
+  apply_season_setpoints: 'Allows real thermostat setpoint changes when ThermalPilot changes between Active and Passive. Active applies each room’s target temperature; Passive applies the shared summer setpoint. These commands can occur even with simulation enabled. This does not enable live heating schedule control.',
+  summer_setpoint: 'The thermostat target used for all configured rooms while ThermalPilot is Passive, if real Active/Passive season setpoint control is enabled. A low summer target normally prevents heating without switching off the thermostats.',
+  boost: 'Degrees added to each room’s target temperature during a suggested heating window. For example, a 20 °C target with a 1.5 °C boost suggests a 21.5 °C thermostat setpoint to store heat. Scheduled targets remain simulated in this version.',
+  setback: 'Negative adjustment added to each room’s target temperature outside suggested heating windows. For example, a 20 °C target with −1 °C reduction suggests a 19 °C thermostat setpoint, allowing stored heat to cover the gap. Scheduled targets remain simulated in this version.',
+  water_entity: 'Select the measured supply-water temperature. A temperature sensor uses its state; a climate entity uses its current_temperature attribute. This is the measured water temperature, not the thermostat’s target. A valid reading is required for planning and room learning.',
+  simulation_enabled: 'Simulation calculates heating suggestions without applying the scheduled targets to thermostats. Disabling simulation pauses suggestions; observation and learning can continue while ThermalPilot is active. Live heating schedule control is not available in this version.',
+};
 const sourceSettingGroups = [
   ['Electricity price settings',['price_entity','price_unit','pricing_mode']],
   ['Weather and forecast settings',['weather_entity','outdoor_entity']],
@@ -92,9 +106,9 @@ class ThermalPilotPanel extends HTMLElement {
       input=`<select data-field="${name}"><option value="">— Select / not used —</option>${retained}${entities.map(s=>`<option value="${escapeHTML(s.entity_id)}" ${s.entity_id===value?'selected':''}>${escapeHTML(entityLabel(s))}</option>`).join('')}</select>`;
     }
     if(key==='fireplace_reduction')input=`<span class="number-unit">${input}<span>%</span></span><small>Negative values reduce estimated heat loss while the fireplace is active; −20% means a 20% reduction.</small>`;
-    const simulationHelp='Simulation calculates heating suggestions without applying the scheduled targets to thermostats. Disabling simulation pauses suggestions; observation and learning can continue while ThermalPilot is active. Live heating schedule control is not available in this version.';
+    const helpText=settingHelp[key];
     const helpId=`help-${prefix}-${key}`;
-    const help=key==='simulation_enabled'?` <span class="setting-help"><button type="button" class="setting-info" aria-label="About simulation" aria-describedby="${helpId}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle class="info-dot" cx="12" cy="7" r="1"/></svg></button><span id="${helpId}" class="setting-tooltip" role="tooltip">${escapeHTML(simulationHelp)}</span></span>`:'';
+    const help=helpText?` <span class="setting-help"><button type="button" class="setting-info" aria-label="About ${escapeHTML(label)}" aria-describedby="${helpId}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle class="info-dot" cx="12" cy="7" r="1"/></svg></button><span id="${helpId}" class="setting-tooltip" role="tooltip">${escapeHTML(helpText)}</span></span>`:'';
     return `<label><span>${escapeHTML(label)}${help}</span>${input}</label>`;
   }
   settingsGroups(groups){
@@ -107,9 +121,9 @@ class ThermalPilotPanel extends HTMLElement {
   settingsView(){
     const i=this.info;
     const rooms=this.settings.rooms.map((room,index)=>({room,index})).sort((a,b)=>compareRoomNames(a.room,b.room));
-    return `<form id="settings"><section class="settings-sources"><h2>Data sources and shared settings</h2><p>The price lists must include VAT, grid charges, electricity tax and retailer margin. ThermalPilot uses these final prices directly. Select the correct source unit. Disabling simulation pauses suggested plans; it does not enable live heating schedules.</p>${this.settingsGroups(sourceSettingGroups)}</section>
-    <section class="settings-shared"><h2>Shared room settings</h2><p>These settings apply to every room. A supply-water sensor uses its state; a climate source uses its current_temperature attribute.</p>${this.settingsGroups(sharedSettingGroups)}</section>
-    <section class="settings-rooms"><h2>Rooms</h2><p>Set the target temperature for each room. Thermostat relays use on/off states. Without a relay, the thermostat hvac_action attribute is used. Room response is learned from observed heating and cooling, starting with internal estimates.</p>
+    return `<form id="settings"><section class="settings-sources"><h2>Data sources and shared settings</h2>${this.settingsGroups(sourceSettingGroups)}</section>
+    <section class="settings-shared"><h2>Shared room settings</h2><p>These settings apply to every room.</p>${this.settingsGroups(sharedSettingGroups)}</section>
+    <section class="settings-rooms"><h2>Rooms</h2><p>Room response is learned from observed heating and cooling, starting with internal estimates.</p>
     <div class="room-cards">${rooms.map(({room:r,index})=>`<article class="room-card"><div class="room-actions"><button type="button" class="icon-button" data-reset="${escapeHTML(r.id)}" title="Reset learning for this room" aria-label="Reset learning for this room"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></svg></button><button type="button" class="icon-button delete-room" data-remove="${index}" title="Remove room" aria-label="Remove room"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></div><details><summary>${escapeHTML(r.name||'New room')} <span class="room-target">${escapeHTML(r.baseline??'—')} °C</span></summary><div class="grid room-fields">${i.room_fields.map(f=>this.field(f,r,`room${index}`)).join('')}</div></details></article>`).join('')}</div>
     <button type="button" id="add">Add room</button></section><div class="sticky"><button class="primary" type="submit">Save settings</button><span>${this.settings.apply_season_setpoints?'Season transitions change real thermostat setpoints':'Simulation only · device settings are never changed'}</span></div></form>`;
   }
