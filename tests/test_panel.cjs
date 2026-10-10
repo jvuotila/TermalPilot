@@ -5,10 +5,31 @@ class Element {
   attachShadow(){this.shadowRoot={innerHTML:'',querySelectorAll:()=>[],querySelector:()=>null};}
 }
 const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(name,value)=>{Component=value;}},
-  structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout};
+  structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout,confirm:()=>true};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
 const panel=new Component();
+// Saving feedback must describe the current attempt, including repeated saves and failure.
+(async()=>{
+ const savePanel=new Component();savePanel._hass={states:{}};
+ savePanel.settings={rooms:[]};savePanel.info={source_fields:[],room_fields:[]};savePanel.tab='settings';
+ const handlers={},button={textContent:'Save settings'},control={disabled:false};let removed=0;
+ const form={addEventListener:(name,handler)=>handlers[name]=handler,querySelector:()=>button,querySelectorAll:()=>[control,button]};
+ savePanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:selector==='.message'?{remove:()=>removed++}:null;
+ savePanel.message='Old save confirmation';savePanel.render();handlers.input();
+ assert.equal(savePanel.message,'');assert.equal(removed,1);
+ let finish,calls=0;savePanel.call=()=>{calls++;return new Promise(resolve=>finish=resolve);};
+ const first=handlers.submit({preventDefault(){}});
+ assert.equal(button.textContent,'Saving…');assert.equal(control.disabled,true);assert.equal(savePanel.message,'');
+ await handlers.submit({preventDefault(){}});assert.equal(calls,1);
+ finish();await first;assert.match(savePanel.message,/^Settings saved at /);assert.equal(savePanel.saving,false);
+ handlers.change();assert.equal(savePanel.message,'');
+ const second=handlers.submit({preventDefault(){}});assert.equal(calls,2);finish();await second;
+ assert.match(savePanel.message,/^Settings saved at /);
+ savePanel.call=async()=>{throw new Error('Connection lost');};
+ await handlers.submit({preventDefault(){}});assert.equal(savePanel.message,'Settings were not saved: Connection lost');
+ console.log('Save feedback tests passed (clear on edit, saving state, duplicate prevention, repeat success and failure).');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 panel._hass={states:{'sensor.price':{entity_id:'sensor.price',attributes:{friendly_name:'<script>alert(1)</script>'}}}};
 panel.settings={heating_enabled:true,apply_season_setpoints:false,rooms:[]};
 panel.info={settings:panel.settings,source_fields:[['price_entity','Price sensor','sensor']],room_fields:[],room_defaults:{},data:{warnings:[],rooms:{},history_info:{rows:0,bytes:0},collection:{collecting:false},heating_active:true}};
@@ -57,6 +78,7 @@ for(const [key,domain,kind,expected] of [
   ['baseline_entity','input_number,number,sensor','target',['input_number.target','number.target','sensor.room','sensor.template','sensor.temperature_state']],
   ['water_entity','sensor,climate','water',['sensor.room','sensor.template','sensor.temperature_state','climate.panasonic_heat_pump_main_z1_temp']],
   ['activity_entity','sensor,binary_sensor,switch','activity',['sensor.state','sensor.custom_state','sensor.digital','binary_sensor.heat','switch.valve']],
+  ['activity_entity','switch','relay',['switch.valve']],
 ]){
  const html=filterPanel.field([key,key,domain,{kind}],{[key]:''},'source');
  for(const item of cases)assert.equal(html.includes(`value="${item.entity_id}"`),expected.includes(item.entity_id),`${key}: ${item.entity_id}`);
@@ -86,10 +108,29 @@ sortedPanel.shadowRoot.querySelectorAll=selector=>{
  if(selector==='[data-remove]')return removalButtons=[...sortedPanel.shadowRoot.innerHTML.matchAll(/data-remove="(\d+)"/g)].map(m=>({dataset:{remove:m[1]}}));
  return [];
 };
-sortedPanel.render();removalButtons.find(b=>b.dataset.remove==='2').onclick();
+sortedPanel.render();context.confirm=()=>false;removalButtons.find(b=>b.dataset.remove==='2').onclick();
+assert.equal(sortedPanel.settings.rooms.length,4);
+context.confirm=()=>true;removalButtons.find(b=>b.dataset.remove==='2').onclick();
 assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','new']);
 assert.equal(sortedPanel.settings.rooms[0].name,'Zulu edited');
 console.log('Alphabetical room tests passed (Settings, Plan, History, stable IDs, editing and removal).');
+
+// Cancelling a learning reset must never contact the integration.
+(async()=>{
+ const resetPanel=new Component();resetPanel._hass={states:{}};
+ resetPanel.settings={rooms:[{id:'reset-room',name:'Study'}]};
+ resetPanel.info={source_fields:[],room_fields:[]};resetPanel.tab='settings';
+ let resetButton,calls=0;
+ resetPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-reset]'?[resetButton={dataset:{reset:'reset-room'}}]:[];
+ resetPanel.call=async(type,args)=>{assert.equal(type,'reset');assert.equal(args.room_id,'reset-room');calls++;};
+ resetPanel.render();
+ assert.match(resetPanel.shadowRoot.innerHTML,/title="Reset learning for this room"/);
+ assert.match(resetPanel.shadowRoot.innerHTML,/title="Remove room"/);
+ assert.doesNotMatch(resetPanel.shadowRoot.innerHTML,/>Remove room<|>Reset learning for this room</);
+ context.confirm=()=>false;await resetButton.onclick();assert.equal(calls,0);
+ context.confirm=()=>true;await resetButton.onclick();assert.equal(calls,1);
+ console.log('Room action tests passed (icon tooltips, cancelled deletion, confirmed/cancelled learning reset).');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 
 const namePanel=new Component();namePanel._hass={states:{
  'sensor.bedroom_temperature':{entity_id:'sensor.bedroom_temperature',attributes:{device_class:'temperature',friendly_name:'Bedroom temperature'}},
@@ -127,4 +168,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.4 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.5 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

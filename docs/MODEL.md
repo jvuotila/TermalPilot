@@ -41,6 +41,12 @@ heat and cannot identify slab energy uniquely from room temperature alone.
 
 ## Learning
 
+New rooms use internal starting estimates corresponding to 4 heating hours per day
+at the configured warm outdoor point and 13 hours at the cold point. These are
+model seeds, not daily limits, and are not exposed as room settings. Valid heating
+and cooling observations begin accumulating immediately while learning and
+collection are enabled.
+
 Finite temperature changes over 3–30 minute intervals are regressed against the
 outdoor/indoor temperature difference and delayed observed activity. Recursive
 sums retain a forgetting factor and ridge regularization toward initial estimates.
@@ -72,16 +78,16 @@ input; they are for relative scheduling, not billing or savings measurement.
 
 ## Pricing
 
-Source values are converted to cents/kWh. If required, VAT is added to the source
-energy price. Configured grid charges and retail margin are then added. Grid
-charges are user-entered gross values; VAT is not added to them again.
+Source lists must already contain final electricity prices including VAT, grid
+charges, electricity tax and retailer margin. Values are converted to cents/kWh
+without adding any further charges.
 
 Hourly mode averages input prices internally to hourly intervals. Quarter-hour
 and flexible modes both use 15-minute intervals; only flexible mode applies the
 configurable minimum run length. No raw quarter-hour information can be recovered
 from an already averaged hourly source.
 
-UTC timestamps are used internally, with HA local time selecting the tariff.
+UTC timestamps are used internally; the source is responsible for applying local tariffs.
 Monthly fixed charges are omitted because they do not change with heating schedules.
 
 ## Thermostat command timing

@@ -85,16 +85,11 @@ accepted solely on regular 24-hour days. Gaps stop the usable horizon.
         total = duration = 0.0
         for s, e, value in segments:
             seconds = max(0.0, (min(b, e)-max(a, s)).total_seconds())
-            if not config['prices_include_vat']:
-                value *= 1+config['vat_percent']/100
-            if not config['prices_include_transfer']:
-                hour = s.astimezone(tz).hour
-                value += config['transfer_day'] if config['day_start'] <= hour < config['day_end'] else config['transfer_night']
             total += seconds*value
             duration += seconds
         if duration < step*60-1:
             break
-        price = total / duration + config['margin']
+        price = total / duration
         output.append(Slot(a, b, price))
     return output
 

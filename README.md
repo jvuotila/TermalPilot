@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.4 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.5 — experimental simulation-first Home Assistant custom integration**.
 
 ThermalPilot proposes room-by-room heating schedules using electricity prices,
 weather forecasts and observed thermal response. It is designed initially for
@@ -21,7 +21,7 @@ service per configuration entry. This classification follows the
 - Hourly, quarter-hour and flexible-run planning. Flexible runs start/end on
   quarter-hour boundaries and have a configurable minimum length, default 60 minutes.
   Runs can last 75, 90, 105 minutes, etc.; they are not rounded to whole hours.
-- Day/night grid tariffs, source VAT handling and missing retail margin.
+- Final-price sensor input including all variable electricity costs.
   Grid charges may include electricity tax.
 - Rolling planning across midnight, including bridging heating before predicted
   cooling and a terminal reserve beyond the end of published prices.
@@ -42,17 +42,22 @@ Unnamed new rooms appear last; sorting preserves each room's identity and data.
 The supply-water source accepts temperature sensors or climate entities with a
 `current_temperature` attribute, including `climate.panasonic_heat_pump_main_z1_temp`.
 This reads measured water temperature, not the climate target. The separate shared
-reference water temperature remains a fixed calibration value. Initial minimum/maximum
-heating hours are per-room model seeds rather than scheduling quotas. The room target
-provides the initial design temperature; no separate design-temperature setting is needed.
+reference water temperature remains a fixed calibration value. Starting heating-hour
+estimates are internal model seeds. Each room has a target temperature; minimum
+and maximum allowed temperatures are shared across the house. Learning collects
+valid observations automatically while active collection is enabled.
+
+Room settings use two columns of collapsible cards, with two columns of fields
+inside each card on wider screens. Boolean settings use keyboard-accessible toggles.
+Trash and learning-reset icons require confirmation. Editing clears the preceding
+save message; successful saves show a fresh timestamp.
 
 ## Entity selection
 
 Temperature fields show temperature sensors, including template sensors with
 temperature units and no device class. Electrical power fields show power sensors
 in W/kW rather than energy counters. Price sources must expose `today`, `tomorrow`,
-`raw_today` or `raw_tomorrow` list attributes. Target helpers accept temperature
-entities or unitless number helpers. Thermostat relay selectors accept switches and binary sensors with on/off states.
+`raw_today` or `raw_tomorrow` list attributes. Thermostat relay selectors accept only switch entities with on/off states.
 An empty relay source falls back to the thermostat hvac_action attribute.
 Weather and thermostat fields are restricted to their respective entity domains.
 
@@ -85,8 +90,7 @@ The optional **Apply Active/Passive season setpoints to real thermostats** setti
 has a narrow physical effect:
 
 - Effective Passive: set enabled rooms' thermostats to the shared summer setpoint.
-- Effective Active: set each enabled room's thermostat to its heating-season target
-  (or its target helper's value).
+- Effective Active: set each enabled room's thermostat to its configured target temperature.
 - Commands are issued on a target/mode change, not repeatedly to overwrite an
   existing automation's heating boost. Failed commands are retried and reported.
 - Thermostat on/off mode is not changed. The pump is never commanded.
@@ -169,12 +173,6 @@ flexible quarter-hour planning. Source prices must be numeric lists or timestamp
 | Source unit | c/kWh (verify the source) |
 | Scheduling mode | flexible |
 | Minimum flexible run | 60 minutes |
-| Source includes VAT | enabled, if your configured Nordpool source adds VAT |
-| Source includes grid charges | disabled for the supplied Nordpool source |
-| Day grid tariff | 7.45 ct/kWh |
-| Night grid tariff | 5.68 ct/kWh |
-| Day interval | 07:00–22:00, HA local timezone |
-| Margin missing from source | 0.456 ct/kWh |
 | Outdoor sensor | `sensor.outdoor_lowest_temperature` |
 | Forecast source | `weather.forecast_koti` |
 | Forecast type | hourly if supported; otherwise daily |
@@ -183,21 +181,18 @@ flexible quarter-hour planning. Source prices must be numeric lists or timestamp
 | Shared summer setpoint | 10 C |
 | Actual season setpoint application | disabled for the first shadow trial |
 
-**Do not double-add VAT, grid charges or margin.** Select the source inclusion flags
-according to the source's price lists, not its displayed current state. The configured
-VAT percentage is a user setting, not automatically maintained tax information.
+Select a price source whose lists already include VAT, day/night grid charges,
+electricity tax and retailer margin. ThermalPilot adds no further costs; both the
+current and future price lists must contain final prices.
 
-Set the shared warm/cold outdoor curve endpoints to 0 and -18 C.
-For rooms previously on curve 1, start with 4–13 daily heating hours.
-For the two higher-demand rooms, 5–16 hours is an initial estimate under those
-shared endpoints; adjust it if needed for the changed cold endpoint. Enter each room's
-normal winter target (19.5 or 20 C as appropriate) and suitable comfort bounds.
+Set each room's target temperature and shared comfort bounds. All rooms use internal
+starting estimates; actual heating and cooling observations refine their models.
 Boost/setback can initially remain 1.5 C and 1 C. A three-hour thermal response lag
 is an initial estimate; it is configurable and is not automatically learned in v0.1.
 
 Actual heating activity defaults to the selected thermostat's `hvac_action`.
 If that attribute is unavailable or does not indicate actual valve demand, choose
-a thermostat relay switch or binary sensor instead (on means active). No learning is inferred from a
+a thermostat relay switch instead (on means active). No learning is inferred from a
 setpoint alone. Separate valve activity indicates demand, not guaranteed heat flow.
 
 Names and room UUIDs are independent of entity IDs. Removing a room leaves its

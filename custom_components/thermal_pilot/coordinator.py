@@ -134,7 +134,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             self.store.async_delay_save(lambda:{'models':self.models,'season':self.season,'applied_season_targets':self.applied_season_targets,'fingerprints':self.config_fingerprint},20)
             return {'updated':now.isoformat(),'simulation_only':not self.settings['apply_season_setpoints'],'heating_active':False,
                 'collection':self.season,'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
-                'rooms':{},'outdoor':outdoor,'water':None,'power':None,
+                'rooms':{},'outdoor':outdoor,'water':None,
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}
         warnings = list(setpoint_errors)
@@ -171,12 +171,12 @@ class PilotCoordinator(DataUpdateCoordinator):
         fireplace = bool(fireplace_state and fireplace_state.state == self.settings['fireplace_active_state'])
         readings, room_data = [], {}
         for configured_room in self.settings['rooms']:
-            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','water_reference','boost','setback')}}
+            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','water_reference','boost','setback','minimum','maximum')}}
             if not room['enabled']:
                 continue
             rid = room['id']
             temperature = self.value(room['temperature_entity'])
-            baseline = self.value(room['baseline_entity']) if room['baseline_entity'] else room['baseline']
+            baseline = room['baseline']
             if baseline is not None:
                 room['baseline'] = baseline
             model = self.models.setdefault(rid, initial_model(room))
@@ -197,7 +197,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['error'] = 'Room temperature, outdoor temperature or normal setpoint is unavailable.'
                 self.previous.pop(rid, None)
             elif not room['minimum'] <= baseline <= room['maximum']:
-                result['error'] = 'Normal setpoint helper is outside the allowed temperature range.'
+                result['error'] = 'Target temperature is outside the allowed temperature range.'
                 self.previous.pop(rid, None)
             else:
                 water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature))) if water is not None else 1.0
@@ -205,7 +205,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                            'activity':activity, 'water_factor':water_factor, 'excluded':fireplace}
                 prediction = None
                 if self.season['collecting'] and rid in self.previous:
-                    prediction = learn(model, room, self.previous[rid], current, self.settings['learning_enabled'])
+                    prediction = learn(model, room, self.previous[rid], current)
                 if self.season['collecting']:
                     self.previous[rid] = current
                 else:
@@ -232,8 +232,6 @@ class PilotCoordinator(DataUpdateCoordinator):
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None})
             if not self.season['collecting']:
                 result['learning_note'] = 'Learning paused outside the collection season.'
-            elif not self.settings['learning_enabled']:
-                result['learning_note'] = 'Learning disabled; observations are still collected in season.'
             elif activity is None:
                 result['learning_note'] = 'No observed heating activity: learning is waiting.'
             elif model['heated_hours'] < 12 or model['idle_hours'] < 12:
@@ -249,7 +247,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         archives = await self.hass.async_add_executor_job(self.history_db.summaries)
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
-                'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 'power':self.value(self.settings['power_entity']),
+                'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
                 'rooms':room_data}
         self.arm_command_timer(data,now)
         return data
@@ -262,7 +260,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         for room in self.settings['rooms']:
             if not room['enabled']:
                 continue
-            target = (self.value(room['baseline_entity']) if room['baseline_entity'] else room['baseline']) if heating_active else self.settings['summer_setpoint']
+            target = room['baseline'] if heating_active else self.settings['summer_setpoint']
             state = self.hass.states.get(room['thermostat'])
             if target is None or state is None or state.state in ('unknown','unavailable'):
                 errors.append(f"{room['name']}: season setpoint could not be applied; source or thermostat unavailable.")

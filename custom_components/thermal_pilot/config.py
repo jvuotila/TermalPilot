@@ -6,30 +6,22 @@ from .model import number
 
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
- ('price_entity','Price sensor (today/tomorrow or raw_today/raw_tomorrow)','sensor',{'kind':'price'}),
+ ('price_entity','Price sensor with additional costs','sensor',{'kind':'price'}),
  ('price_format','Source list resolution','select:hourly,quarterly'),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
  ('pricing_mode','Scheduling mode: hourly averages / quarter-hours / flexible runs','select:hourly,quarterly,flexible'),
- ('minimum_run_minutes','Minimum flexible heating run, minutes','number',15,360),
- ('prices_include_vat','Source prices include VAT','bool'),
- ('vat_percent','VAT to add to untaxed source prices, %','number',0,100),
- ('prices_include_transfer','Source lists include grid charges','bool'),
- ('transfer_day','Day grid tariff including electricity tax, ct/kWh','number',0,100),
- ('transfer_night','Night grid tariff including electricity tax, ct/kWh','number',0,100),
- ('day_start','Day tariff starts at hour','number',0,23),
- ('day_end','Day tariff ends at hour','number',1,24),
- ('margin','Margin missing from source lists, ct/kWh','number',0,100),
+ ('minimum_run_minutes','Minimum flexible heating run, minutes','number',15,360,15),
  ('weather_entity','Weather forecast source','weather'),
  ('forecast_type','Forecast type','select:hourly,daily'),
  ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
  ('water_entity','Supply water temperature source (optional)','sensor,climate',{'kind':'water'}),
- ('power_entity','Heating electrical power W/kW (optional)','sensor',{'kind':'power'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
- ('learning_enabled','Enable learning','bool'),
  ('horizon_hours','Maximum planning horizon, hours','number',6,72),
  ('terminal_reserve_hours','Reserve beyond known prices, hours','number',0,12),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
+ ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
+ ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),
  ('boost','Heating setpoint boost (°C)','number',0,5),
  ('setback','Idle setpoint reduction (°C)','number',0,5),
  ('start_offset_minutes','Raise thermostat before heating starts, minutes','number',0,30),
@@ -53,13 +45,8 @@ SOURCE_FIELDS = [
 ROOM_FIELDS = [
  ('name','Room name','text'), ('thermostat','Thermostat','climate'),
  ('temperature_entity','Room temperature sensor','sensor',{'kind':'temperature'}),
- ('activity_entity','Thermostat relay (optional)','binary_sensor,switch',{'kind':'relay'}),
- ('baseline_entity','Heating-season target helper (optional)','input_number,number,sensor',{'kind':'target'}),
- ('baseline','Target temperature (°C)','number',5,30),
- ('minimum','Minimum allowed temperature (°C)','number',5,30),
- ('maximum','Maximum allowed temperature (°C)','number',5,35),
- ('curve_min_hours','Initial minimum heating hours','number',.5,24),
- ('curve_max_hours','Initial maximum heating hours','number',.5,24),
+ ('activity_entity','Thermostat relay (optional)','switch',{'kind':'relay'}),
+ ('baseline','Target temperature (°C)','number',5,30,0.1),
  ('fireplace_reduction','Estimated fireplace heat-loss offset, %','number',0,80),
  ('enabled','Enable room simulation','bool'),
 ]
@@ -74,7 +61,7 @@ def entity_matches(state, rule, settings=None):
     unit = str(attrs.get('unit_of_measurement') or '').strip().lower()
     temperature = device_class == 'temperature' or (not device_class and unit in ('°c', '°f', 'c', 'f', 'k', '°k'))
     if kind == 'relay':
-        return domain in ('binary_sensor', 'switch')
+        return domain == 'switch'
     if kind == 'water':
         return (domain == 'climate' and 'current_temperature' in attrs) or (domain == 'sensor' and temperature)
     if kind == 'temperature':
@@ -140,7 +127,9 @@ def validate(payload, hass=None):
                     if hass is not None and hass.states.get(value) is None:
                         raise ValueError(f'{label}: entity {value} was not found.')
     check(result, SOURCE_FIELDS)
-    for key in ('day_start','day_end','horizon_hours','history_days','minimum_run_minutes','archive_keep_days','start_offset_minutes','stop_offset_minutes'):
+    if result['minimum'] > result['maximum']:
+        raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
+    for key in ('horizon_hours','history_days','minimum_run_minutes','archive_keep_days','start_offset_minutes','stop_offset_minutes'):
         if result[key] != int(result[key]):
             raise ValueError(f'{key}: use an integer.')
         result[key] = int(result[key])
@@ -150,8 +139,6 @@ def validate(payload, hass=None):
         raise ValueError('Collection start temperature must be below stop temperature.')
     if result['minimum_run_minutes'] % 15:
         raise ValueError('Minimum heating run must be a multiple of 15 minutes.')
-    if result['day_start'] >= result['day_end']:
-        raise ValueError('Day tariff start must precede its end.')
     if not result['price_entity'] or not result['outdoor_entity']:
         raise ValueError('Select at least price and outdoor temperature sensors.')
     if not isinstance(result['rooms'], list) or len(result['rooms']) > 30:
@@ -161,7 +148,7 @@ def validate(payload, hass=None):
         if not isinstance(raw, dict):
             raise ValueError('Invalid room settings.')
         room = deepcopy(ROOM_DEFAULTS)
-        room.update({k:v for k,v in raw.items() if k in ROOM_DEFAULTS})
+        room.update({k:v for k,v in raw.items() if k in ROOM_DEFAULTS and k not in ('curve_min_hours','curve_max_hours')})
         room['id'] = raw.get('id') or str(uuid4())
         try:
             from uuid import UUID
@@ -174,10 +161,8 @@ def validate(payload, hass=None):
         if room['id'] in ids or room['thermostat'] in thermostats:
             raise ValueError('Room identifier or thermostat is already in use.')
         ids.add(room['id']); thermostats.add(room['thermostat'])
-        if not room['minimum'] <= room['baseline'] <= room['maximum']:
+        if not result['minimum'] <= room['baseline'] <= result['maximum']:
             raise ValueError(f"{room['name']}: normal temperature must be within the allowed temperature range.")
-        if room['curve_min_hours'] > room['curve_max_hours']:
-            raise ValueError(f"{room['name']}: check the heating-hours curve limits.")
         rooms.append(room)
     result['rooms'] = rooms
     if hass is not None and result['apply_season_setpoints']:

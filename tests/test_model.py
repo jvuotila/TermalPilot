@@ -18,20 +18,20 @@ NOW=datetime(2026,1,2,tzinfo=UTC)
 
 class PriceTests(unittest.TestCase):
     def config(self, **kw):
-        return {**DEFAULTS,'prices_include_transfer':True,'margin':0,**kw}
+        return {**DEFAULTS,**kw}
     def test_internal_hourly_average(self):
         prices=[1,2,3,4]*24
         slots=price_slots({'today':prices},self.config(pricing_mode='hourly'),NOW,UTC)
         self.assertEqual(len(slots),24);self.assertEqual(slots[0].price,2.5)
-    def test_quarter_prices_and_tariffs(self):
+    def test_final_quarter_prices_are_not_marked_up(self):
         slots=price_slots({'today':[10]*96},self.config(pricing_mode='flexible',prices_include_transfer=False,margin=.456),NOW,UTC)
-        self.assertAlmostEqual(slots[0].price,16.136)
-        self.assertAlmostEqual(slots[7*4].price,17.906)
-        self.assertAlmostEqual(slots[22*4].price,16.136)
+        self.assertAlmostEqual(slots[0].price,10)
+        self.assertAlmostEqual(slots[7*4].price,10)
+        self.assertAlmostEqual(slots[22*4].price,10)
         self.assertEqual(len(slots),96)
-    def test_vat_and_euro_conversion(self):
+    def test_final_euro_conversion_without_added_vat(self):
         slots=price_slots({'today':[.1]*96},self.config(price_unit='€/kWh',prices_include_vat=False,vat_percent=25.5),NOW,UTC)
-        self.assertAlmostEqual(slots[0].price,12.55)
+        self.assertAlmostEqual(slots[0].price,10)
     def test_missing_tomorrow_does_not_invent_prices(self):
         slots=price_slots({'today':[10]*96},self.config(),NOW+timedelta(hours=23),UTC)
         self.assertEqual(len(slots),4)
@@ -101,8 +101,8 @@ class PlannerTests(unittest.TestCase):
 
 class SettingsTests(unittest.TestCase):
     def test_invalid_bounds(self):
-        r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test','minimum':22}
-        with self.assertRaises(ValueError):validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r]})
+        r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
+        with self.assertRaises(ValueError):validate({**DEFAULTS,'minimum':22,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r]})
     def test_thermostat_duplicate(self):
         r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
         with self.assertRaises(ValueError):validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r,r]})
