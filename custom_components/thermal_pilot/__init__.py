@@ -7,6 +7,7 @@ except ImportError:
 from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS
 from .config import validate, stored_settings, SOURCE_FIELDS, ROOM_FIELDS
 from .coordinator import PilotCoordinator
@@ -66,7 +67,12 @@ def get_coordinator(hass, connection, msg):
 @callback
 def ws_get(hass, connection, msg):
     if (c := get_coordinator(hass, connection, msg)) is not None:
-        connection.send_result(msg['id'], {'settings':c.settings, 'data':c.data,
+        registry = er.async_get(hass)
+        room_entities = {room['id']:{
+            'suggested':registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_heat'),
+            'actual':room['activity_entity'] or registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_activity'),
+        } for room in c.settings['rooms']}
+        connection.send_result(msg['id'], {'settings':c.settings, 'data':c.data, 'room_entities':room_entities,
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS})
 
 

@@ -1,7 +1,7 @@
 """HA adapter tests using minimal doubles, not a real Home Assistant runtime."""
 import sys,types,tempfile,unittest
 from pathlib import Path
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from copy import deepcopy
 from unittest.mock import AsyncMock, patch
 
@@ -20,6 +20,7 @@ storage=types.ModuleType('homeassistant.helpers.storage')
 class Store:
     def __init__(self,*args):self.saved={}
     async def async_load(self):return self.saved
+    async def async_save(self,data):self.saved=deepcopy(data)
     def async_delay_save(self,callback,delay):self.saved=deepcopy(callback())
 storage.Store=Store;sys.modules[storage.__name__]=storage
 event=types.ModuleType('homeassistant.helpers.event')
@@ -36,17 +37,83 @@ class State:
 class Hass:
     def __init__(self,path):
         self.states={'sensor.out':State('-10'),'sensor.price':State('10',{'today':[10]*96}),
-            'sensor.room':State('20'),'climate.room':State('heat',{'temperature':20,'hvac_action':'idle','min_temp':5,'max_temp':35}),
+            'sensor.water':State('32'),'sensor.room':State('20'),'climate.room':State('heat',{'temperature':20,'hvac_action':'idle','min_temp':5,'max_temp':35}),
             'input_boolean.heating':State('on')}
         self.config=types.SimpleNamespace(time_zone='UTC',path=lambda *args:str(Path(path).joinpath(*args)))
         self.services=types.SimpleNamespace(async_call=AsyncMock())
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_sensor_warning_after_six_hours_aggregates_and_limits_daily(self):
+        second={**self.c.settings['rooms'][0],'id':'second','name':'Bedroom','temperature_entity':'sensor.second'}
+        self.c.settings['rooms'].append(second)
+        self.hass.states['sensor.second']=State('unknown')
+        for step in range(12):
+            await self.c.check_temperature_sensors(now+timedelta(minutes=30*step),True)
+        self.hass.services.async_call.assert_not_awaited()
+        await self.c.check_temperature_sensors(now+timedelta(hours=6),True)
+        self.hass.services.async_call.assert_awaited_once()
+        notification=self.hass.services.async_call.await_args.args[2]
+        self.assertIn('Study',notification['message']);self.assertIn('Bedroom',notification['message'])
+        self.assertIn('unavailable',notification['message'])
+        self.assertEqual(self.c.store.saved['sensor_health']['last_notification_day'],'2026-01-02')
+        # Loading saved state does not permit a repeated notification on the same day.
+        self.c.sensor_health=deepcopy(self.c.store.saved['sensor_health'])
+        for step in range(13,48):
+            await self.c.check_temperature_sensors(now+timedelta(minutes=30*step),True)
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+        await self.c.check_temperature_sensors(now+timedelta(days=1),True)
+        self.assertEqual(self.hass.services.async_call.await_count,2)
+        self.assertEqual(self.hass.services.async_call.await_args.args[2]['notification_id'],notification['notification_id'])
+
+    async def test_sensor_changes_passive_and_monitoring_gaps_reset_timer(self):
+        for step in range(12):
+            await self.c.check_temperature_sensors(now+timedelta(minutes=30*step),True)
+        self.hass.states['sensor.room'].state='20.1'
+        await self.c.check_temperature_sensors(now+timedelta(hours=6),True)
+        self.hass.services.async_call.assert_not_awaited()
+        await self.c.check_temperature_sensors(now+timedelta(hours=12),True)
+        self.hass.services.async_call.assert_not_awaited()
+        await self.c.check_temperature_sensors(now+timedelta(hours=12,minutes=5),False)
+        self.assertFalse(self.c.sensor_health['rooms'])
+
+    async def test_sensor_daily_limit_uses_home_assistant_timezone(self):
+        self.hass.config.time_zone='Europe/Helsinki'
+        self.c.sensor_health['rooms'][self.c.settings['rooms'][0]['id']]={
+            'entity':'sensor.room','value':20,'since':now.timestamp(),
+            'last_seen':(now+timedelta(hours=21,minutes=30)).timestamp()}
+        await self.c.check_temperature_sensors(now+timedelta(hours=22),True)
+        self.assertEqual(self.c.sensor_health['last_notification_day'],'2026-01-03')
+
+    async def test_forecast_prefers_hourly_and_caches_by_source(self):
+        self.c.settings['weather_entity']='weather.home'
+        row={'datetime':now.isoformat(),'temperature':-10}
+        self.hass.services.async_call.return_value={'weather.home':{'forecast':[row]}}
+        self.assertEqual(await self.c.get_forecast(now),[row])
+        self.assertEqual(self.c.forecast_type,'hourly')
+        await self.c.get_forecast(now)
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+        self.c.settings['weather_entity']='weather.other'
+        self.hass.services.async_call.return_value={'weather.other':{'forecast':[row]}}
+        await self.c.get_forecast(now)
+        self.assertEqual(self.hass.services.async_call.await_count,2)
+
+    async def test_forecast_falls_back_to_daily_after_unusable_hourly(self):
+        self.c.settings['weather_entity']='weather.home'
+        row={'datetime':now.isoformat(),'temperature':2,'templow':-5}
+        self.hass.services.async_call.side_effect=[
+            {'weather.home':{'forecast':[{'datetime':'invalid','temperature':0}]}},
+            RuntimeError('Twice daily not supported'),
+            {'weather.home':{'forecast':[row]}},
+        ]
+        self.assertEqual(await self.c.get_forecast(now),[row])
+        self.assertEqual(self.c.forecast_type,'daily')
+        self.assertEqual([call.args[2]['type'] for call in self.hass.services.async_call.await_args_list],['hourly','twice_daily','daily'])
+
     async def asyncSetUp(self):
         self.temp=tempfile.TemporaryDirectory();self.hass=Hass(self.temp.name)
         room={**ROOM_DEFAULTS,'id':'11111111-1111-4111-8111-111111111111','name':'Study','thermostat':'climate.room','temperature_entity':'sensor.room'}
-        entry=types.SimpleNamespace(entry_id='test',data={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[room]},options={})
+        entry=types.SimpleNamespace(entry_id='test',data={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[room]},options={})
         self.c=PilotCoordinator(self.hass,entry);await self.c.load()
     async def asyncTearDown(self):self.temp.cleanup()
     async def test_shared_setpoint_adjustments_override_legacy_room_values(self):
@@ -56,13 +123,13 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.c.settings['rooms'].append(second)
         self.hass.states['climate.second']=State('heat',{'temperature':20,'hvac_action':'idle'})
         self.hass.states['sensor.second']=State('20')
-        self.c.settings.update(boost=1.8,setback=.7)
+        self.c.settings.update(boost=1.8,setback=-.7)
         with patch('thermal_pilot.coordinator.plan',return_value=None) as planner:
             await self.c._async_update_data()
         self.assertEqual(planner.call_count,2)
         for call in planner.call_args_list:
             self.assertEqual(call.args[0]['boost'],1.8)
-            self.assertEqual(call.args[0]['setback'],.7)
+            self.assertEqual(call.args[0]['setback'],-.7)
         self.hass.services.async_call.assert_not_awaited()
 
     async def test_global_simulation_pause_keeps_observations_without_planning(self):
@@ -166,7 +233,16 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.hass.states.pop('sensor.room')
         result=await self.c._async_update_data()
         self.assertIsNone(next(iter(result['rooms'].values()))['plan'])
+    async def test_missing_water_suppresses_plan_and_learning(self):
+        await self.c._async_update_data()
+        self.hass.states.pop('sensor.water')
+        result=await self.c._async_update_data()
+        self.assertTrue(all(room['plan'] is None for room in result['rooms'].values()))
+        self.assertFalse(self.c.previous)
+        self.assertEqual(self.c.history_db.size()['rows'],1)
+        self.hass.services.async_call.assert_not_awaited()
     async def test_passive_transition_compacts(self):
+        self.c.settings['season_archive_enabled']=False  # Removed legacy preference is ignored.
         await self.c._async_update_data()
         self.c.settings['heating_enabled']=False
         await self.c._async_update_data()

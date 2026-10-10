@@ -35,6 +35,10 @@ class PriceTests(unittest.TestCase):
     def test_missing_tomorrow_does_not_invent_prices(self):
         slots=price_slots({'today':[10]*96},self.config(),NOW+timedelta(hours=23),UTC)
         self.assertEqual(len(slots),4)
+    def test_all_available_prices_ignore_legacy_horizon(self):
+        slots=price_slots({'today':[10]*96,'tomorrow':[20]*96},self.config(horizon_hours=6),NOW,UTC)
+        self.assertEqual(len(slots),192)
+        self.assertEqual(slots[-1].end,NOW+timedelta(days=2))
     def test_negative_prices(self):
         slots=price_slots({'today':[-10]*96},self.config(),NOW,UTC)
         self.assertEqual(slots[0].price,-10)
@@ -100,14 +104,25 @@ class PlannerTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
+    def test_negative_idle_adjustment_and_legacy_conversion(self):
+        original={'setback':1.5}
+        converted=stored_settings(original,{})
+        self.assertEqual(converted['setback'],-1.5)
+        self.assertEqual(original['setback'],1.5)
+        self.assertEqual(stored_settings(converted,{})['setback'],-1.5)
+        for value in (-5,-1.5,0):
+            self.assertEqual(validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','setback':value})['setback'],value)
+        for value in (-5.1,1):
+            with self.assertRaises(ValueError):
+                validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','setback':value})
     def test_fireplace_compensation_range(self):
         room={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
         for value in (-100,-20,0):
-            result=validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[{**room,'fireplace_reduction':value}]})
+            result=validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[{**room,'fireplace_reduction':value}]})
             self.assertEqual(result['rooms'][0]['fireplace_reduction'],value)
         for value in (-101,1):
             with self.assertRaises(ValueError):
-                validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[{**room,'fireplace_reduction':value}]})
+                validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[{**room,'fireplace_reduction':value}]})
 
     def test_legacy_fireplace_compensation_preserves_effect(self):
         original={'rooms':[{**ROOM_DEFAULTS,'fireplace_reduction':20}]}
@@ -118,12 +133,12 @@ class SettingsTests(unittest.TestCase):
 
     def test_invalid_bounds(self):
         r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
-        with self.assertRaises(ValueError):validate({**DEFAULTS,'minimum':22,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r]})
+        with self.assertRaises(ValueError):validate({**DEFAULTS,'minimum':22,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[r]})
     def test_thermostat_duplicate(self):
         r={**ROOM_DEFAULTS,'name':'Test','thermostat':'climate.test','temperature_entity':'sensor.test'}
-        with self.assertRaises(ValueError):validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[r,r]})
+        with self.assertRaises(ValueError):validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[r,r]})
     def test_unknown_mode_cannot_enable_control(self):
-        result=validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','control_enabled':True})
+        result=validate({**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','control_enabled':True})
         self.assertNotIn('control_enabled',result)
     def test_no_actuator_commands(self):
         import ast
@@ -131,7 +146,7 @@ class SettingsTests(unittest.TestCase):
             tree=ast.parse(path.read_text())
             for n in ast.walk(tree):
                 if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='async_call':
-                    self.assertIn((n.args[0].value,n.args[1].value),{('weather','get_forecasts'),('climate','set_temperature')})
+                    self.assertIn((n.args[0].value,n.args[1].value),{('weather','get_forecasts'),('climate','set_temperature'),('persistent_notification','create')})
                     if n.args[0].value=='climate':
                         method=next(f for f in ast.walk(tree) if isinstance(f,ast.AsyncFunctionDef) and n in list(ast.walk(f)))
                         self.assertEqual(method.name,'apply_season_targets')

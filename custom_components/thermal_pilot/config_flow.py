@@ -21,6 +21,7 @@ class ThermalPilotFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id='user', data_schema=vol.Schema({
             vol.Required('price_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'price_entity')),
             vol.Required('outdoor_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'outdoor_entity')),
+            vol.Required('water_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'water_entity')),
         }))
 
     @staticmethod

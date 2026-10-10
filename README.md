@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.7 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.8 — experimental simulation-first Home Assistant custom integration**.
 
 ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
 with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
@@ -33,7 +33,7 @@ service per configuration entry. This classification follows the
 - Per-room target and comfort limits, with a separate **Shared room settings**
   section for boost/reduction, thermal lag, curve endpoints and supply water.
 - Conservative online adaptation using actual heating activity and temperature changes.
-- Five-minute SQLite observation history, CSV export, native HA suggested-heating
+- Five-minute SQLite observation history and native HA suggested-heating
   binary sensors and suggested-setpoint/forecast/error sensors.
 - One Active/Passive master switch for planning, collection and learning.
 - Active/Passive collection, full-season accumulators, compact
@@ -44,10 +44,11 @@ service per configuration entry. This classification follows the
 Rooms are displayed alphabetically by name in Settings, Plan and History.
 Unnamed new rooms appear last; sorting preserves each room's identity and data.
 
-The supply-water source accepts temperature sensors or climate entities with a
+A supply-water source is required. If its reading is missing, planning and room
+learning pause until it recovers. The source accepts temperature sensors or climate entities with a
 `current_temperature` attribute, including `climate.panasonic_heat_pump_main_z1_temp`.
-This reads measured water temperature, not the climate target. The separate shared
-reference water temperature remains a fixed calibration value. Starting heating-hour
+This reads measured water temperature, not the climate target. A fixed internal
+32 °C reference calibrates the model and never commands the heat pump. Starting heating-hour
 estimates are internal model seeds. Each room has a target temperature; minimum
 and maximum allowed temperatures are shared across the house. Learning collects
 valid observations automatically while active collection is enabled.
@@ -65,6 +66,43 @@ Fireplace heating compensation uses -100% to 0%; -20% reduces estimated heat
 loss by 20% while the fireplace is active. Existing positive compensation
 values are converted when loading settings to preserve their effect.
 
+Planning automatically covers all continuously available price intervals from
+now until the published prices end. There is no configurable planning horizon,
+and missing future prices are not invented.
+
+Weather forecasts are selected automatically: hourly first, then twice daily,
+then daily, depending on usable data from the selected weather source.
+Forecasts refresh hourly; changing the source refreshes immediately.
+
+## Room sensor checks
+
+While Active, ThermalPilot checks whether each room's temperature reading has
+changed. After six hours of unchanged or unavailable readings, one persistent
+Home Assistant notification lists the suspect rooms. Stable room temperatures
+can produce this warning too; it identifies a possible issue rather than a
+confirmed sensor failure. A changed reading resets the timer.
+
+Notifications are limited to once per local calendar day, including across
+restarts. Passive mode resets observation timers; monitoring resumes on activation.
+A monitoring gap longer than 30 minutes also restarts the six-hour observation
+period. The notification ID is reused so unresolved alerts do not accumulate.
+
+## Native Home Assistant heating timelines
+
+Each room on History has a native Home Assistant history-graph card comparing
+its recorded suggested-heating window with the selected thermostat relay.
+Without a relay selection, a ThermalPilot binary sensor publishes observed
+thermostat demand at the observation interval. The relay's own entity provides
+its directly recorded state transitions. Entity registry lookup supports renamed
+suggestion entities without guessing their IDs.
+
+These graphs use Home Assistant Recorder history rather than ThermalPilot's
+SQLite retention. Both entities must be recorded; excluded entities and periods
+before installation have no recorded history. If dashboard card helpers have not
+loaded, open a Home Assistant dashboard once and return, or use the provided full
+History link. Future suggested sessions remain on Plan; these timelines show
+previously published suggestions and observed demand.
+
 ## Reading room history
 
 Room charts have a legend: blue is measured temperature; the dashed orange line
@@ -77,7 +115,7 @@ heating-window On/Off describes the proposed boosted-target window; actual
 thermostat-demand On/Off describes the observed relay or thermostat request. These
 can differ, and neither proves heat flow. Missing observations show Unknown.
 The suggested thermostat target is the proposed setpoint, not a room-temperature
-forecast. CSV exports retain the original observation resolution.
+forecast. Original observations retain their resolution in the local database.
 
 ## Entity selection
 
@@ -202,7 +240,6 @@ flexible quarter-hour planning. Source prices must be numeric lists or timestamp
 | Minimum flexible run | 60 minutes |
 | Outdoor sensor | `sensor.outdoor_lowest_temperature` |
 | Forecast source | `weather.forecast_koti` |
-| Forecast type | hourly if supported; otherwise daily |
 | Shared summer setpoint | 10 C |
 | Actual season setpoint application | disabled for the first shadow trial |
 
@@ -212,7 +249,7 @@ current and future price lists must contain final prices.
 
 Set each room's target temperature and shared comfort bounds. All rooms use internal
 starting estimates; actual heating and cooling observations refine their models.
-Boost/setback can initially remain 1.5 C and 1 C. A three-hour thermal response lag
+Boost and idle adjustment can initially remain +1.5 °C and -1 °C. A three-hour thermal response lag
 is an initial estimate; it is configurable and is not automatically learned in v0.1.
 
 Actual heating activity defaults to the selected thermostat's `hvac_action`.
@@ -232,7 +269,7 @@ The same setting can be changed from Plan or Settings.
 Use ThermalPilot's own Active/Passive switch to start or end the heating season.
 
 Passive mode stops planning, collection and learning. It preserves learned models
-and, when enabled, archives the ending season. On reactivation, existing learned
+and automatically archives the ending season. On reactivation, existing learned
 coefficients remain the starting point; transient slab response is reinitialized.
 
 Collection and learning automatically follow Active/Passive. Missing outdoor
@@ -250,7 +287,7 @@ Model state is stored with HA Store under the same integration/entry namespace.
 No external database or cloud service is required.
 
 - At most one stored observation per room per five-minute bucket.
-- Default raw retention: 30 days; configurable 1–90 days.
+- Raw observation retention: a fixed internal 30-day limit.
 - Seasonal accumulators cover all collected samples, including samples whose raw
   rows have already expired. They retain sums, counts, temperature variation,
   observed activity counts, outdoor range and short-term forecast-error statistics.

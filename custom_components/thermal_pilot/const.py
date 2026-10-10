@@ -1,23 +1,22 @@
 """ThermalPilot constants; scheduled heating remains simulated in this release."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.7'
+VERSION = '0.1.8'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7
+HISTORY_DAYS = 30
+WATER_REFERENCE = 32.0
 DEFAULTS = {
     'price_entity': '', 'price_format': 'quarterly', 'price_unit': 'c/kWh',
     'pricing_mode': 'flexible', 'minimum_run_minutes': 60,
-    'weather_entity': '', 'forecast_type': 'hourly', 'outdoor_entity': '',
+    'weather_entity': '', 'outdoor_entity': '',
     'water_entity': '', 'fireplace_entity': '',
     'fireplace_active_state': 'on',
-    'horizon_hours': 48,
-    'history_days': 30, 'heating_enabled': True, 'simulation_enabled': True,
+    'heating_enabled': True, 'simulation_enabled': True,
     'summer_setpoint': 10.0, 'apply_season_setpoints': False,
-    'boost': 1.5, 'setback': 1.0, 'minimum': 19.0, 'maximum': 23.0,
+    'boost': 1.5, 'setback': -1.0, 'minimum': 19.0, 'maximum': 23.0,
     'start_offset_minutes': 5, 'stop_offset_minutes': 10,
     'lag_hours': 3.0, 'curve_warm_temp': 0.0, 'curve_cold_temp': -18.0,
-    'water_reference': 32.0,
-    'season_archive_enabled': True,
     'rooms': [],
 }
 ROOM_DEFAULTS = {

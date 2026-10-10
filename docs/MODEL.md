@@ -62,7 +62,7 @@ confidence interval; there is no claim of statistically validated predictive acc
 ## Planner
 
 The rolling horizon searches two setpoint choices: winter target plus boost, or
-winter target minus setback. Boost and setback are shared settings applied to
+winter target plus the negative idle adjustment. Boost and setback are shared settings applied to
 every room. Boost is capped by the user maximum. Every candidate
 propagates temperature and delayed heating response.
 

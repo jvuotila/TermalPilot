@@ -79,7 +79,9 @@ accepted solely on regular 24-hour days. Gaps stop the usable horizon.
     step = 60 if config['pricing_mode'] == 'hourly' else 15
     first = now.astimezone(timezone.utc).replace(minute=(now.minute//step)*step, second=0, microsecond=0)
     output = []
-    for i in range(config['horizon_hours']*60//step):
+    last_available = max((end for _, end, _ in segments), default=first)
+    intervals = max(0, math.ceil((last_available-first).total_seconds()/(step*60)))
+    for i in range(intervals):
         a = first + timedelta(minutes=i*step)
         b = a + timedelta(minutes=step)
         total = duration = 0.0
@@ -186,7 +188,7 @@ def thermostat_timing(rows, settings, baseline, now):
         else:
             windows.append({'start':start.isoformat(), 'end':end.isoformat()})
     boosted = min(settings['maximum'],baseline+settings['boost'])
-    reduced = baseline-settings['setback']
+    reduced = baseline+settings['setback']
     commands = [command for window in windows for command in (
         {'time':window['start'],'setpoint':boosted,'action':'raise'},
         {'time':window['end'],'setpoint':reduced,'action':'lower'})]
@@ -230,7 +232,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                 if on and not last and (slots[-1].end-max(now,slot.start)).total_seconds()/3600 < minimum_run:
                     continue
                 # Demand proxy: real thermostats may call for heat in setback too.
-                request = min(room['maximum'], baseline+room['boost']) if on else baseline-room['setback']
+                request = min(room['maximum'], baseline+room['boost']) if on else baseline+room['setback']
                 heating = 1.0 if temp < request else 0.0
                 r, average = response_step(response, heating, hours, room['lag_hours'])
                 predicted = temp+hours*(loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0))

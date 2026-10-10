@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
-from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS
+from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
 from .config import stored_settings
 from .model import number, stamp, initial_model, learn, price_slots, plan, collection_state, thermostat_state
@@ -27,10 +27,13 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.previous = {}
         self.forecast = []
         self.forecast_updated = None
+        self.forecast_entity = None
+        self.forecast_type = None
         self.config_fingerprint = {}
         self.suggested_runs = {}
         self.season = {}
         self.applied_season_targets = {}
+        self.sensor_health = {'rooms':{},'last_notification_day':None}
         self._command_timer = None
 
     def cancel_command_timer(self):
@@ -63,6 +66,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             model['response'] = 0.0  # Slab state cannot be trusted across downtime.
         self.season = saved.get('season', {})
         self.applied_season_targets = saved.get('applied_season_targets', {})
+        self.sensor_health = saved.get('sensor_health', {'rooms':{},'last_notification_day':None})
         await self.hass.async_add_executor_job(self.history_db.initialize)
         self.config_fingerprint = saved.get('fingerprints', {})
 
@@ -83,23 +87,91 @@ class PilotCoordinator(DataUpdateCoordinator):
             return None
         return 1.0 if value == 'on' else 0.0 if value == 'off' else None
 
+    def storage_data(self):
+        return {'models':self.models,'season':self.season,
+                'applied_season_targets':self.applied_season_targets,
+                'fingerprints':self.config_fingerprint,'sensor_health':self.sensor_health}
+
+    async def check_temperature_sensors(self, now, active):
+        """Warn once per local day after six hours of continuous suspect readings."""
+        tracking = self.sensor_health.setdefault('rooms',{})
+        if not active:
+            tracking.clear()
+            return
+        timestamp = now.timestamp()
+        configured = {room['id'] for room in self.settings['rooms']}
+        for rid in list(tracking):
+            if rid not in configured:
+                tracking.pop(rid)
+        suspect = []
+        for room in self.settings['rooms']:
+            rid, entity = room['id'], room['temperature_entity']
+            value = self.value(entity)
+            previous = tracking.get(rid,{})
+            # Do not count time across a long outage or a changed sensor mapping.
+            if (previous.get('entity') != entity or previous.get('value') != value or
+                    timestamp-previous.get('last_seen',timestamp) > 1800 or
+                    timestamp < previous.get('last_seen',timestamp)):
+                previous = {'entity':entity,'value':value,'since':timestamp}
+            previous['last_seen'] = timestamp
+            previous.setdefault('since',timestamp)
+            tracking[rid] = previous
+            if timestamp-previous['since'] >= 6*3600:
+                reason = 'unavailable' if value is None else f'unchanged at {value:g} °C'
+                suspect.append(f"- {room['name']}: {reason} for at least 6 hours ({entity}).")
+        day = now.astimezone(ZoneInfo(self.hass.config.time_zone)).date().isoformat()
+        if not suspect or self.sensor_health.get('last_notification_day') == day:
+            return
+        message = ('These room temperature sensors may need checking:\n\n'+
+                   '\n'.join(suspect)+
+                   '\n\nAn unchanged reading can also mean the room temperature is stable. Check batteries, connectivity and sensor readings. ThermalPilot issues at most one sensor notification per day.')
+        try:
+            await self.hass.services.async_call('persistent_notification','create',{
+                'title':'ThermalPilot: check room temperature sensors',
+                'message':message,
+                'notification_id':f'{DOMAIN}_{self.entry.entry_id}_temperature_sensors',
+            },blocking=True)
+        except Exception:
+            _LOGGER.warning('Room sensor notification could not be created',exc_info=True)
+            return
+        self.sensor_health['last_notification_day'] = day
+        # Persist the daily limit immediately so a restart does not repeat the alert.
+        await self.store.async_save(self.storage_data())
+
     async def get_forecast(self, now):
         entity = self.settings['weather_entity']
         if not entity:
+            self.forecast = []
+            self.forecast_type = None
             return []
-        if self.forecast_updated is not None and (now-self.forecast_updated).total_seconds() < 3600:
+        if entity == self.forecast_entity and self.forecast_updated is not None and (now-self.forecast_updated).total_seconds() < 3600:
             return self.forecast
-        try:
-            result = await self.hass.services.async_call('weather', 'get_forecasts',
-                {'entity_id':entity, 'type':self.settings['forecast_type']},
-                blocking=True, return_response=True)
-            self.forecast = (result or {}).get(entity, {}).get('forecast', [])
-            self.forecast_updated = now
-        except Exception:  # Source failure must leave the simulator operational.
+        def usable(rows, kind):
+            if not isinstance(rows, list):
+                return []
+            return [row for row in rows if isinstance(row,dict) and stamp(row.get('datetime')) is not None and
+                    number(row.get('templow',row.get('temperature')) if kind=='daily' else row.get('temperature')) is not None]
+        self.forecast = []
+        self.forecast_type = None
+        for kind in ('hourly','twice_daily','daily'):
+            try:
+                result = await self.hass.services.async_call('weather', 'get_forecasts',
+                    {'entity_id':entity, 'type':kind}, blocking=True, return_response=True)
+                rows = (result or {}).get(entity, {}).get('forecast', [])
+                rows = usable(rows,kind)
+                if rows:
+                    self.forecast, self.forecast_type = rows, kind
+                    break
+            except Exception:
+                _LOGGER.debug('Forecast type %s unavailable for %s',kind,entity,exc_info=True)
+        if not self.forecast:
             state = self.hass.states.get(entity)
-            self.forecast = state.attributes.get('forecast', []) if state else []
-            self.forecast_updated = now
-            _LOGGER.debug('Forecast unavailable; using attribute fallback', exc_info=True)
+            rows = state.attributes.get('forecast', []) if state else []
+            kind = 'daily' if isinstance(rows,list) and any(isinstance(row,dict) and 'templow' in row for row in rows) else 'hourly'
+            self.forecast = usable(rows,kind)
+            self.forecast_type = kind if self.forecast else None
+        self.forecast_updated = now
+        self.forecast_entity = entity
         return self.forecast
 
     async def _async_update_data(self):
@@ -108,6 +180,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         outdoor = self.value(self.settings['outdoor_entity'])
         source = self.hass.states.get(self.settings['price_entity'])
         heating_active = self.settings['heating_enabled']
+        await self.check_temperature_sensors(now,heating_active)
         setpoint_errors = await self.apply_season_targets(heating_active)
         previous_season = dict(self.season)
         self.season = collection_state(self.season,outdoor,now.timestamp(),self.settings)
@@ -119,7 +192,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         if self.season['collecting'] and not previous_season.get('collecting'):
             season_id = f'{year}-{year+1}'
         self.season['season_id'] = season_id or f'{year}-{year+1}'
-        if self.settings['season_archive_enabled'] and (previous_season.get('heating_active') and not heating_active):
+        if previous_season.get('heating_active') and not heating_active:
             keep_since = now.timestamp()-ARCHIVE_KEEP_DAYS*86400
             await self.hass.async_add_executor_job(self.history_db.compact_season,
                 previous_season.get('season_id',self.season['season_id']), deepcopy(self.models),deepcopy(self.config_fingerprint),keep_since)
@@ -129,9 +202,9 @@ class PilotCoordinator(DataUpdateCoordinator):
             self.suggested_runs.clear()
             for model in self.models.values():
                 model['response'] = 0.0
-            cutoff = now.timestamp()-self.settings['history_days']*86400
+            cutoff = now.timestamp()-HISTORY_DAYS*86400
             await self.hass.async_add_executor_job(self.history_db.append, [], cutoff, self.season['season_id'])
-            self.store.async_delay_save(lambda:{'models':self.models,'season':self.season,'applied_season_targets':self.applied_season_targets,'fingerprints':self.config_fingerprint},20)
+            self.store.async_delay_save(self.storage_data,20)
             return {'updated':now.isoformat(),'simulation_only':not self.settings['apply_season_setpoints'],'heating_active':False,
                 'collection':self.season,'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
                 'rooms':{},'outdoor':outdoor,'water':None,
@@ -153,8 +226,6 @@ class PilotCoordinator(DataUpdateCoordinator):
                 warnings.append(str(error))
         if not slots:
             warnings.append('No continuous prices from now: no heating plan is available.')
-        elif (slots[-1].end-now).total_seconds()/3600 < self.settings['horizon_hours']:
-            warnings.append(f'Known prices cover {(slots[-1].end-now).total_seconds()/3600:.1f} hours. Unpublished prices are not invented.')
         forecasts = await self.get_forecast(now)
         if not forecasts:
             warnings.append('No weather forecast: current outdoor temperature is held constant.')
@@ -163,7 +234,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             points = []
             for f in forecasts:
                 date = stamp(f.get('datetime'))
-                temp = number(f.get('templow') if self.settings['forecast_type']=='daily' else f.get('temperature'))
+                temp = number(f.get('templow',f.get('temperature')) if self.forecast_type=='daily' else f.get('temperature'))
                 if date and temp is not None:
                     points.append((date, temp))
             earlier = [p for p in points if p[0] <= slot.start]
@@ -174,7 +245,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         fireplace = bool(fireplace_state and fireplace_state.state == self.settings['fireplace_active_state'])
         readings, room_data = [], {}
         for configured_room in self.settings['rooms']:
-            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','water_reference','boost','setback','minimum','maximum')}}
+            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','boost','setback','minimum','maximum')}, 'water_reference':WATER_REFERENCE}
             rid = room['id']
             temperature = self.value(room['temperature_entity'])
             baseline = room['baseline']
@@ -194,14 +265,14 @@ class PilotCoordinator(DataUpdateCoordinator):
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
                       'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None}
-            if temperature is None or outdoor is None or baseline is None:
-                result['error'] = 'Room temperature, outdoor temperature or normal setpoint is unavailable.'
+            if temperature is None or outdoor is None or baseline is None or water is None:
+                result['error'] = 'Room temperature, outdoor temperature, supply water temperature or target temperature is unavailable.'
                 self.previous.pop(rid, None)
             elif not room['minimum'] <= baseline <= room['maximum']:
                 result['error'] = 'Target temperature is outside the allowed temperature range.'
                 self.previous.pop(rid, None)
             else:
-                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature))) if water is not None else 1.0
+                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature)))
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
                            'activity':activity, 'water_factor':water_factor, 'excluded':fireplace}
                 prediction = None
@@ -240,11 +311,10 @@ class PilotCoordinator(DataUpdateCoordinator):
             else:
                 result['learning_note'] = 'Model adapting to observations; assess reliability from prediction error.'
             room_data[rid] = result
-        cutoff = now.timestamp()-self.settings['history_days']*86400
+        cutoff = now.timestamp()-HISTORY_DAYS*86400
         await self.hass.async_add_executor_job(self.history_db.append, readings, cutoff, self.season['season_id'])
         # Model parameters are small; sample history lives in SQLite.
-        self.store.async_delay_save(lambda:{'models':self.models, 'season':self.season,
-                                           'applied_season_targets':self.applied_season_targets,'fingerprints':self.config_fingerprint}, 20)
+        self.store.async_delay_save(self.storage_data,20)
         archives = await self.hass.async_add_executor_job(self.history_db.summaries)
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,

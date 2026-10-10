@@ -9,6 +9,23 @@ const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(nam
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
 const panel=new Component();
+(async()=>{
+ const graphPanel=new Component();graphPanel.tab='history';graphPanel.historyHours=48;graphPanel._hass={states:{}};
+ const room={id:'native-room',name:'Study',activity_entity:'switch.floor_valve'};
+ graphPanel.settings={rooms:[room]};graphPanel.info={room_entities:{'native-room':{suggested:'binary_sensor.renamed_suggestion',actual:'binary_sensor.observed_demand'}}};
+ let createdConfig,mounted;const links=[];
+ const host={dataset:{roomHistory:'native-room'},isConnected:true,replaceChildren:card=>mounted=card,append:link=>links.push(link)};
+ graphPanel.shadowRoot.querySelectorAll=()=>[host];
+ context.loadCardHelpers=async()=>({createCardElement:config=>{createdConfig=config;return {};}});
+ context.document={createElement:()=>({})};
+ await graphPanel.mountHistoryGraphs();
+ assert.equal(createdConfig.type,'history-graph');assert.equal(createdConfig.hours_to_show,48);
+ assert.equal(createdConfig.entities[0].entity,'binary_sensor.renamed_suggestion');
+ assert.equal(createdConfig.entities[1].entity,'switch.floor_valve');assert.equal(mounted.hass,graphPanel._hass);
+ assert.match(links[0].href,/entity_id=binary_sensor.renamed_suggestion%2Cswitch.floor_valve/);
+ room.activity_entity='';assert.equal(graphPanel.historyGraphConfig(room).entities[1].entity,'binary_sensor.observed_demand');
+ console.log('Native history tests passed (renamed entity IDs, relay comparison, thermostat fallback, period and full-history link).');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 const quarterRows=vm.runInContext('quarterHourObservations',context);
 const hour=new Date(2026,9,10,0,0,0).getTime()/1000;
 const samples=[
@@ -51,7 +68,7 @@ console.log('Readable history tests passed (quarter-hour latest observations, le
  const handlers={},button={textContent:'Save settings'},control={disabled:false};let removed=0;
  const form={addEventListener:(name,handler)=>handlers[name]=handler,querySelector:()=>button,querySelectorAll:()=>[control,button]};
  savePanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:selector==='.message'?{remove:()=>removed++}:null;
- savePanel.message='Old save confirmation';savePanel.render();handlers.input();
+ savePanel.message='Old save confirmation';savePanel.render();handlers.input({});
  assert.equal(savePanel.message,'');assert.equal(removed,1);
  let finish,calls=0;savePanel.call=()=>{calls++;return new Promise(resolve=>finish=resolve);};
  const first=handlers.submit({preventDefault(){}});
@@ -71,7 +88,7 @@ panel.info={settings:panel.settings,source_fields:[['price_entity','Price sensor
 panel.tab='settings';panel.render();assert.match(panel.shadowRoot.innerHTML,/Save settings/);assert.match(panel.shadowRoot.innerHTML,/data-field="source.price_entity"/);assert.match(panel.shadowRoot.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/<script>alert/);
 panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/Simulation status/);assert.match(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
 panel.settings.apply_season_setpoints=true;panel.render();assert.match(panel.shadowRoot.innerHTML,/SEASON SETPOINT CONTROL ENABLED/);
-panel.tab='history';panel.history=[];panel.render();assert.match(panel.shadowRoot.innerHTML,/Season archives/);assert.match(panel.shadowRoot.innerHTML,/Download observations as CSV/);
+panel.tab='history';panel.history=[];panel.render();assert.match(panel.shadowRoot.innerHTML,/Season archives/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Download observations|id="export"/);
 console.log('Panel template tests passed (settings, status, history, command-mode banner, escaping).');
 
 // Exercise the actual click handler with and without secure-context UUID support.
@@ -133,7 +150,7 @@ assert.equal((settingsHTML.match(/<details>/g)||[]).length,4);
 assert.ok(settingsHTML.indexOf('<summary>Alpha')<settingsHTML.indexOf('<summary>beta'));
 assert.ok(settingsHTML.indexOf('<summary>beta')<settingsHTML.indexOf('<summary>Zulu'));
 assert.ok(settingsHTML.indexOf('<summary>Zulu')<settingsHTML.indexOf('<summary>New room'));
-assert.match(settingsHTML,/<summary>Alpha<\/summary>[\s\S]*?data-field="room2.name"/);
+assert.match(settingsHTML,/<summary>Alpha[\s\S]*?<\/summary>[\s\S]*?data-field="room2.name"/);
 assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','a','new']);
 const overviewHTML=sortedPanel.overview(),historyHTML=sortedPanel.historyView();
 for(const html of [overviewHTML,historyHTML])assert.ok(html.indexOf('<h2>Alpha')<html.indexOf('<h2>beta')&&html.indexOf('<h2>beta')<html.indexOf('<h2>Zulu'));
@@ -183,10 +200,10 @@ console.log('Friendly-name selector tests passed (selected names, distinct IDs f
 
 const groupedPanel=new Component();groupedPanel._hass={states:{}};
 groupedPanel.settings={boost:1.5,setback:1,lag_hours:3,water_reference:32,price_entity:'',rooms:[]};
-groupedPanel.info={source_fields:[['price_entity','Price','sensor',{kind:'price'}],['boost','Boost','number',0,5],['setback','Reduction','number',0,5],['lag_hours','Lag','number',.25,12],['water_reference','Reference','number',20,55]],room_fields:[]};
+groupedPanel.info={source_fields:[['price_entity','Price','sensor',{kind:'price'}],['boost','Boost','number',0,5],['setback','Reduction','number',0,5],['lag_hours','Lag','number',.25,12]],room_fields:[]};
 const groupedHTML=groupedPanel.settingsView();
 const sharedSection=groupedHTML.match(/<section class="settings-shared"><h2>Shared room settings<\/h2>[\s\S]*?<\/section>/)[0];
-for(const key of ['boost','setback','lag_hours','water_reference']){
+for(const key of ['boost','setback','lag_hours']){
  assert.match(sharedSection,new RegExp(`data-field="source.${key}"`));
  assert.equal(groupedHTML.split(`data-field="source.${key}"`).length-1,1);
 }
@@ -197,10 +214,21 @@ const preview=fs.readFileSync(path.join(__dirname,'../PREVIEW.html'),'utf8');
 const previewInfo=JSON.parse(preview.match(/const demo=([\s\S]*?);const states=/)[1]);
 const previewPanel=new Component();previewPanel._hass={states:{}};previewPanel.settings=previewInfo.settings;previewPanel.info=previewInfo;
 const previewSettings=previewPanel.settingsView();
+for(const field of previewInfo.source_fields){
+ assert.equal(previewSettings.split(`data-field="source.${field[0]}"`).length-1,1,`${field[0]} must remain editable exactly once`);
+}
+assert.match(previewSettings,/<h3>Electricity price settings<\/h3>/);
+assert.match(previewSettings,/<h3>Integration settings<\/h3>/);
+assert.match(previewSettings,/<h3>Thermostat settings<\/h3>/);
+assert.match(previewSettings,/value="hourly">hourly average<\/option>/);
+assert.match(previewSettings,/value="quarterly">15 minutes<\/option>/);
+assert.match(previewSettings,/value="flexible">flexible<\/option>/);
+const sourcesSection=previewSettings.match(/<section class="settings-sources">[\s\S]*?<\/section>/)[0];
+assert.match(sourcesSection,/source.simulation_enabled/);
 assert.match(previewSettings,/Shared room settings/);
 assert.match(previewSettings,/source.start_offset_minutes/);assert.match(previewSettings,/source.stop_offset_minutes/);
 assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute|room\d+\.active_value|room\d+\.design_room_temp/i);
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.7 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.8 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

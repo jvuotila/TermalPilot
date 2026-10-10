@@ -9,31 +9,26 @@ SOURCE_FIELDS = [
  ('price_entity','Price sensor with additional costs','sensor',{'kind':'price'}),
  ('price_format','Source list resolution','select:hourly,quarterly'),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
- ('pricing_mode','Scheduling mode: hourly averages / quarter-hours / flexible runs','select:hourly,quarterly,flexible'),
+ ('pricing_mode','Scheduling mode','select:hourly,quarterly,flexible'),
  ('minimum_run_minutes','Minimum flexible heating run, minutes','number',15,360,15),
  ('weather_entity','Weather forecast source','weather'),
- ('forecast_type','Forecast type','select:hourly,daily'),
  ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
- ('water_entity','Supply water temperature source (optional)','sensor,climate',{'kind':'water'}),
+ ('water_entity','Supply water temperature source','sensor,climate',{'kind':'water'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
- ('horizon_hours','Maximum planning horizon, hours','number',6,72),
  ('simulation_enabled','Enable simulation for all rooms','bool'),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
  ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),
  ('boost','Heating setpoint boost (°C)','number',0,5),
- ('setback','Idle setpoint reduction (°C)','number',0,5),
+ ('setback','Idle setpoint reduction (°C)','number',-5,0,0.1),
  ('start_offset_minutes','Raise thermostat before heating starts, minutes','number',0,30),
  ('stop_offset_minutes','Lower thermostat before heating stops, minutes','number',0,30),
  ('lag_hours','Estimated thermal response lag, hours','number',.25,12),
  ('curve_warm_temp','Heating-hours curve warm outdoor temperature (°C)','number',-40,25),
  ('curve_cold_temp','Heating-hours curve cold outdoor temperature (°C)','number',-40,25),
- ('water_reference','Reference supply water temperature (°C)','number',20,55),
  ('apply_season_setpoints','Apply Active/Passive season setpoints to real thermostats','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
- ('season_archive_enabled','Compact observations at heating-season end','bool'),
- ('history_days','Local history retention, days','number',1,90),
 ]
 ROOM_FIELDS = [
  ('name','Room name','text'), ('thermostat','Thermostat','climate'),
@@ -84,15 +79,19 @@ def setup_selector_config(hass, key):
     """Use the same source rules in Home Assistant's native initial setup form."""
     field = next(field for field in SOURCE_FIELDS if field[0] == key)
     rule = field[3]
-    return {'filter': {'domain': 'sensor'}, 'exclude_entities': [
-        state.entity_id for state in hass.states.async_all('sensor')
+    domains = field[2].split(',')
+    return {'filter': {'domain': domains[0] if len(domains)==1 else domains}, 'exclude_entities': [
+        state.entity_id for domain in domains for state in hass.states.async_all(domain)
         if not entity_matches(state, rule)]}
 
 
 def stored_settings(data, options):
-    """Convert legacy positive fireplace reductions when loading stored entries."""
+    """Convert legacy positive reductions when loading stored entries."""
     merged = {**DEFAULTS, **data, **options}
     settings = deepcopy({key:merged[key] for key in DEFAULTS})
+    setback = number(settings['setback'])
+    if setback is not None and setback > 0:
+        settings['setback'] = -setback
     for room in settings['rooms']:
         value = number(room.get('fireplace_reduction'))
         if value is not None and value > 0:
@@ -132,7 +131,7 @@ def validate(payload, hass=None):
     check(result, SOURCE_FIELDS)
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
-    for key in ('horizon_hours','history_days','minimum_run_minutes','start_offset_minutes','stop_offset_minutes'):
+    for key in ('minimum_run_minutes','start_offset_minutes','stop_offset_minutes'):
         if result[key] != int(result[key]):
             raise ValueError(f'{key}: use an integer.')
         result[key] = int(result[key])
@@ -140,8 +139,8 @@ def validate(payload, hass=None):
         raise ValueError('Cold curve temperature must be below warm curve temperature.')
     if result['minimum_run_minutes'] % 15:
         raise ValueError('Minimum heating run must be a multiple of 15 minutes.')
-    if not result['price_entity'] or not result['outdoor_entity']:
-        raise ValueError('Select at least price and outdoor temperature sensors.')
+    if not result['price_entity'] or not result['outdoor_entity'] or not result['water_entity']:
+        raise ValueError('Select price, outdoor temperature and supply water temperature sources.')
     if not isinstance(result['rooms'], list) or len(result['rooms']) > 30:
         raise ValueError('A maximum of 30 rooms is supported.')
     rooms, ids, thermostats = [], set(), set()

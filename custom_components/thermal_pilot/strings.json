@@ -7,7 +7,8 @@
         "description": "Select sources. Configure rooms and all settings in the ThermalPilot sidebar panel. Heating schedules remain simulated; physical season setpoints are optional.",
         "data": {
           "price_entity": "Price sensor",
-          "outdoor_entity": "Outdoor temperature sensor"
+          "outdoor_entity": "Outdoor temperature sensor",
+          "water_entity": "Supply water temperature source"
         }
       }
     },
