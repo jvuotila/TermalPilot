@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.2 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.3 — experimental simulation-first Home Assistant custom integration**.
 
 ThermalPilot proposes room-by-room heating schedules using electricity prices,
 weather forecasts and observed thermal response. It is designed initially for
@@ -34,6 +34,22 @@ service per configuration entry. This classification follows the
   season archives and retained learned parameters for the following season.
 - A **shared summer setpoint**, default 10 C, and optional actual season setpoint
   application. Scheduled heating decisions always remain simulated in version 0.1.
+
+Rooms are displayed alphabetically by name in Settings, Plan and History.
+Unnamed new rooms appear last; sorting preserves each room's identity and data.
+
+## Entity selection
+
+Temperature fields show temperature sensors, including template sensors with
+temperature units and no device class. Electrical power fields show power sensors
+in W/kW rather than energy counters. Price sources must expose `today`, `tomorrow`,
+`raw_today` or `raw_tomorrow` list attributes. Target helpers accept temperature
+entities or unitless number helpers. Activity selectors accept binary sensors,
+switches and discrete state sensors; custom room activity attributes remain usable.
+Weather and thermostat fields are restricted to their respective entity domains.
+
+Already configured sources remain visible if unavailable or no longer matching
+the filter, with an explanatory label. They are never silently cleared.
 
 ## Important operating distinction
 

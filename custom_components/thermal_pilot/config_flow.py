@@ -7,6 +7,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from .const import DOMAIN, DEFAULTS
+from .config import setup_selector_config
 
 
 class ThermalPilotFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -18,8 +19,8 @@ class ThermalPilotFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return self.async_create_entry(title='ThermalPilot', data={**DEFAULTS, **user_input})
         return self.async_show_form(step_id='user', data_schema=vol.Schema({
-            vol.Required('price_entity'): selector.EntitySelector({'domain':'sensor'}),
-            vol.Required('outdoor_entity'): selector.EntitySelector({'domain':'sensor'}),
+            vol.Required('price_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'price_entity')),
+            vol.Required('outdoor_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'outdoor_entity')),
         }))
 
     @staticmethod

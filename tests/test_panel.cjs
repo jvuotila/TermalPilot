@@ -42,3 +42,48 @@ for(const mode of ['native','http','missing']){
   assert.match(testPanel.shadowRoot.innerHTML,/New room/);
 }
 console.log('Add Room click tests passed (native UUID, HTTP-compatible crypto, no crypto, unsaved settings).');
+
+// Shared fixtures also exercise the Python setup-selector rules.
+const cases=JSON.parse(fs.readFileSync(path.join(__dirname,'entity_selector_cases.json'),'utf8'));
+const matches=vm.runInContext('entityMatches',context);
+for(const item of cases){
+  for(const kind of ['temperature','power','price','target','activity'])assert.equal(matches(item,{kind}),item.matches.includes(kind),`${item.entity_id}: ${kind}`);
+}
+const filterPanel=new Component();filterPanel._hass={states:Object.fromEntries(cases.map(item=>[item.entity_id,item]))};
+for(const [key,domain,kind,expected] of [
+  ['temperature_entity','sensor','temperature',['sensor.room','sensor.template','sensor.temperature_state']],
+  ['power_entity','sensor','power',['sensor.power','sensor.power_template']],
+  ['price_entity','sensor','price',['sensor.price','sensor.price_legacy']],
+  ['baseline_entity','input_number,number,sensor','target',['input_number.target','number.target','sensor.room','sensor.template','sensor.temperature_state']],
+  ['activity_entity','sensor,binary_sensor,switch','activity',['sensor.state','sensor.custom_state','sensor.digital','binary_sensor.heat','switch.valve']],
+]){
+ const html=filterPanel.field([key,key,domain,{kind}],{[key]:''},'source');
+ for(const item of cases)assert.equal(html.includes(`value="${item.entity_id}"`),expected.includes(item.entity_id),`${key}: ${item.entity_id}`);
+}
+const retained=filterPanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.humidity'},'room0');
+assert.match(retained,/selected value="sensor.humidity"/);assert.match(retained,/does not match filter/);
+const missing=filterPanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.missing'},'room0');assert.match(missing,/unavailable/);
+assert.equal(matches({entity_id:'sensor.room',state:'20',attributes:{device_class:'temperature',valve:'open'}},{kind:'activity'},{activity_attribute:'valve'}),true);
+console.log('Typed selector tests passed (temperature, power, prices, targets, activity, retained selections).');
+
+const sortedPanel=new Component();sortedPanel._hass={states:{}};sortedPanel.tab='settings';sortedPanel.history=[];
+sortedPanel.settings={rooms:[{id:'z',name:'Zulu'},{id:'b',name:'beta'},{id:'a',name:'Alpha'},{id:'new',name:''}]};
+sortedPanel.info={source_fields:[],room_fields:[['name','Room name','text']],room_defaults:{},data:{rooms:{z:{name:'Zulu'},b:{name:'beta'},a:{name:'Alpha'}}}};
+const settingsHTML=sortedPanel.settingsView();
+assert.ok(settingsHTML.indexOf('<summary>Alpha')<settingsHTML.indexOf('<summary>beta'));
+assert.ok(settingsHTML.indexOf('<summary>beta')<settingsHTML.indexOf('<summary>Zulu'));
+assert.ok(settingsHTML.indexOf('<summary>Zulu')<settingsHTML.indexOf('<summary>New room'));
+assert.match(settingsHTML,/<summary>Alpha<\/summary>[\s\S]*?data-field="room2.name"/);
+assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','a','new']);
+const overviewHTML=sortedPanel.overview(),historyHTML=sortedPanel.historyView();
+for(const html of [overviewHTML,historyHTML])assert.ok(html.indexOf('<h2>Alpha')<html.indexOf('<h2>beta')&&html.indexOf('<h2>beta')<html.indexOf('<h2>Zulu'));
+let removalButtons=[];
+sortedPanel.shadowRoot.querySelectorAll=selector=>{
+ if(selector==='[data-field]')return [{dataset:{field:'room0.name'},type:'text',value:'Zulu edited'}];
+ if(selector==='[data-remove]')return removalButtons=[...sortedPanel.shadowRoot.innerHTML.matchAll(/data-remove="(\d+)"/g)].map(m=>({dataset:{remove:m[1]}}));
+ return [];
+};
+sortedPanel.render();removalButtons.find(b=>b.dataset.remove==='2').onclick();
+assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','new']);
+assert.equal(sortedPanel.settings.rooms[0].name,'Zulu edited');
+console.log('Alphabetical room tests passed (Settings, Plan, History, stable IDs, editing and removal).');

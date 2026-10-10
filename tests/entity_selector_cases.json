@@ -1,0 +1,187 @@
+[
+  {
+    "entity_id": "sensor.room",
+    "state": "20",
+    "attributes": {
+      "device_class": "temperature",
+      "unit_of_measurement": "\u00b0C"
+    },
+    "matches": [
+      "temperature",
+      "target"
+    ]
+  },
+  {
+    "entity_id": "sensor.template",
+    "state": "unknown",
+    "attributes": {
+      "unit_of_measurement": "\u00b0C"
+    },
+    "matches": [
+      "temperature",
+      "target"
+    ]
+  },
+  {
+    "entity_id": "sensor.humidity",
+    "state": "50",
+    "attributes": {
+      "device_class": "humidity",
+      "unit_of_measurement": "%"
+    },
+    "matches": []
+  },
+  {
+    "entity_id": "sensor.power",
+    "state": "unavailable",
+    "attributes": {
+      "device_class": "power",
+      "unit_of_measurement": "W"
+    },
+    "matches": [
+      "power"
+    ]
+  },
+  {
+    "entity_id": "sensor.power_template",
+    "state": "1.2",
+    "attributes": {
+      "unit_of_measurement": "kW"
+    },
+    "matches": [
+      "power"
+    ]
+  },
+  {
+    "entity_id": "sensor.energy",
+    "state": "3",
+    "attributes": {
+      "device_class": "energy",
+      "unit_of_measurement": "kWh"
+    },
+    "matches": []
+  },
+  {
+    "entity_id": "sensor.price",
+    "state": "0.2",
+    "attributes": {
+      "raw_today": [],
+      "unit_of_measurement": "EUR/kWh"
+    },
+    "matches": [
+      "price"
+    ]
+  },
+  {
+    "entity_id": "sensor.price_legacy",
+    "state": "0.2",
+    "attributes": {
+      "today": [
+        1,
+        2
+      ],
+      "tomorrow": []
+    },
+    "matches": [
+      "price"
+    ]
+  },
+  {
+    "entity_id": "sensor.spot_current",
+    "state": "0.2",
+    "attributes": {
+      "unit_of_measurement": "EUR/kWh"
+    },
+    "matches": []
+  },
+  {
+    "entity_id": "sensor.state",
+    "state": "heating",
+    "attributes": {
+      "device_class": "enum"
+    },
+    "matches": [
+      "activity"
+    ]
+  },
+  {
+    "entity_id": "sensor.custom_state",
+    "state": "running",
+    "attributes": {},
+    "matches": [
+      "activity"
+    ]
+  },
+  {
+    "entity_id": "sensor.digital",
+    "state": "1",
+    "attributes": {},
+    "matches": [
+      "activity"
+    ]
+  },
+  {
+    "entity_id": "sensor.temperature_state",
+    "state": "heating",
+    "attributes": {
+      "device_class": "temperature"
+    },
+    "matches": [
+      "temperature",
+      "target"
+    ]
+  },
+  {
+    "entity_id": "sensor.date",
+    "state": "2026-10-10",
+    "attributes": {
+      "device_class": "date"
+    },
+    "matches": []
+  },
+  {
+    "entity_id": "input_number.target",
+    "state": "20",
+    "attributes": {},
+    "matches": [
+      "target"
+    ]
+  },
+  {
+    "entity_id": "number.target",
+    "state": "20",
+    "attributes": {
+      "unit_of_measurement": "\u00b0C"
+    },
+    "matches": [
+      "temperature",
+      "target"
+    ]
+  },
+  {
+    "entity_id": "number.power_limit",
+    "state": "20",
+    "attributes": {
+      "unit_of_measurement": "W"
+    },
+    "matches": [
+      "power"
+    ]
+  },
+  {
+    "entity_id": "binary_sensor.heat",
+    "state": "on",
+    "attributes": {},
+    "matches": [
+      "activity"
+    ]
+  },
+  {
+    "entity_id": "switch.valve",
+    "state": "off",
+    "attributes": {},
+    "matches": [
+      "activity"
+    ]
+  }
+]

@@ -12,6 +12,28 @@ function roomId(){
   const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
+function entityMatches(state,rule={},settings={}){
+  const attrs=state.attributes||{},domain=state.entity_id.split('.')[0];
+  const deviceClass=attrs.device_class,unit=String(attrs.unit_of_measurement||'').trim().toLowerCase();
+  const temperature=deviceClass==='temperature'||(!deviceClass&&['°c','°f','c','f','k','°k'].includes(unit));
+  if(rule.kind==='temperature')return temperature;
+  if(rule.kind==='power')return deviceClass==='power'||(!deviceClass&&['w','kw'].includes(unit));
+  if(rule.kind==='price')return ['today','tomorrow','raw_today','raw_tomorrow'].some(key=>Array.isArray(attrs[key]));
+  if(rule.kind==='target')return temperature||(['number','input_number'].includes(domain)&&!deviceClass&&!unit);
+  if(rule.kind==='activity'){
+    if(['binary_sensor','switch'].includes(domain))return true;
+    if(settings.activity_attribute&&Object.hasOwn(attrs,settings.activity_attribute))return true;
+    if((deviceClass&&deviceClass!=='enum')||unit)return false;
+    const value=String(state.state??'').trim().toLowerCase();
+    return deviceClass==='enum'||['0','1'].includes(value)||(!['','unknown','unavailable'].includes(value)&&!Number.isFinite(Number(value)))||Object.hasOwn(attrs,'hvac_action');
+  }
+  return true;
+}
+function compareRoomNames(a,b){
+  const first=String(a.name||'').trim(),second=String(b.name||'').trim();
+  if(!first||!second)return first?-1:second?1:0;
+  return first.localeCompare(second,undefined,{sensitivity:'base',numeric:true});
+}
 class ThermalPilotPanel extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;}
   set hass(value){this._hass=value;if(this.isConnected && !this.loaded && !this.loading)this.load();}
@@ -39,16 +61,18 @@ class ThermalPilotPanel extends HTMLElement {
     else if(type==='number')input=`<input type="number" step="any" min="${min}" max="${max}" data-field="${name}" value="${escapeHTML(value)}">`;
     else if(type==='text')input=`<input data-field="${name}" value="${escapeHTML(value)}">`;
     else{
-      const domains=type.split(',');const entities=Object.values(this._hass.states).filter(s=>domains.includes(s.entity_id.split('.')[0])).sort((a,b)=>(a.attributes.friendly_name||a.entity_id).localeCompare(b.attributes.friendly_name||b.entity_id));
-      input=`<select data-field="${name}"><option value="">— Select / not used —</option>${value&&!entities.some(s=>s.entity_id===value)?`<option selected value="${escapeHTML(value)}">${escapeHTML(value)} (unavailable)</option>`:''}${entities.map(s=>`<option value="${escapeHTML(s.entity_id)}" ${s.entity_id===value?'selected':''}>${escapeHTML(s.attributes.friendly_name||s.entity_id)} · ${escapeHTML(s.entity_id)}</option>`).join('')}</select>`;
+      const domains=type.split(','),rule=field[3]||{};const entities=Object.values(this._hass.states).filter(s=>domains.includes(s.entity_id.split('.')[0])&&entityMatches(s,rule,obj)).sort((a,b)=>(a.attributes.friendly_name||a.entity_id).localeCompare(b.attributes.friendly_name||b.entity_id));
+      const retained=value&&!entities.some(s=>s.entity_id===value)?`<option selected value="${escapeHTML(value)}">${escapeHTML(value)} (${this._hass.states[value]?'does not match filter':'unavailable'})</option>`:'';
+      input=`<select data-field="${name}"><option value="">— Select / not used —</option>${retained}${entities.map(s=>`<option value="${escapeHTML(s.entity_id)}" ${s.entity_id===value?'selected':''}>${escapeHTML(s.attributes.friendly_name||s.entity_id)} · ${escapeHTML(s.entity_id)}</option>`).join('')}</select>`;
     }
     return `<label><span>${escapeHTML(label)}</span>${input}</label>`;
   }
   settingsView(){
     const i=this.info;
+    const rooms=this.settings.rooms.map((room,index)=>({room,index})).sort((a,b)=>compareRoomNames(a.room,b.room));
     return `<form id="settings"><section><h2>Data sources and shared settings</h2><p>The price source needs today/tomorrow lists or timestamped raw_today/raw_tomorrow lists. Select the correct unit and avoid adding grid charges or margin twice.</p><div class="grid">${i.source_fields.map(f=>this.field(f,this.settings,'source')).join('')}</div></section>
     <section><h2>Rooms</h2><p>Set the normal temperature explicitly or use a helper. The changing thermostat setpoint is not used as the baseline. An empty activity source uses the thermostat hvac_action attribute.</p>
-    ${this.settings.rooms.map((r,index)=>`<details open><summary>${escapeHTML(r.name||'New room')}</summary><div class="grid">${i.room_fields.map(f=>this.field(f,r,`room${index}`)).join('')}</div><button type="button" data-remove="${index}">Remove room</button><button type="button" data-reset="${escapeHTML(r.id)}">Reset learning for this room</button></details>`).join('')}
+    ${rooms.map(({room:r,index})=>`<details open><summary>${escapeHTML(r.name||'New room')}</summary><div class="grid">${i.room_fields.map(f=>this.field(f,r,`room${index}`)).join('')}</div><button type="button" data-remove="${index}">Remove room</button><button type="button" data-reset="${escapeHTML(r.id)}">Reset learning for this room</button></details>`).join('')}
     <button type="button" id="add">Add room</button></section><div class="sticky"><button class="primary" type="submit">Save settings</button><span>${this.settings.apply_season_setpoints?'Season transitions change real thermostat setpoints':'Simulation only · device settings are never changed'}</span></div></form>`;
   }
   chart(rows,key,alternate){
@@ -59,14 +83,14 @@ class ThermalPilotPanel extends HTMLElement {
     return `<svg viewBox="0 0 800 180" role="img" aria-label="Temperature development"><text x="2" y="18">${high.toFixed(1)} °C</text><line x1="20" y1="150" x2="780" y2="150" stroke="#aaa"/><polyline points="${points(key)}" fill="none" stroke="#1976d2" stroke-width="3"/>${alternate?`<polyline points="${points(alternate)}" fill="none" stroke="#e49025" stroke-width="2"/>`:''}<text x="20" y="175">${escapeHTML(timeLabel(first*1000))}</text><text x="600" y="175">${escapeHTML(timeLabel(last*1000))}</text></svg>`;
   }
   overview(){
-    const data=this.info.data||{};const rooms=Object.entries(data.rooms||{});
+    const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));
     return `<section><h2>Simulation status</h2><button id="toggle-active" class="primary">${this.settings.heating_enabled?'Set passive':'Set active'}</button><p>Effective operation: <strong>${data.heating_active===false?'Passive':'Active'}</strong>. An optional activation helper must also permit operation.</p><p>Stored samples: ${data.history_info?.rows??0} · local database ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</p><p>Collection: <strong>${data.collection?.collecting?'Active':'Paused'}</strong> · smoothed outdoor temperature ${data.collection?.average?.toFixed(1)??'—'} °C</p><p>Updated ${escapeHTML(data.updated?timeLabel(data.updated):'—')} · outdoors ${escapeHTML(data.outdoor)} °C · supply water ${escapeHTML(data.water??'—')} °C</p>${(data.warnings||[]).map(w=>`<p class="warning">${escapeHTML(w)}</p>`).join('')}</section>${!rooms.length?'<section>Add rooms on the Settings page.</section>':''}
     ${rooms.map(([id,r])=>{const p=r.plan,m=r.model||{};return `<section><h2>${escapeHTML(r.name)} <small>${p?(p.heat?'Heat storage':'Idle / reduced setpoint'):'No suggestion'}</small></h2><div class="metrics"><div>Measured<strong>${escapeHTML(r.temperature??'—')} °C</strong></div><div>Suggested setpoint<strong>${escapeHTML(p?.setpoint??'—')} °C</strong></div><div>Actual heating<strong>${r.actual_activity==null?'Unknown':r.actual_activity?'Active':'Inactive'}</strong></div><div>Short-term prediction error<strong>${m.mae==null?'—':m.mae.toFixed(3)+' °C'}</strong></div></div><p>${escapeHTML(r.error||p?.reason||'Waiting for data.')}</p><p>${escapeHTML(r.learning_note)} · samples ${m.samples||0} · heating ${(m.heated_hours||0).toFixed(1)} h / idle ${(m.idle_hours||0).toFixed(1)} h</p>
     ${p?`${this.chart(p.slots,'temperature')}<p>Blue: predicted temperature under the proposed plan. This outcome has not been observed.</p><div class="scroll"><table><thead><tr><th>Starts</th><th>Price ct/kWh</th><th>Suggestion</th><th>Setpoint °C</th><th>Prediction °C</th></tr></thead><tbody>${p.slots.map(s=>`<tr class="${s.heat?'heat':''}"><td>${escapeHTML(timeLabel(s.start))}</td><td>${s.price.toFixed(2)}</td><td>${s.heat?'Store heat':'Idle'}</td><td>${s.setpoint}</td><td>${s.temperature.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;}).join('')}`;
   }
   historyView(){
     return `<section><h2>Observations and suggestions</h2><label>Period<select id="history-hours">${[24,48,168,720].map(h=>`<option value="${h}" ${h===this.historyHours?'selected':''}>${h} hours</option>`).join('')}</select></label><button id="export">Download observations as CSV</button><p>Blue: measured temperature. Orange: short-term prediction from the preceding observation and actual heating. This validates the model, not counterfactual savings.</p></section>
-    <section><h2>Season archives</h2><p>Learned parameters and season aggregates are retained when old observations are compacted.</p>${(this.info.data?.season_summaries||[]).map(a=>`<p>${escapeHTML(a.season)} · ${escapeHTML(this.settings.rooms.find(r=>r.id===a.room_id)?.name||a.room_id)} · ${a.statistics?.samples||0} observations · loss ${(a.model?.loss||0).toFixed(4)} · heating gain ${(a.model?.gain||0).toFixed(3)}</p>`).join('')||'<p>No completed heating season yet.</p>'}</section>${this.settings.rooms.map(room=>{const rows=(this.history||[]).filter(r=>r.room_id===room.id);const recent=rows.slice(-288);return `<section><h2>${escapeHTML(room.name)}</h2>${this.chart(rows,'temperature','prediction')}<div class="scroll"><table><thead><tr><th>Time</th><th>Suggested run</th><th>Actual heating</th><th>Measured °C</th><th>Suggested setpoint °C</th></tr></thead><tbody>${recent.reverse().map(r=>`<tr><td>${escapeHTML(timeLabel(r.time*1000))}</td><td>${r.suggested_heat===null?'—':r.suggested_heat?'Heating':'Idle'}</td><td>${r.activity===null?'—':r.activity?'Active':'Inactive'}</td><td>${r.temperature}</td><td>${r.suggested_setpoint??'—'}</td></tr>`).join('')}</tbody></table></div><p>Table shows up to 288 latest samples. CSV includes the selected period.</p></section>`;}).join('')}`;
+    <section><h2>Season archives</h2><p>Learned parameters and season aggregates are retained when old observations are compacted.</p>${(this.info.data?.season_summaries||[]).map(a=>`<p>${escapeHTML(a.season)} · ${escapeHTML(this.settings.rooms.find(r=>r.id===a.room_id)?.name||a.room_id)} · ${a.statistics?.samples||0} observations · loss ${(a.model?.loss||0).toFixed(4)} · heating gain ${(a.model?.gain||0).toFixed(3)}</p>`).join('')||'<p>No completed heating season yet.</p>'}</section>${[...this.settings.rooms].sort(compareRoomNames).map(room=>{const rows=(this.history||[]).filter(r=>r.room_id===room.id);const recent=rows.slice(-288);return `<section><h2>${escapeHTML(room.name)}</h2>${this.chart(rows,'temperature','prediction')}<div class="scroll"><table><thead><tr><th>Time</th><th>Suggested run</th><th>Actual heating</th><th>Measured °C</th><th>Suggested setpoint °C</th></tr></thead><tbody>${recent.reverse().map(r=>`<tr><td>${escapeHTML(timeLabel(r.time*1000))}</td><td>${r.suggested_heat===null?'—':r.suggested_heat?'Heating':'Idle'}</td><td>${r.activity===null?'—':r.activity?'Active':'Inactive'}</td><td>${r.temperature}</td><td>${r.suggested_setpoint??'—'}</td></tr>`).join('')}</tbody></table></div><p>Table shows up to 288 latest samples. CSV includes the selected period.</p></section>`;}).join('')}`;
   }
   capture(){this.shadowRoot.querySelectorAll('[data-field]').forEach(input=>{const [prefix,key]=input.dataset.field.split('.');const obj=prefix==='source'?this.settings:this.settings.rooms[Number(prefix.slice(4))];obj[key]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;});}
   render(){

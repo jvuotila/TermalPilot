@@ -6,7 +6,7 @@ from .model import number
 
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
- ('price_entity','Price sensor (today/tomorrow or raw_today/raw_tomorrow)','sensor'),
+ ('price_entity','Price sensor (today/tomorrow or raw_today/raw_tomorrow)','sensor',{'kind':'price'}),
  ('price_format','Source list resolution','select:hourly,quarterly'),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
  ('pricing_mode','Scheduling mode: hourly averages / quarter-hours / flexible runs','select:hourly,quarterly,flexible'),
@@ -23,10 +23,10 @@ SOURCE_FIELDS = [
  ('margin','Margin missing from source lists, ct/kWh','number',0,100),
  ('weather_entity','Weather forecast source','weather'),
  ('forecast_type','Forecast type','select:hourly,daily'),
- ('outdoor_entity','Outdoor temperature','sensor'),
- ('water_entity','Supply water temperature (optional)','sensor'),
- ('power_entity','Heating electrical power W/kW (optional)','sensor'),
- ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor'),
+ ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
+ ('water_entity','Supply water temperature (optional)','sensor',{'kind':'temperature'}),
+ ('power_entity','Heating electrical power W/kW (optional)','sensor',{'kind':'power'}),
+ ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('learning_enabled','Enable learning','bool'),
  ('horizon_hours','Maximum planning horizon, hours','number',6,72),
@@ -46,11 +46,11 @@ SOURCE_FIELDS = [
 ]
 ROOM_FIELDS = [
  ('name','Room name','text'), ('thermostat','Thermostat','climate'),
- ('temperature_entity','Room temperature sensor','sensor'),
- ('activity_entity','Actual heating activity sensor (optional)','sensor,binary_sensor,switch'),
+ ('temperature_entity','Room temperature sensor','sensor',{'kind':'temperature'}),
+ ('activity_entity','Actual heating activity sensor (optional)','sensor,binary_sensor,switch',{'kind':'activity'}),
  ('activity_attribute','Activity attribute (empty = entity state)','text'),
  ('active_value','Active value (e.g. on or heating)','text'),
- ('baseline_entity','Heating-season target helper (optional)','input_number,number,sensor'),
+ ('baseline_entity','Heating-season target helper (optional)','input_number,number,sensor',{'kind':'target'}),
  ('baseline','Heating-season target temperature, C','number',5,30),
  ('minimum','Minimum allowed temperature, C','number',5,30),
  ('maximum','Maximum allowed temperature, C','number',5,35),
@@ -66,6 +66,45 @@ ROOM_FIELDS = [
  ('fireplace_reduction','Estimated fireplace heat-loss offset, %','number',0,80),
  ('enabled','Enable room simulation','bool'),
 ]
+
+
+def entity_matches(state, rule, settings=None):
+    """Filter choices by semantic metadata, including unit-only template sensors."""
+    attrs = state.attributes
+    domain = state.entity_id.split('.')[0]
+    kind = rule.get('kind')
+    device_class = attrs.get('device_class')
+    unit = str(attrs.get('unit_of_measurement') or '').strip().lower()
+    temperature = device_class == 'temperature' or (not device_class and unit in ('°c', '°f', 'c', 'f', 'k', '°k'))
+    if kind == 'temperature':
+        return temperature
+    if kind == 'power':
+        return device_class == 'power' or (not device_class and unit in ('w', 'kw'))
+    if kind == 'price':
+        return any(isinstance(attrs.get(key), (list, tuple)) for key in ('today', 'tomorrow', 'raw_today', 'raw_tomorrow'))
+    if kind == 'target':
+        return temperature or (domain in ('number', 'input_number') and not device_class and not unit)
+    if kind == 'activity':
+        if domain in ('binary_sensor', 'switch'):
+            return True
+        attribute = (settings or {}).get('activity_attribute')
+        if attribute and attribute in attrs:
+            return True
+        if device_class not in (None, '', 'enum') or unit:
+            return False
+        # Unitless discrete states are suitable for configurable active-value matching.
+        value = str(state.state).strip().lower()
+        return device_class == 'enum' or value in ('0', '1') or (number(value) is None and value not in ('unknown', 'unavailable', '')) or 'hvac_action' in attrs
+    return True
+
+
+def setup_selector_config(hass, key):
+    """Use the same source rules in Home Assistant's native initial setup form."""
+    field = next(field for field in SOURCE_FIELDS if field[0] == key)
+    rule = field[3]
+    return {'filter': {'domain': 'sensor'}, 'exclude_entities': [
+        state.entity_id for state in hass.states.async_all('sensor')
+        if not entity_matches(state, rule)]}
 
 
 def validate(payload, hass=None):
