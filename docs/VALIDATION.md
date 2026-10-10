@@ -3,6 +3,8 @@
 - 57 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - HA adapter tests use minimal doubles; there is no installed HA runtime here.
 - Python modules compile and frontend JavaScript passes Node syntax checking.
+- History tests cover quarter-hour selection, legends, On/Off/Unknown states,
+  and temperature-axis bounds including both measured and predicted values.
 - Panel tests cover save feedback, five-second notifications, repeated saves,
   cancelled/confirmed room actions, and global simulation controls.
 - Python tests cover Active/Passive collection and negative fireplace compensation

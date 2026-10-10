@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.6 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.7 — experimental simulation-first Home Assistant custom integration**.
 
 ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
 with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
@@ -64,6 +64,20 @@ after five seconds. Settings sections use distinct subtle background colors.
 Fireplace heating compensation uses -100% to 0%; -20% reduces estimated heat
 loss by 20% while the fireplace is active. Existing positive compensation
 values are converted when loading settings to preserve their effect.
+
+## Reading room history
+
+Room charts have a legend: blue is measured temperature; the dashed orange line
+is the model prediction using actual heating demand. This checks short-term model
+accuracy, not the simulated outcome of the suggested schedule. Both lines are
+included in the temperature-axis scale. Short views use quarter-hour time labels.
+
+History tables show the latest observation in each 15-minute interval. Suggested
+heating-window On/Off describes the proposed boosted-target window; actual
+thermostat-demand On/Off describes the observed relay or thermostat request. These
+can differ, and neither proves heat flow. Missing observations show Unknown.
+The suggested thermostat target is the proposed setpoint, not a room-temperature
+forecast. CSV exports retain the original observation resolution.
 
 ## Entity selection
 

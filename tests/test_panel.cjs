@@ -9,6 +9,25 @@ const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(nam
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
 const panel=new Component();
+const quarterRows=vm.runInContext('quarterHourObservations',context);
+const hour=new Date(2026,9,10,0,0,0).getTime()/1000;
+const samples=[
+ {room_id:'history-room',time:hour+3*60,temperature:20,prediction:20.1,suggested_heat:1,activity:0,suggested_setpoint:21.5},
+ {room_id:'history-room',time:hour+12*60,temperature:20.2,prediction:20.3,suggested_heat:0,activity:1,suggested_setpoint:19},
+ {room_id:'history-room',time:hour+21*60,temperature:20.4,prediction:null,suggested_heat:null,activity:null,suggested_setpoint:null},
+];
+const quarters=quarterRows(samples.slice().reverse());
+assert.equal(quarters.length,2);assert.equal(quarters[0].time,hour+12*60);assert.equal(quarters[1].interval_start,hour+15*60);
+const historyPanel=new Component();historyPanel.settings={rooms:[{id:'history-room',name:'Study'}]};historyPanel.info={data:{}};historyPanel.history=samples;
+const readableHistory=historyPanel.historyView();
+assert.match(readableHistory,/Measured temperature/);assert.match(readableHistory,/Model prediction using actual heating/);
+assert.match(readableHistory,/00:00/);assert.match(readableHistory,/00:15/);assert.match(readableHistory,/00:30/);
+assert.match(readableHistory,/<td>Off<\/td><td>On<\/td>/);assert.match(readableHistory,/<td>Unknown<\/td><td>Unknown<\/td>/);
+assert.match(readableHistory,/Suggested thermostat target \(°C\)/);assert.match(readableHistory,/not an average/);
+assert.doesNotMatch(readableHistory,/>Idle<|>Inactive<|>Heating</);
+const chartWithLargePrediction=historyPanel.chart([{time:hour,temperature:20,prediction:25}],'temperature','prediction');
+assert.match(chartWithLargePrediction,/25.1 °C/);assert.match(chartWithLargePrediction,/stroke-dasharray/);
+console.log('Readable history tests passed (quarter-hour latest observations, legends, On/Off/Unknown, scale includes both lines).');
 (async()=>{
  let ToastPanel,nextTimer=0;const timers=new Map(),callbacks=[];
  const toastContext={...context,customElements:{get:()=>undefined,define:(_,value)=>ToastPanel=value},
@@ -184,4 +203,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.6 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.7 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
