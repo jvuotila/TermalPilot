@@ -248,11 +248,29 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.20 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
-for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[10,'#ccff66'],[15,'#ffff00'],[20,'#ffcc00'],[30,'#ff9933'],[40,'#ff0000'],[50,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
+console.log('Version 0.1.21 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
 pricePanel.info={data:{price_chart:[{start:new Date(priceTime).toISOString(),end:new Date(priceTime+900000).toISOString(),price:-5}],rooms:{r0:{plan:{commands:[{time:new Date(priceTime).toISOString(),action:'raise'},{time:new Date(priceTime+600000).toISOString(),action:'lower'}]}}}}};
 let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:506px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:506px/);
-pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:50,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:686px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/No recorded electricity prices yet/);
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:686px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/No recorded electricity prices yet/);
 console.log('Electricity chart checks passed: thresholds, negative prices, real windows, missing history, ten rooms, fixed height.');
+// Size the SVG from its rendered viewport immediately and on resize.
+let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
+const sizingContext={...context,document:{createElement:()=>{const template={innerHTML:''};template.content={querySelector:()=>({html:template.innerHTML})};return template;}},customElements:{get:()=>undefined,define:(name,value)=>sizingComponent=value},ResizeObserver:class{constructor(callback){resizeCallback=callback;}observe(){}disconnect(){disconnects++;}}};
+vm.createContext(sizingContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),sizingContext);
+const sized=new sizingComponent();sized.settings=pricePanel.settings;sized.info=pricePanel.info;sized.tab='overview';
+const viewport={clientWidth:3024,querySelector:()=>({replaceWith:svg=>replacedHTML=svg.html})};sized.shadowRoot.querySelector=()=>viewport;sized.mountPriceChartSizing();
+assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 506"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 506"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
+console.log('Price chart layout checks passed (immediate container measurement, resize, collapsed container, observer cleanup).');
+
+const trend=new Component();trend.info={data:{price_chart:[{start:'2026-10-10T00:00:00Z',end:'2026-10-12T00:00:00Z'}]}};
+const trendStart=Date.parse('2026-10-10T00:00:00Z')/1000;
+trend.statusHistory=[{time:trendStart,outdoor:4,water:31},{time:trendStart+300,outdoor:4.5,water:32}];
+const spark=trend.statusSparkline('outdoor','#2196f3');assert.match(spark,/status-sparkline/);assert.match(spark,/L300.00,/);assert.doesNotMatch(spark,/NaN/);assert.equal(trend.statusSparkline('missing','#16b957'),'');
+console.log('Status temperature trends use observations within the price chart period and fill the card width.');
+
+for(const [temperature,color] of [[-40,'#154360'],[-30,'#154360'],[-25,'#1B4F72'],[-20,'#2874A6'],[-10,'#3498DB'],[-5,'#85C1E9'],[0,'#82E0AA'],[5,'#2ECC71'],[10,'#239B56'],[20,'#186A3B'],[25,'#B7950B'],[30,'#CB4335'],[35,'#E74C3C'],[40,'#E74C3C']])assert.equal(vm.runInContext(`outdoorColor(${temperature})`,context).toLowerCase(),color.toLowerCase());
+assert.match(trend.statusSparkline('outdoor','#2196f3'),/linearGradient/);assert.doesNotMatch(trend.statusSparkline('water','#16b957'),/linearGradient/);
+console.log('Outdoor temperature gradient checks passed for every threshold and out-of-range readings.');

@@ -297,7 +297,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             else:
                 water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature)))
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
-                           'activity':activity, 'water_factor':water_factor, 'excluded':fireplace}
+                           'activity':activity, 'water':water, 'water_factor':water_factor, 'excluded':fireplace}
                 prediction = None
                 if self.season['collecting'] and rid in self.previous:
                     prediction = learn(model, room, self.previous[rid], current)

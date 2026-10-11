@@ -74,15 +74,28 @@ function compareRoomNames(a,b){
   if(!first||!second)return first?-1:second?1:0;
   return first.localeCompare(second,undefined,{sensitivity:'base',numeric:true});
 }
-const priceThresholds=[[0,'#40ff00'],[10,'#ccff66'],[15,'#ffff00'],[20,'#ffcc00'],[30,'#ff9933'],[40,'#ff0000'],[50,'#cc0000']];
+const priceThresholds=[[0,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000']];
  const priceColor=price=>priceThresholds.findLast(([value])=>price>=value)?.[1]||priceThresholds[0][1];
 
+const outdoorThresholds=[[-30,'#154360'],[-25,'#1B4F72'],[-20,'#2874A6'],[-10,'#3498DB'],[-5,'#85C1E9'],[0,'#82E0AA'],[5,'#2ECC71'],[10,'#239B56'],[20,'#186A3B'],[25,'#B7950B'],[30,'#CB4335'],[35,'#E74C3C']];
+const outdoorColor=value=>{
+  if(value<=outdoorThresholds[0][0])return outdoorThresholds[0][1];
+  for(let i=1;i<outdoorThresholds.length;i++){
+    const [upper,b]=outdoorThresholds[i],[lower,a]=outdoorThresholds[i-1];
+    if(value<=upper){
+      const fraction=(value-lower)/(upper-lower);
+      const channel=offset=>Math.round(parseInt(a.slice(offset,offset+2),16)*(1-fraction)+parseInt(b.slice(offset,offset+2),16)*fraction).toString(16).padStart(2,'0');
+      return '#'+channel(1)+channel(3)+channel(5);
+    }
+  }
+  return outdoorThresholds.at(-1)[1];
+};
 class ThermalPilotPanel extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;this.roomDisclosureState=new Map();}
   set hass(value){this._hass=value;for(const card of this.historyCards||[])card.hass=value;if(this.isConnected && !this.loaded && !this.loading)this.load();}
   set panel(value){this._panel=value;if(this.isConnected && this._hass && !this.loaded)this.load();}
   connectedCallback(){if(this._hass)this.load();this.timer=setInterval(()=>{if(this.tab!=='settings')this.load();},60000);}
-  disconnectedCallback(){clearInterval(this.timer);clearTimeout(this.saveMessageTimer);}
+  disconnectedCallback(){this.priceResizeObserver?.disconnect();clearInterval(this.timer);clearTimeout(this.saveMessageTimer);}
   get entry(){return this._panel?.config?.entry_id;}
   async call(type,extra={}){return this._hass.callWS({type:`thermal_pilot/${type}`,entry_id:this.entry,...extra});}
   async load(){
@@ -92,6 +105,7 @@ class ThermalPilotPanel extends HTMLElement {
       const response=await this.call('get');
       this.info=response;this.settings=structuredClone(response.settings);
       if(this.tab==='history')this.history=await this.call('history',{hours:this.historyHours});
+      else if(this.tab==='overview'){try{this.statusHistory=await this.call('history',{hours:48});}catch(error){this.statusHistory=[];}}
       this.loaded=true;this.message='';this.render();
     }catch(e){this.message=e.message||String(e);this.render();}
     finally{this.loading=false;}
@@ -186,12 +200,12 @@ class ThermalPilotPanel extends HTMLElement {
   const start=history?Math.min(values[0].time,Date.now()-this.historyHours*3600000):values[0].time;
   const end=history?Math.max(values.at(-1).end,Date.now()):values.at(-1).end;
   const span=end-start;
-  const viewWidth=Math.max(900,(this.clientWidth||1164)-64);
+  const viewWidth=Math.max(900,this.priceChartWidth||900);
   const left=170,width=viewWidth-left-30,top=15,height=120,max=Math.max(25,Math.ceil(Math.max(...values.map(v=>v.price))/5)*5),min=Math.min(0,Math.floor(Math.min(...values.map(v=>v.price))/5)*5);
   const ticks=Array.from({length:6},(_,i)=>min+(max-min)*i/5).map(v=>{const y=top+height-(v-min)/(max-min)*height;return `<line x1="${left}" x2="${left+width}" y1="${y}" y2="${y}" stroke="#829aa32c"/><text x="160" y="${y+4}" text-anchor="end" fill="#526b75" font-size="12">${v.toFixed(0)}</text>`;}).join('');
   const x=time=>left+(time-start)/span*width;
   const y=price=>top+height-(price-min)/(max-min)*height;
-  const bars=values.map(v=>`<rect x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"><title>${escapeHTML(timeLabel(v.time))} · ${v.price.toFixed(2)} ct/kWh</title></rect>`).join('');
+  const bars=values.map(v=>`<rect x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"><title>${escapeHTML(timeLabel(v.time))} · ${v.price.toFixed(2)} c/kWh</title></rect>`).join('');
   const labelRow=y=>Array.from({length:9},(_,i)=>{const time=start+span*i/8;return `<text x="${x(time)}" y="${y}" text-anchor="${i===0?'start':i===8?'end':'middle'}" fill="#526b75" font-size="11">${escapeHTML(timeLabel(time))}</text>`;}).join('');
   const rowHeight=history?48:30,roomTop=180,chartHeight=roomTop+rooms.length*rowHeight+26;
   const lanes=rooms.map((room,roomIndex)=>{
@@ -206,7 +220,64 @@ class ThermalPilotPanel extends HTMLElement {
    }).join('');
    return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><text x="20" y="${y+11}" fill="#253f49" font-size="13" font-weight="600">${escapeHTML(room.name)}</text>${history?`<text x="150" y="${y+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="150" y="${y+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
   }).join('');
-  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Past prices, suggested heating and observed relay activity for all rooms':'Published prices · suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (ct/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px;font-size:12px;color:#526b75" aria-label="Price color thresholds">${priceThresholds.map(([value,color],index)=>`<span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${color};border:1px solid #526b7533;vertical-align:middle;margin-right:5px"></i>${index===0?'<10':index===priceThresholds.length-1?'≥50':value+'–<'+priceThresholds[index+1][0]} ct/kWh</span>`).join('')}</div><div style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:900px;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">ct/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. Gaps in recorded data are not filled. Hover for details.</small></div></details></section>`;
+  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Past prices, suggested heating and observed relay activity for all rooms':'Published prices · suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px;font-size:12px;color:#526b75" aria-label="Price color thresholds">${priceThresholds.map(([value,color],index)=>`<span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${color};border:1px solid #526b7533;vertical-align:middle;margin-right:5px"></i>${index===0?'<'+priceThresholds[1][0]:index===priceThresholds.length-1?'≥'+value:value+'–<'+priceThresholds[index+1][0]} c/kWh</span>`).join('')}</div><div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:900px;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. Gaps in recorded data are not filled. Hover for details.</small></div></details></section>`;
+  }
+  mountPriceChartSizing(){
+    this.priceResizeObserver?.disconnect();
+    const viewport=this.shadowRoot.querySelector('.price-chart-viewport');
+    if(!viewport)return;
+    const history=this.tab==='history';
+    const resize=width=>{
+      if(width<=0)return;
+      const measured=Math.max(900,Math.round(width));
+      if(this.priceChartWidth===measured)return;
+      this.priceChartWidth=measured;
+      const template=document.createElement('template');
+      template.innerHTML=this.priceChart(history);
+      const svg=template.content.querySelector('svg');
+      const current=viewport.querySelector('svg');
+      if(svg&&current)current.replaceWith(svg);
+    };
+    // Read the rendered content box, not the custom element's pre-layout width.
+    resize(viewport.clientWidth-24);
+    if(typeof ResizeObserver!=='undefined'){
+      this.priceResizeObserver=new ResizeObserver(entries=>resize(entries[0].contentRect.width));
+      this.priceResizeObserver.observe(viewport);
+    }
+  }
+  statusSparkline(key,color){
+    const values=new Map();
+    for(const row of this.statusHistory||[]){
+      if(row[key]!=null&&Number.isFinite(Number(row[key])))values.set(row.time,Number(row[key]));
+    }
+    const prices=this.info?.data?.price_chart||[];
+    const end=prices.length?new Date(prices.at(-1).end).getTime()/1000:Date.now()/1000;
+    const start=prices.length?new Date(prices[0].start).getTime()/1000:end-86400;
+    const points=[...values].filter(([time])=>time>=start&&time<=end).sort((a,b)=>a[0]-b[0]);
+    if(points.length<2||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return '';
+    const trendStart=points[0][0],span=Math.max(1,points.at(-1)[0]-trendStart);
+    const low=Math.min(...points.map(p=>p[1])),high=Math.max(...points.map(p=>p[1]));
+    const y=value=>high===low?25:42-(value-low)/(high-low)*34;
+    let definitions='';
+    if(key==='outdoor'){
+      if(high===low)color=outdoorColor(low);
+      else{
+        const stops=[[low,outdoorColor(low)],...outdoorThresholds.filter(([value])=>value>low&&value<high),[high,outdoorColor(high)]];
+        definitions=`<defs><linearGradient id="outdoor-trend-color" gradientUnits="userSpaceOnUse" x1="0" y1="42" x2="0" y2="8">${stops.map(([value,color])=>`<stop offset="${(value-low)/(high-low)}" stop-color="${color}"/>`).join('')}</linearGradient></defs>`;
+        color='url(#outdoor-trend-color)';
+      }
+    }
+    const segments=[];
+    for(const p of points){
+      if(!segments.length||p[0]-segments.at(-1).at(-1)[0]>1800)segments.push([]);
+      segments.at(-1).push(p);
+    }
+    const paths=segments.filter(segment=>segment.length>1).map(segment=>{
+      const coordinates=segment.map(([time,value])=>[(time-trendStart)/span*300,y(value)]);
+      const line=coordinates.map(([x,y],i)=>`${i?'L':'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+      return `<path d="${line} L${coordinates.at(-1)[0]},50 L${coordinates[0][0]},50 Z" fill="${color}" fill-opacity=".12"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
+    }).join('');
+    return `<svg class="status-sparkline" viewBox="0 0 300 50" preserveAspectRatio="none" aria-hidden="true">${definitions}${paths}</svg>`;
   }
   overview(){
     const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));
@@ -215,12 +286,12 @@ class ThermalPilotPanel extends HTMLElement {
       <div class="status-block"><dt>Operation</dt><dd><span class="status-pill ${data.heating_active===false?'paused':'active'}">${data.heating_active===false?'Passive':'Active'}</span></dd><small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
       <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span></dd><small>Room observations for learning.</small></div>
       <div class="status-block"><dt>Stored history</dt><dd>${escapeHTML(Number(data.history_info?.rows??0).toLocaleString())}<span class="status-unit"> samples</span></dd><small>Local database: ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</small></div>
-      <div class="status-block"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd><small>Current outdoor reading.</small></div>
-      <div class="status-block"><dt>Supply water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd><small>Measured heating-water temperature.</small></div>
+      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd><small>Current outdoor reading.</small>${this.statusSparkline('outdoor','#2196f3')}</div>
+      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Supply water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd><small>Measured heating-water temperature.</small>${this.statusSparkline('water','#16b957')}</div>
       <div class="status-block"><dt>Last update</dt><dd class="status-time">${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><small>Latest calculation and observation.</small></div>
     </dl>${(data.warnings||[]).map(w=>`<p class="warning">${escapeHTML(w)}</p>`).join('')}</section>${!rooms.length?'<section>Add rooms on the Settings page.</section>':''}
     ${this.priceChart(false)}<div class="observation-cards">${rooms.map(([id,r])=>{const p=r.plan,m=r.model||{};return `<section class="observation-card"><details class="observation-accordion" data-room-accordion="${escapeHTML(id)}" ${this.roomDisclosureOpen(id)?'open':''}><summary><h2>${escapeHTML(r.name)} ${this.learningBadge(r)} <small>${p?(p.heat?'Boosted thermostat target':'Reduced thermostat target temperature'):'No suggestion'}</small></h2></summary><div class="observation-content"><div class="metrics"><div>Measured<strong>${escapeHTML(r.temperature??'—')} °C</strong></div><div>Suggested thermostat target<strong>${escapeHTML(p?.setpoint??'—')} °C</strong></div><div>Actual heating<strong>${heatingLabel(r.actual_activity)}</strong></div><div>Short-term prediction error<strong>${m.mae==null?'—':m.mae.toFixed(3)+' °C'}</strong></div></div><p>${escapeHTML(r.error||p?.reason||'Waiting for data.')}</p>${this.learningView(r)}
-    ${p?`<h3>Thermostat timing</h3><p>Target changes include the shared start/stop offsets. The temperature forecast models the planned heating period; actual valve and heat-pump delays must be checked against observations.</p><div class="scroll timing-table"><table><thead><tr><th>Planned heating starts</th><th>Planned heating ends</th></tr></thead><tbody>${(p.sessions||[]).map(s=>`<tr><td>${escapeHTML(timeLabel(s.start))}</td><td>${escapeHTML(timeLabel(s.end))}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="2">No heating sessions planned.</td></tr>'}</tbody></table></div><div class="scroll timing-table"><table><thead><tr><th>Change target at</th><th>Action</th><th>Target (°C)</th></tr></thead><tbody>${(p.commands||[]).map(c=>`<tr><td>${escapeHTML(timeLabel(c.time))}</td><td>${c.action==='raise'?'Raise':'Lower'}</td><td>${c.setpoint}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="3">No thermostat target changes planned.</td></tr>'}</tbody></table></div>${this.chart(p.slots,'temperature')}<p>Blue: predicted temperature under the proposed plan. This outcome has not been observed.</p><div class="scroll"><table><thead><tr><th>Starts</th><th>Price ct/kWh</th><th>Suggestion</th><th>Setpoint °C</th><th>Prediction °C</th></tr></thead><tbody>${p.slots.map(s=>`<tr class="${s.heat?'heat':''}"><td>${escapeHTML(timeLabel(s.start))}</td><td>${s.price.toFixed(2)}</td><td>${s.heat?'Store heat':'Idle'}</td><td>${s.setpoint}</td><td>${s.temperature.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`:''}</div></details></section>`;}).join('')}</div>`;
+    ${p?`<h3>Thermostat timing</h3><p>Target changes include the shared start/stop offsets. The temperature forecast models the planned heating period; actual valve and heat-pump delays must be checked against observations.</p><div class="scroll timing-table"><table><thead><tr><th>Planned heating starts</th><th>Planned heating ends</th></tr></thead><tbody>${(p.sessions||[]).map(s=>`<tr><td>${escapeHTML(timeLabel(s.start))}</td><td>${escapeHTML(timeLabel(s.end))}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="2">No heating sessions planned.</td></tr>'}</tbody></table></div><div class="scroll timing-table"><table><thead><tr><th>Change target at</th><th>Action</th><th>Target (°C)</th></tr></thead><tbody>${(p.commands||[]).map(c=>`<tr><td>${escapeHTML(timeLabel(c.time))}</td><td>${c.action==='raise'?'Raise':'Lower'}</td><td>${c.setpoint}</td></tr>`).join('')||'<tr><td class="empty-table" colspan="3">No thermostat target changes planned.</td></tr>'}</tbody></table></div>${this.chart(p.slots,'temperature')}<p>Blue: predicted temperature under the proposed plan. This outcome has not been observed.</p><div class="scroll"><table><thead><tr><th>Starts</th><th>Price (c/kWh)</th><th>Suggestion</th><th>Setpoint °C</th><th>Prediction °C</th></tr></thead><tbody>${p.slots.map(s=>`<tr class="${s.heat?'heat':''}"><td>${escapeHTML(timeLabel(s.start))}</td><td>${s.price.toFixed(2)}</td><td>${s.heat?'Store heat':'Idle'}</td><td>${s.setpoint}</td><td>${s.temperature.toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`:''}</div></details></section>`;}).join('')}</div>`;
   }
   historyView(){
     return `<div class="history-summary"><section><h2>Observations and suggestions</h2><label>Period<select id="history-hours">${[24,48,168,720].map(h=>`<option value="${h}" ${h===this.historyHours?'selected':''}>${h} hours</option>`).join('')}</select></label><p>Each chart compares measured room temperature with the model’s prediction using observed heating demand. It does not show the simulated outcome of ThermalPilot’s suggested schedule. Suggested On means a boosted thermostat target; actual On means the observed relay or thermostat is requesting heat. These can differ.</p></section>
@@ -376,6 +447,9 @@ section{margin-bottom:30px}
 .status-heading button{margin:0}
 .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:0}
 .status-block{min-width:0;padding:14px;border:1px solid #91a5ad;border-radius:10px;background:var(--card-background-color,white);box-shadow:0 2px 6px #0000000a,0 1px 2px #00000008}
+.status-temperature{position:relative;overflow:hidden;padding-bottom:54px}
+.status-temperature>dt,.status-temperature>dd,.status-temperature>small{position:relative;z-index:1}
+.status-temperature .status-sparkline{position:absolute;bottom:0;left:0;width:100%;height:46px;max-height:none;pointer-events:none}
 .status-block dt{font-size:14px;color:var(--secondary-text-color,#526671);margin-bottom:10px}
 .status-block dd{margin:0 0 8px;font-size:24px;font-weight:650;overflow-wrap:anywhere}
 .status-block small{font-size:13px;line-height:1.4;color:var(--secondary-text-color,#526671)}
@@ -458,6 +532,7 @@ section{margin-bottom:30px}
     });
     const disclosureTab=this.tab;
     this.shadowRoot.querySelectorAll('[data-room-accordion]').forEach(details=>details.addEventListener('toggle',()=>{this.roomDisclosureState.set(`${disclosureTab}:${details.dataset.roomAccordion}`,details.open);}));
+    this.mountPriceChartSizing();
     if(this.tab==='history')this.mountHistoryGraphs();
     this.shadowRoot.querySelector('#history-hours')?.addEventListener('change',e=>{this.historyHours=Number(e.target.value);this.load();});
   }

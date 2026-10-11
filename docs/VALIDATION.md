@@ -53,3 +53,6 @@ HA integration tests in an actual HA environment.
 
 Learning-progress tests cover heating/idle thresholds, wall-time rate estimates,
 missing heating evidence, bounded rate history and excluded observations.
+
+Frontend checks also cover price color boundaries, responsive container sizing,
+full-width status temperature trends, and every outdoor temperature color threshold.
