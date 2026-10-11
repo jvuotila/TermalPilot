@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.27 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.28 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -327,3 +327,28 @@ assert.match(flamePanel.historyView(),/<summary><h2>Room [^]*?room-heating actua
 console.log('Room-header flame checks passed: Plan/History, current demand, Off/Unknown, unavailable relay and climate fallback.');
 
 assert.doesNotMatch(flamePanel.roomHeatingBadge({actual_activity:0,plan:{heat:true}},'flame'),/Suggested heating|suggested/);
+
+// The menu event must escape the panel's shadow root to reach Home Assistant.
+context.CustomEvent=class{constructor(type,options){this.type=type;Object.assign(this,options);}};
+const mobile=new Component();let menuEvent;
+mobile.dispatchEvent=event=>{menuEvent=event;};mobile.openSidebar();
+assert.equal(menuEvent.type,'hass-toggle-menu');assert.equal(menuEvent.bubbles,true);assert.equal(menuEvent.composed,true);
+mobile.settings=pricePanel.settings;mobile.info=pricePanel.info;mobile.history=pricePanel.history;
+for(const screen of [320,390,600]){
+ mobile.clientWidth=screen;mobile.priceChartWidth=Math.max(240,screen-100);
+ for(const history of [false,true]){
+  const html=mobile.priceChart(history),width=Number(html.match(/viewBox="0 0 (\d+)/)[1]);
+  assert.equal(width,mobile.priceChartWidth);assert.doesNotMatch(html,/min-width:900px|NaN/);
+  assert.equal((html.match(/<foreignObject/g)||[]).length,10);
+  // Mobile names sit above their own lanes; no left column eats the chart width.
+  assert.match(html,/foreignObject x="20" y="179"/);
+  const firstLane=html.match(/<rect x="(\d+)" y="204" width="([\d.]+)" height="14"/);
+  assert.ok(firstLane);assert.ok(Number(firstLane[1])+Number(firstLane[2])<=width);
+ }
+ const temperature=mobile.chart(samples,'temperature','prediction');
+ const width=Number(temperature.match(/viewBox="0 0 (\d+)/)[1]);
+ assert.ok(width<=screen);assert.doesNotMatch(temperature,/NaN/);
+}
+resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 746"/);
+resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 506"/);
+console.log('Mobile checks passed: bubbling Home Assistant menu event, ten readable room lanes, narrow temperature charts and desktop/mobile resizing.');

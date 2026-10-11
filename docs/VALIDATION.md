@@ -88,3 +88,8 @@ Home Assistant service doubles; physical restart behavior remains to be verified
 Calendar and forecast tests cover the always-summer date span, inclusive threshold,
 user-configured threshold, incomplete/gapped forecasts and retained daily lows.
 Physical valve and pump response still require observation on the user's system.
+
+Mobile panel checks verify the Home Assistant sidebar event crosses the shadow
+root, shared charts reflow ten room lanes at 320/390/600-pixel panel widths, and
+charts return to their desktop layout after resizing. These are template and
+event checks, not a phone browser or installed Home Assistant visual test.

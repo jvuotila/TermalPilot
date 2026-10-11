@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.27 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.28 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -467,3 +467,9 @@ explains the criteria. Learning continues at every level.
 
 Stored history displays the original collection start date, retained after raw
 history cleanup and recovered from older season records when available.
+
+### Phone layout
+
+The header includes a Home Assistant menu button. On narrow screens cards and
+settings stack, room names appear above the shared chart timelines, temperature
+charts use fewer labels, and wide data tables scroll inside their cards.

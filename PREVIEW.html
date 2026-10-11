@@ -96,6 +96,7 @@ const outdoorColor=value=>{
 };
 class ThermalPilotPanel extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this.tab='overview';this.historyHours=48;this.roomDisclosureState=new Map();}
+  openSidebar(){this.dispatchEvent(new CustomEvent('hass-toggle-menu',{bubbles:true,composed:true}));}
   set hass(value){this._hass=value;for(const card of this.historyCards||[])card.hass=value;if(this.isConnected && !this.loaded && !this.loading)this.load();}
   set panel(value){this._panel=value;if(this.isConnected && this._hass && !this.loaded)this.load();}
   connectedCallback(){if(this._hass)this.load();this.timer=setInterval(()=>{if(this.tab!=='settings')this.load();},60000);}
@@ -158,14 +159,17 @@ class ThermalPilotPanel extends HTMLElement {
     const low=Math.floor((Math.min(...values)-.1)*10)/10,high=Math.ceil((Math.max(...values)+.1)*10)/10;
     const first=Math.floor(timestamp(data[0])/900)*900,last=Math.max(first+900,Math.ceil(timestamp(data.at(-1))/900)*900),span=last-first;
     // Quarter-hour ticks for short periods; longer views use aligned multiples to keep labels readable.
-    const tickSeconds=Math.max(900,Math.ceil(span/(12*900))*900);
-    const x=time=>70+710*(time-first)/span,y=value=>155-125*(value-low)/Math.max(.1,high-low);
+    const chartWidth=(this.clientWidth||0)>0&&this.clientWidth<700?Math.max(240,this.clientWidth-128):800;
+    const left=chartWidth<600?56:70,right=chartWidth-20;
+    const tickCount=chartWidth<600?Math.max(2,Math.floor((right-left)/70)):12;
+    const tickSeconds=Math.max(900,Math.ceil(span/(tickCount*900))*900);
+    const x=time=>left+(right-left)*(time-first)/span,y=value=>155-125*(value-low)/Math.max(.1,high-low);
     const points=k=>data.filter(r=>numeric(r[k])).map(r=>`${x(timestamp(r))},${y(Number(r[k]))}`).join(' ');
-    const grid=[low,(low+high)/2,high].map(value=>`<line x1="70" y1="${y(value)}" x2="780" y2="${y(value)}" stroke="currentColor" opacity=".15"/><text x="60" y="${y(value)+4}" text-anchor="end">${value.toFixed(1)} °C</text>`).join('');
+    const grid=[low,(low+high)/2,high].map(value=>`<line x1="${left}" y1="${y(value)}" x2="${right}" y2="${y(value)}" stroke="currentColor" opacity=".15"/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${value.toFixed(1)} °C</text>`).join('');
     const ticks=[];
     for(let time=first;time<=last;time+=tickSeconds){const label=new Date(time*1000).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false});ticks.push(`<line x1="${x(time)}" y1="30" x2="${x(time)}" y2="160" stroke="currentColor" opacity=".1"/><text x="${x(time)}" y="180" text-anchor="middle">${escapeHTML(label)}</text>`);}
     const label=alternate?'Measured temperature':'Predicted temperature under the suggested plan';
-    return `<div class="chart-legend"><span><i style="background:#1976d2"></i>${label}</span>${alternate?'<span><i style="background:#e49025"></i>Model prediction using actual heating</span>':''}</div><div class="temperature-chart"><svg viewBox="0 0 800 195" role="img" aria-label="${label}${alternate?' and model prediction using actual heating':''}">${grid}${ticks.join('')}<polyline points="${points(key)}" fill="none" stroke="#1976d2" stroke-width="3"/>${alternate?`<polyline points="${points(alternate)}" fill="none" stroke="#e49025" stroke-width="2" stroke-dasharray="6 4"/>`:''}</svg></div><small>${escapeHTML(timeLabel(first*1000))} – ${escapeHTML(timeLabel(last*1000))}</small>`;
+    return `<div class="chart-legend"><span><i style="background:#1976d2"></i>${label}</span>${alternate?'<span><i style="background:#e49025"></i>Model prediction using actual heating</span>':''}</div><div class="temperature-chart"><svg viewBox="0 0 ${chartWidth} 195" role="img" aria-label="${label}${alternate?' and model prediction using actual heating':''}">${grid}${ticks.join('')}<polyline points="${points(key)}" fill="none" stroke="#1976d2" stroke-width="3"/>${alternate?`<polyline points="${points(alternate)}" fill="none" stroke="#e49025" stroke-width="2" stroke-dasharray="6 4"/>`:''}</svg></div><small>${escapeHTML(timeLabel(first*1000))} – ${escapeHTML(timeLabel(last*1000))}</small>`;
   }
   roomDisclosureOpen(id){return this.roomDisclosureState.get(`${this.tab}:${id}`)===true;}
   learningPercent(room){
@@ -227,8 +231,9 @@ class ThermalPilotPanel extends HTMLElement {
   const start=Math.floor((published[0]?.time??values[0].time)/900000)*900000;
   const end=Math.ceil((published.at(-1)?.end??Math.max(values.at(-1).end,now))/900000)*900000;
   const span=end-start;
-  const viewWidth=Math.max(900,this.priceChartWidth||900);
-  const left=history?310:210,roomNameWidth=history?190:180,width=viewWidth-left-30,top=15,height=120,max=Math.max(25,Math.ceil(Math.max(...values.map(v=>v.price))/5)*5),min=Math.min(0,Math.floor(Math.min(...values.map(v=>v.price))/5)*5);
+  const viewWidth=Math.max(240,this.priceChartWidth||((this.clientWidth||0)>0?this.clientWidth-104:900));
+  const compact=viewWidth<600;
+  const left=compact?(history?88:48):history?310:210,roomNameWidth=compact?viewWidth-40:history?190:180,width=viewWidth-left-20,top=15,height=120,max=Math.max(25,Math.ceil(Math.max(...values.map(v=>v.price))/5)*5),min=Math.min(0,Math.floor(Math.min(...values.map(v=>v.price))/5)*5);
   const ticks=Array.from({length:6},(_,i)=>min+(max-min)*i/5).map(v=>{const y=top+height-(v-min)/(max-min)*height;return `<line x1="${left}" x2="${left+width}" y1="${y}" y2="${y}" stroke="#829aa32c"/><text x="${left-10}" y="${y+4}" text-anchor="end" fill="#526b75" font-size="12">${v.toFixed(0)}</text>`;}).join('');
   const x=time=>left+(time-start)/span*width;
   const y=price=>top+height-(price-min)/(max-min)*height;
@@ -238,8 +243,9 @@ class ThermalPilotPanel extends HTMLElement {
   const tickStep=(tickSteps.find(minutes=>span/(minutes*60000)<=maximumLabels)||11520)*60000;
   const axisTimes=[];
   for(let time=Math.ceil(start/tickStep)*tickStep;time<=end;time+=tickStep)axisTimes.push(time);
-  const labelRow=y=>axisTimes.map(time=>`<text x="${x(time)}" y="${y}" text-anchor="${time===start?'start':time===end?'end':'middle'}" fill="#526b75" font-size="11">${escapeHTML(timeLabel(time))}</text>`).join('');
-  const rowHeight=history?48:30,roomTop=180,chartHeight=roomTop+rooms.length*rowHeight+26;
+  const axisLabel=time=>compact?`${new Date(time).getDate()}.${new Date(time).getMonth()+1}. ${new Date(time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false})}`:timeLabel(time);
+  const labelRow=y=>axisTimes.map(time=>`<text x="${x(time)}" y="${y}" text-anchor="${time===start?'start':time===end?'end':'middle'}" fill="#526b75" font-size="11">${escapeHTML(axisLabel(time))}</text>`).join('');
+  const rowHeight=compact?(history?74:54):history?48:30,roomTop=180,chartHeight=roomTop+rooms.length*rowHeight+26;
   const lanes=rooms.map((room,roomIndex)=>{
    const rows=(this.history||[]).filter(r=>r.room_id===room.id).sort((a,b)=>a.time-b.time),y=roomTop+roomIndex*rowHeight;
    const plan=this.info.data?.rooms?.[room.id]?.plan;
@@ -247,13 +253,14 @@ class ThermalPilotPanel extends HTMLElement {
    const recorded=rows.map((r,i)=>({start:r.time*1000,end:Math.min((rows[i+1]?.time??(r.time+300))*1000,r.time*1000+1800000,now),suggested_heat:r.suggested_heat,activity:r.activity}));
    const planned=commands.map((c,i)=>({start:Math.max(history?now:start,new Date(c.time).getTime()),end:commands[i+1]?new Date(commands[i+1].time).getTime():end,suggested_heat:c.action==='raise',activity:null}));
    const intervals=history?[...recorded,...planned]:planned;
-   const lane=(key,offset,color)=>`<rect x="${left}" y="${y+offset}" width="${width}" height="14" rx="3" fill="#dbe5ea"/>`+intervals.map(v=>{
+   const laneTop=compact?24:0;
+   const lane=(key,offset,color)=>`<rect x="${left}" y="${y+laneTop+offset}" width="${width}" height="14" rx="3" fill="#dbe5ea"/>`+intervals.map(v=>{
     const a=Math.max(start,v.start),b=Math.min(end,v.end);
-    return v[key]&&b>a?`<rect x="${x(a)}" y="${y+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"><title>${escapeHTML(room.name)} · ${escapeHTML(timeLabel(a))} · ${key==='activity'?'Actual relay':'Suggested heating'} On</title></rect>`:'';
+    return v[key]&&b>a?`<rect x="${x(a)}" y="${y+laneTop+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"><title>${escapeHTML(room.name)} · ${escapeHTML(timeLabel(a))} · ${key==='activity'?'Actual relay':'Suggested heating'} On</title></rect>`:'';
    }).join('');
-   return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
+   return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(compact?-1:history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+laneTop+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+laneTop+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
   }).join('');
-  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Today and tomorrow · recorded heating and future suggestions for all rooms':'Today and tomorrow · published prices and suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:900px;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)+5}" y="12" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. ${history?'Recorded heating is shown before now; future suggestions come from the current plan. Tomorrow appears when its prices are published. ':''}Times align to 15-minute boundaries; wider views show fewer labels. Hover for details.</small></div></details></section>`;
+  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Today and tomorrow · recorded heating and future suggestions for all rooms':'Today and tomorrow · published prices and suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:0;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)+5}" y="12" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. ${history?'Recorded heating is shown before now; future suggestions come from the current plan. Tomorrow appears when its prices are published. ':''}Times align to 15-minute boundaries; wider views show fewer labels. Hover for details.</small></div></details></section>`;
   }
   mountPriceChartSizing(){
     this.priceResizeObserver?.disconnect();
@@ -262,7 +269,7 @@ class ThermalPilotPanel extends HTMLElement {
     const history=this.tab==='history';
     const resize=width=>{
       if(width<=0)return;
-      const measured=Math.max(900,Math.round(width));
+      const measured=Math.max(240,Math.round(width));
       if(this.priceChartWidth===measured)return;
       this.priceChartWidth=measured;
       const template=document.createElement('template');
@@ -583,8 +590,49 @@ section{margin-bottom:30px}
 .room-heating.unknown{font-size:20px;font-weight:700}
 .room-heating:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .room-learning{display:inline-block;margin-left:8px;font-size:14px;font-weight:normal;vertical-align:middle;white-space:nowrap;color:var(--secondary-text-color,#526671)}
+
+/* Keep navigation reachable and card content inside the phone viewport. */
+:host{min-width:0;max-width:100%}
+.page-title{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.page-title h1{margin:0;min-width:0}
+.menu-button{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;margin:0;padding:10px;border:0;background:transparent}
+.menu-button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.menu-button:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:2px}
+.page-layout,section,.scroll,.price-chart-viewport,.temperature-chart{min-width:0;max-width:100%}
+@media(max-width:600px){
+ header.page-layout{padding:12px 10px 0}
+ .page-title h1{font-size:25px}
+ .badge{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+ .tab-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px}
+ .tab-list button{min-height:44px;padding:12px 6px}
+ .tab-panel.page-layout{margin:0 10px 12px;padding:10px;border-radius:0 0 12px 12px}
+ #settings>section,.observation-cards>section,.history-summary>section,.status-card,.price-card{padding:12px}
+ #settings,.observation-cards,.history-summary{gap:16px}
+ .grid{grid-template-columns:minmax(0,1fr)}
+ .status-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+ .observation-card .metrics{grid-template-columns:minmax(0,1fr);gap:10px}
+ .observation-card .observation-accordion>summary{padding:10px;gap:6px}
+ .observation-card .observation-accordion>summary h2{font-size:18px;overflow-wrap:anywhere}
+ .room-learning{display:block;margin:5px 0 0;white-space:normal;font-size:13px}
+ .observation-card .temperature-chart svg{min-width:0;width:100%;height:195px;max-height:none}
+ .temperature-chart,.history-layout [data-room-history]{padding:6px}
+ .scroll{overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+ th,td{font-size:13px}
+ .sticky{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 6px calc(10px + env(safe-area-inset-bottom));font-size:13px}
+ input:not([type=checkbox]),select,#settings input:not([type=checkbox]),#settings select{font-size:16px;min-height:44px}
+ input[type=checkbox].setting-toggle,#settings input.setting-toggle{width:44px;height:26px;min-height:26px;max-height:26px;padding:2px;align-self:start}
+ .setting-help .setting-info{width:32px;height:32px}
+ .setting-tooltip{position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));width:auto;max-width:none;max-height:55vh;overflow:auto}
+ .room-card summary{min-height:36px}
+ .room-actions .icon-button{width:40px;height:40px}
+ .room-card summary{padding-right:88px}
+ .chart-legend span{min-width:0;align-items:flex-start}
+ .chart-legend i{flex:none;margin-top:7px}
+ .learning-card{padding:12px}
+}
 </style>
-    <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><h1>ThermalPilot</h1><div class="badge">${!this.settings?.simulation_enabled&&this.settings?.live_control_confirmed?(this.settings?.heating_enabled===false?'LIVE CONTROL PAUSED · seasonal fallback targets':'LIVE CONTROL · ThermalPilot controls thermostat targets'):this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav class="tab-list" role="tablist" aria-label="ThermalPilot pages">${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button id="tab-${id}" role="tab" aria-selected="${this.tab===id}" aria-controls="thermal-pilot-tab-panel" tabindex="${this.tab===id?0:-1}" data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main id="thermal-pilot-tab-panel" role="tabpanel" aria-labelledby="tab-${this.tab}" class="tab-panel page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
+    <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><div class="page-title"><button type="button" class="menu-button" id="ha-menu" aria-label="Open Home Assistant menu" title="Open Home Assistant menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button><h1>ThermalPilot</h1></div><div class="badge">${!this.settings?.simulation_enabled&&this.settings?.live_control_confirmed?(this.settings?.heating_enabled===false?'LIVE CONTROL PAUSED · seasonal fallback targets':'LIVE CONTROL · ThermalPilot controls thermostat targets'):this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav class="tab-list" role="tablist" aria-label="ThermalPilot pages">${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button id="tab-${id}" role="tab" aria-selected="${this.tab===id}" aria-controls="thermal-pilot-tab-panel" tabindex="${this.tab===id?0:-1}" data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main id="thermal-pilot-tab-panel" role="tabpanel" aria-labelledby="tab-${this.tab}" class="tab-panel page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
+    this.shadowRoot.querySelector('#ha-menu')?.addEventListener('click',()=>this.openSidebar());
     const priceAccordion=this.shadowRoot.querySelector('#price-accordion');if(priceAccordion){const tab=this.tab;priceAccordion.addEventListener('toggle',()=>{this.priceAccordionState??={};this.priceAccordionState[tab]=priceAccordion.open;});}
     this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.tab;this.loaded=false;this.load();});
     this.shadowRoot.querySelector('.tab-list')?.addEventListener('keydown',event=>{
