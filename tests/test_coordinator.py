@@ -44,6 +44,12 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_chart_prices_are_exposed_and_recorded(self):
+        data=await self.c._async_update_data()
+        self.assertEqual(data['price_chart'][0]['price'],10)
+        self.assertEqual(len(data['price_chart']),96)
+        self.assertEqual(self.c.history_db.read(0)[0]['price'],10)
+
     async def test_sensor_warning_after_six_hours_aggregates_and_limits_daily(self):
         second={**self.c.settings['rooms'][0],'id':'second','name':'Bedroom','temperature_entity':'sensor.second'}
         self.c.settings['rooms'].append(second)

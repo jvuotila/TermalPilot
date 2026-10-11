@@ -236,11 +236,15 @@ class PilotCoordinator(DataUpdateCoordinator):
         if not self.season['collecting']:
             warnings.append('History collection and learning paused because outdoor temperature is unavailable. Existing model parameters are retained.')
         slots = []
+        chart_prices = []
         if source is None or source.state in ('unknown','unavailable'):
             warnings.append('Price sensor is missing or unavailable.')
         else:
             try:
                 slots = price_slots(source.attributes, self.settings, now, ZoneInfo(self.hass.config.time_zone))
+                midnight = local_now.replace(hour=0,minute=0,second=0,microsecond=0)
+                chart_prices = [{'start':s.start.isoformat(),'end':s.end.isoformat(),'price':s.price}
+                    for s in (price_slots(source.attributes,self.settings,midnight,ZoneInfo(self.hass.config.time_zone)) or slots)]
             except ValueError as error:
                 warnings.append(str(error))
         if not slots:
@@ -321,7 +325,8 @@ class PilotCoordinator(DataUpdateCoordinator):
                 if self.season['collecting']:
                     readings.append({'room_id':rid, **current, 'actual_setpoint':actual_request,
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
-                                 'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None})
+                                 'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None,
+                                 'price':slots[0].price if slots else None})
             if not self.season['collecting']:
                 result['learning_note'] = 'Learning paused while collection is inactive.'
             elif activity is None:
@@ -340,7 +345,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
-                'rooms':room_data}
+                'rooms':room_data,'price_chart':chart_prices}
         self.arm_command_timer(data,now)
         return data
 

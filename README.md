@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.19 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.20 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -392,3 +392,13 @@ of observed rates. An estimated initial-data completion date is shown alongside
 the percentage and days remaining when enough rate data is available. It predicts
 when those initial thresholds may be reached,
 not when predictions become trustworthy or live control becomes available.
+
+
+Plan and History include a shared electricity-price chart above all room timelines.
+Its accordion opens by default; timeline heights remain compact on wide screens.
+Price colors use thresholds at 0, 10, 15, 20, 30, 40 and 50 ct/kWh, from green
+to dark red. Prices are normalized using the selected source unit. Plan displays
+published prices and suggested thermostat boost windows, including timing offsets.
+History shows recorded prices, suggested boost windows and actual heating demand.
+Price history starts with this version's new observations while collection is active;
+older observations without prices are not backfilled. Gaps are left blank.

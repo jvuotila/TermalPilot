@@ -1,6 +1,6 @@
 # Validation status
 
-- 76 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 77 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
