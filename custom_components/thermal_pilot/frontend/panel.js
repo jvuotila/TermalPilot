@@ -239,7 +239,7 @@ class ThermalPilotPanel extends HTMLElement {
   const x=time=>left+(time-start)/span*width;
   const y=price=>top+height-(price-min)/(max-min)*height;
   const detailAttributes=text=>`data-chart-detail="${escapeHTML(text)}" tabindex="0" role="img" aria-label="${escapeHTML(text)}"`;
-  const bars=values.map(v=>`<rect ${detailAttributes(`Electricity price: ${v.price.toFixed(2)} c/kWh\nStart: ${timeLabel(v.time)}\nEnd: ${timeLabel(v.end)}`)} x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"><title>${escapeHTML(timeLabel(v.time))} · ${v.price.toFixed(2)} c/kWh</title></rect>`).join('');
+  const bars=values.map(v=>`<rect ${detailAttributes(`Electricity price: ${v.price.toFixed(2)} c/kWh\nStart: ${timeLabel(v.time)}\nEnd: ${timeLabel(v.end)}`)} x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"></rect>`).join('');
   const maximumLabels=Math.max(2,Math.floor(width/120));
   const tickSteps=[15,30,60,120,180,360,720,1440,2880,5760,11520];
   const tickStep=(tickSteps.find(minutes=>span/(minutes*60000)<=maximumLabels)||11520)*60000;
@@ -271,7 +271,7 @@ class ThermalPilotPanel extends HTMLElement {
      const a=Math.max(start,v.start),b=Math.min(end,v.end);
      const label=key==='activity'?'Actual relay':'Suggested heating';
      const detail=`${room.name} · ${label} On\n${v.recorded&&!v.started?'First observed On':'Start'}: ${timeLabel(v.start)}\n${v.recorded&&!v.stopped?'Observed until':'Stop'}: ${timeLabel(v.end)}${v.recorded?'\nTimes are based on recorded observations; gaps are not filled.':''}`;
-     return b>a?`<rect ${detailAttributes(detail)} x="${x(a)}" y="${y+laneTop+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"><title>${escapeHTML(detail)}</title></rect>`:'';
+     return b>a?`<rect ${detailAttributes(detail)} x="${x(a)}" y="${y+laneTop+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"></rect>`:'';
     }).join('');
    };
    return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(compact?-1:history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+laneTop+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+laneTop+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
