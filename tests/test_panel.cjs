@@ -47,16 +47,18 @@ assert.match(chartWithLargePrediction,/25.1 °C/);assert.match(chartWithLargePre
 console.log('Readable history tests passed (quarter-hour latest observations, legends, On/Off/Unknown, scale includes both lines).');
 
 const accordionPanel=new Component();accordionPanel.settings={rooms:[{id:'room-a',name:'Study'}],heating_enabled:true};
-accordionPanel.info={data:{rooms:{'room-a':{name:'Study'}}}};accordionPanel.tab='overview';
-assert.match(accordionPanel.overview(),/data-room-accordion="room-a" open/);
-accordionPanel.roomDisclosureState.set('overview:room-a',false);
+accordionPanel.info={data:{rooms:{'room-a':{name:'Study',learning_progress:{percent:62.5}}}}};accordionPanel.tab='overview';
 assert.doesNotMatch(accordionPanel.overview(),/data-room-accordion="room-a" open/);
-accordionPanel.tab='history';assert.match(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
-accordionPanel.roomDisclosureState.set('history:room-a',false);
-assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+assert.match(accordionPanel.overview(),/63% learning/);
+accordionPanel.roomDisclosureState.set('overview:room-a',true);
+assert.match(accordionPanel.overview(),/data-room-accordion="room-a" open/);
+accordionPanel.tab='history';assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+assert.match(accordionPanel.historyView(),/63% learning/);
 accordionPanel.roomDisclosureState.set('history:room-a',true);
 assert.match(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
-console.log('Room accordion tests passed (open by default, remembered independently on Plan and History).');
+accordionPanel.roomDisclosureState.set('history:room-a',false);
+assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+console.log('Room accordion tests passed (closed by default, summary learning progress, independently remembered Plan/History states).');
 
 (async()=>{
  let ToastPanel,nextTimer=0;const timers=new Map(),callbacks=[];
@@ -244,4 +246,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.17 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.18 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
 from .config import stored_settings
-from .model import number, stamp, initial_model, learn, price_slots, plan, collection_state, thermostat_state
+from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -183,6 +183,16 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.forecast_entity = entity
         return self.forecast
 
+    def committed_session(self, rid, now):
+        """Keep a published session once its advance opening time has arrived."""
+        previous_plan = ((getattr(self,'data',None) or {}).get('rooms',{}).get(rid,{}) or {}).get('plan') or {}
+        for session in previous_plan.get('sessions',[]):
+            start, end = stamp(session['start']), stamp(session['end'])
+            opening = start-timedelta(minutes=self.settings['start_offset_minutes'])
+            if opening <= now < end:
+                return deepcopy(session)
+        return None
+
     async def _async_update_data(self):
         self.cancel_command_timer()
         now = dt_util.utcnow()
@@ -297,6 +307,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
+                        'committed_session':self.committed_session(rid,now),
                         'previous_suggested_heat':run.get('heat',False),
                         'previous_run_hours':max(0,(now.timestamp()-run.get('since',now.timestamp()))/3600)}
                     result['plan'] = await self.hass.async_add_executor_job(plan, settings, deepcopy(model),
@@ -319,6 +330,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['learning_note'] = 'Initial model: needs at least 12 heating hours and 12 idle hours.'
             else:
                 result['learning_note'] = 'Model adapting to observations; assess reliability from prediction error.'
+            result['learning_progress'] = learning_progress(model,now)
             room_data[rid] = result
         cutoff = now.timestamp()-HISTORY_DAYS*86400
         await self.hass.async_add_executor_job(self.history_db.append, readings, cutoff, self.season['season_id'])

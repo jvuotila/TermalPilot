@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.17 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.18 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -12,7 +12,7 @@ chart surfaces and shaded tables, with subtle shadows and stronger borders.
 Room rows alternate teal and blue backgrounds. Failed forecast requests show their
 underlying errors and retry after five minutes; successful forecasts are cached
 for an hour.
-Room accordions start open and remember their state during the panel session.
+Room accordions start closed and remember their state during the panel session.
 Simulation status is split into labeled blocks. Empty timing tables show a clear
 message and are separated from each other. Smaller screens retain a single-column
 room-card layout.
@@ -153,7 +153,12 @@ session the thermostat target should rise and how many minutes before its end
 it should fall. Defaults are 5 minutes before start and 10 minutes before stop.
 For a 22:00–23:00 session, the suggested target rises at 21:55 and falls at 22:50.
 Both offsets accept whole minutes from 0 to 30, including values outside the
-15-minute price boundaries. Consecutive heating slots form one session.
+15-minute price boundaries. Consecutive heating slots form one session. Once a
+published session reaches its advance valve-opening time, subsequent calculations
+retain that session through its planned delivery end. Its original start time is
+preserved so valve offsets are not reapplied to the clipped remaining period.
+This continuity applies while the integration runs with valid inputs; disabling
+operation or simulation, missing required inputs, or restarting can interrupt it.
 
 The Plan page shows intended heating periods and the offset-adjusted thermostat
 commands separately. Suggested-state entities update at command boundaries
@@ -379,3 +384,9 @@ Background references:
 - [HeishaMon topics](https://github.com/heishamon/HeishaMon/blob/main/MQTT-Topics.md)
 
 MIT licensed.
+
+Initial learning progress is shown per room on Plan. The bar measures collection
+of 12 accepted heating hours and 12 accepted idle hours. After at least 24 hours
+of rate tracking, an approximate days-remaining estimate uses up to seven days
+of observed rates. It predicts when those initial thresholds may be reached,
+not when predictions become trustworthy or live control becomes available.

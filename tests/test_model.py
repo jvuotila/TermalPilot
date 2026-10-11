@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
 pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
 from thermal_pilot.const import DEFAULTS, ROOM_DEFAULTS
-from thermal_pilot.model import Slot, price_slots, initial_model, learn, plan
+from thermal_pilot.model import Slot, price_slots, initial_model, learn, learning_progress, plan
 from thermal_pilot.config import validate, stored_settings
 UTC=timezone.utc
 NOW=datetime(2026,1,2,tzinfo=UTC)
@@ -85,6 +85,26 @@ class PlannerTests(unittest.TestCase):
         p=plan(r,m,20,[-15]*48,self.slots([1]*4+[9]*15+[50]*4+[9]*21+[1]*4),NOW,20)
         self.assertTrue(any(s['heat'] for s in p['slots'][4:44]))
         self.assertTrue(any(s['heat'] for s in p['slots'][4:19]))
+    def test_started_session_survives_replanning_and_keeps_original_offsets(self):
+        start=NOW+timedelta(minutes=15);end=start+timedelta(hours=1)
+        r=self.room(committed_session={'start':start.isoformat(),'end':end.isoformat()})
+        m=initial_model(r)
+        prices=self.slots([100]*12,15)
+        # High room temperature and high prices would normally choose no boost.
+        for minute in (10,15,20,35,60,65,70):
+            current=NOW+timedelta(minutes=minute)
+            remaining=[slot for slot in prices if slot.end>current]
+            current_room={**r,'previous_suggested_heat':current>=start,'previous_run_hours':max(0,(current-start).total_seconds()/3600)}
+            p=plan(current_room,m,22,[5]*len(remaining),remaining,current,20)
+            self.assertEqual(p['sessions'][0]['start'],start.isoformat())
+            self.assertGreaterEqual(datetime.fromisoformat(p['sessions'][0]['end']),end)
+            self.assertEqual(p['commands'][0]['time'],(start-timedelta(minutes=5)).isoformat())
+            window=p['thermostat_windows'][0]
+            self.assertGreaterEqual((datetime.fromisoformat(window['end'])-datetime.fromisoformat(window['start'])).total_seconds(),55*60)
+            for slot in p['slots']:
+                if datetime.fromisoformat(slot['start'])<end and datetime.fromisoformat(slot['end'])>start:
+                    self.assertTrue(slot['heat'])
+
     def test_flexible_minimum_run(self):
         r=self.room(terminal_reserve_hours=0)
         p=plan(r,initial_model(r),20,[-10]*48,self.slots([1,1,1,1,1,50,50,50]*6,15),NOW,20)
@@ -182,3 +202,33 @@ class FlexibleRunExampleTests(unittest.TestCase):
             elif run:lengths.append(run);run=0
         if run:lengths.append(run)
         self.assertIn(75,lengths)
+
+
+class LearningProgressTests(unittest.TestCase):
+    def test_initial_percent_requires_both_states(self):
+        p=learning_progress({'heated_hours':24,'idle_hours':0},NOW)
+        self.assertEqual(p['percent'],50);self.assertFalse(p['initial_complete'])
+        self.assertIsNone(p['estimated_days_to_initial'])
+        p=learning_progress({'heated_hours':12,'idle_hours':12},NOW)
+        self.assertEqual(p['percent'],100);self.assertTrue(p['initial_complete'])
+        self.assertEqual(p['estimated_days_to_initial'],0)
+    def test_eta_uses_wall_time_and_requires_full_day(self):
+        model={'heated_hours':4,'idle_hours':12,'learning_rate_since':NOW.timestamp()-86400,
+               'learning_rates':[{'time':NOW.timestamp()-3600,'heat':4,'idle':12}]}
+        self.assertEqual(learning_progress(model,NOW)['estimated_days_to_initial'],2)
+        model['learning_rate_since']=NOW.timestamp()-23*3600
+        self.assertIsNone(learning_progress(model,NOW)['estimated_days_to_initial'])
+    def test_missing_heating_rate_does_not_invent_eta(self):
+        model={'heated_hours':0,'idle_hours':24,'learning_rate_since':NOW.timestamp()-86400,
+               'learning_rates':[{'time':NOW.timestamp()-3600,'heat':0,'idle':24}]}
+        self.assertIsNone(learning_progress(model,NOW)['estimated_days_to_initial'])
+    def test_rate_tracking_is_bounded_and_exclusions_do_not_count(self):
+        room={**ROOM_DEFAULTS,**DEFAULTS,'baseline':20}
+        model=initial_model(room)
+        model['learning_rates']=[{'time':NOW.timestamp()-8*86400,'heat':10,'idle':10}]
+        old={'time':NOW.timestamp(),'temperature':20,'outdoor':0,'activity':1}
+        learn(model,room,old,{**old,'time':NOW.timestamp()+900,'temperature':20.01})
+        self.assertEqual(len(model['learning_rates']),1)
+        self.assertEqual(model['learning_rates'][0]['heat'],.25)
+        learn(model,room,{**old,'excluded':True},{**old,'time':NOW.timestamp()+900})
+        self.assertEqual(model['learning_rates'][0]['heat'],.25)

@@ -127,6 +127,29 @@ def response_step(response, heating, hours, lag):
     return end, average
 
 
+def learning_progress(model, now):
+    """Initial evidence coverage and ETA, never a readiness-to-control claim."""
+    heating=max(0,model.get('heated_hours',0));idle=max(0,model.get('idle_hours',0))
+    remaining_heat=max(0,12-heating);remaining_idle=max(0,12-idle)
+    percent=100*(min(12,heating)+min(12,idle))/24
+    rates=[row for row in model.get('learning_rates',[]) if row['time']>=now.timestamp()-7*86400]
+    since=model.get('learning_rate_since')
+    elapsed=now.timestamp()-max(since,now.timestamp()-7*86400) if since is not None else 0
+    eta=None
+    if remaining_heat==0 and remaining_idle==0:
+        eta=0
+    elif elapsed>=86400:
+        heat_rate=sum(row['heat'] for row in rates)/(elapsed/86400)
+        idle_rate=sum(row['idle'] for row in rates)/(elapsed/86400)
+        if (not remaining_heat or heat_rate>0) and (not remaining_idle or idle_rate>0):
+            eta=round(max(remaining_heat/heat_rate if remaining_heat else 0,
+                          remaining_idle/idle_rate if remaining_idle else 0),1)
+    return {'percent':round(percent,1),'heating_hours':round(heating,1),
+            'idle_hours':round(idle,1),'required_hours_each':12,
+            'initial_complete':remaining_heat==0 and remaining_idle==0,
+            'estimated_days_to_initial':eta,'rate_history_hours':round(elapsed/3600,1)}
+
+
 def learn(model, room, previous, current, enabled=True):
     """Learn only with observed activity and uninterrupted short intervals.
 
@@ -155,6 +178,14 @@ multi-day counterfactual cost savings are asserted from these observations.
     model['samples'] += 1
     model['heated_hours'] += dt*previous['activity']
     model['idle_hours'] += dt*(1-previous['activity'])
+    model.setdefault('learning_rate_since',previous['time'])
+    bucket=math.floor(previous['time']/3600)*3600
+    rates=[row for row in model.get('learning_rates',[]) if row['time']>=current['time']-7*86400]
+    row=next((row for row in rates if row['time']==bucket),None)
+    if row is None:
+        row={'time':bucket,'heat':0.0,'idle':0.0};rates.append(row)
+    row['heat']+=dt*previous['activity'];row['idle']+=dt*(1-previous['activity'])
+    model['learning_rates']=rates
     # Ridge regularization toward design estimates, plus evidence from both states.
     prior = initial_model(room)
     xx, yy, xy = model['xx']+200, model['yy']+20, model['xy']
@@ -178,6 +209,14 @@ def thermostat_timing(rows, settings, baseline, now):
             sessions[-1]['end'] = row['end']
         else:
             sessions.append({'start':row['start'], 'end':row['end']})
+    committed = settings.get('committed_session')
+    if committed:
+        start, end = stamp(committed['start']), stamp(committed['end'])
+        # Rows are clipped to now; retain the original start for advance commands.
+        for session in sessions:
+            if stamp(session['start']) < end and stamp(session['end']) > start:
+                session['start'] = min(start,stamp(session['start'])).isoformat()
+                break
     windows = []
     for session in sessions:
         start = stamp(session['start']) - timedelta(minutes=settings['start_offset_minutes'])
@@ -213,6 +252,9 @@ ending the known-price horizon with insufficient estimated thermal reserve.
     room = {**DEFAULTS, **room}
     if not slots:
         return None
+    committed = room.get('committed_session')
+    committed_start = stamp(committed['start']) if committed else None
+    committed_end = stamp(committed['end']) if committed else None
     loss, gain = model['loss'], model['gain']
     if fireplace:
         loss *= 1 + room['fireplace_reduction']/100
@@ -228,6 +270,8 @@ ending the known-price horizon with insufficient estimated thermal reserve.
         candidates = []
         for violation, cost, temp, response, last, run, path in beam:
             for on in (0, 1):
+                if committed_start is not None and slot.end > committed_start and max(now,slot.start) < committed_end and not on:
+                    continue  # A published session has already begun its valve-opening window.
                 if not on and last and run < minimum_run-1e-6:
                     continue
                 if on and not last and (slots[-1].end-max(now,slot.start)).total_seconds()/3600 < minimum_run:

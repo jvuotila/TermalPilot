@@ -157,6 +157,16 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.c.suggested_runs)
         self.hass.services.async_call.assert_not_awaited()
 
+    async def test_session_commits_at_opening_and_expires_after_delivery_end(self):
+        start=now+timedelta(minutes=15);end=start+timedelta(hours=1)
+        session={'start':start.isoformat(),'end':end.isoformat()}
+        self.c.data={'rooms':{'test':{'plan':{'sessions':[session]}}}}
+        self.assertIsNone(self.c.committed_session('test',now+timedelta(minutes=9)))
+        self.assertEqual(self.c.committed_session('test',now+timedelta(minutes=10)),session)
+        # Keep the closing offset stable even during the final delivery minutes.
+        self.assertEqual(self.c.committed_session('test',end-timedelta(minutes=5)),session)
+        self.assertIsNone(self.c.committed_session('test',end))
+
     async def test_read_only_default(self):
         result=await self.c._async_update_data()
         self.assertTrue(result['simulation_only']);self.assertTrue(result['rooms'])
