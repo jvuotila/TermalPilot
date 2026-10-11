@@ -4,7 +4,7 @@ No device commands exist in this module. A low-pass heating response approximate
 slab delay; it is not a physical measurement of the slab's stored energy.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 import math
 from .const import DEFAULTS
 
@@ -325,3 +325,41 @@ def collection_state(previous, outdoor, timestamp, config):
     state.update(time=timestamp, active=bool(config['heating_enabled']),
                  collecting=bool(config['heating_enabled'] and outdoor is not None))
     return state
+
+
+def fallback_season(previous, forecasts, forecast_type, outdoor, now, zone, threshold=6.0):
+    """Summer: May 15–September 30, or a complete day's minimum at or above the configured threshold."""
+    local = now.astimezone(zone)
+    date = local.date().isoformat()
+    days = {key:dict(value) for key,value in (previous or {}).get('days',{}).items()
+            if abs((local.date()-date_type.fromisoformat(key)).days)<=3}
+    for item in forecasts:
+        moment = stamp(item.get('datetime'))
+        value = number(item.get('templow',item.get('temperature')) if forecast_type in ('daily','twice_daily') else item.get('temperature'))
+        if moment is None or value is None:
+            continue
+        point = moment.astimezone(zone)
+        key = point.date().isoformat()
+        day = days.setdefault(key,{})
+        day['low'] = min(day.get('low',value),value)
+        hour = point.hour+point.minute/60
+        day['first_hour'] = min(day.get('first_hour',hour),hour)
+        day['last_hour'] = max(day.get('last_hour',hour),hour)
+        if forecast_type == 'daily':
+            day['complete'] = True
+        elif forecast_type == 'twice_daily':
+            day['complete'] = day['first_hour'] <= 6 and day['last_hour'] >= 18
+        else:
+            points = day.setdefault('points',[])
+            if moment.timestamp() not in points:
+                points.append(moment.timestamp())
+                points.sort()
+            if day['first_hour'] <= 0 and day['last_hour'] >= 23 and all(b-a<=5400 for a,b in zip(points,points[1:])):
+                day['complete'] = True
+    today = days.setdefault(date,{})
+    if outdoor is not None:
+        today['low'] = min(today.get('low',outdoor),outdoor)
+    in_dates = (5,15) <= (local.month,local.day) <= (9,30)
+    summer = bool(in_dates or (today.get('complete') and today.get('low',-100)>=threshold))
+    return {'summer':summer,'date':date,'daily_minimum':today.get('low'),
+            'complete':bool(today.get('complete')),'days':days}

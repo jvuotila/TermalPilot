@@ -1,6 +1,6 @@
 # Validation status
 
-- 79 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 97 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -73,3 +73,18 @@ placement inside the Operation card, Finnish dates and preserved Active/Paused
 badges. Collection-start storage survives retention and migrates existing season
 records. Preview scripts pass syntax checks; browser visual rendering has not
 been verified by these template tests.
+
+
+Live control tests use Home Assistant service doubles, not actual thermostat
+hardware. Coverage includes scheduled offset execution, simulation consent,
+legacy-off protection, missing inputs, expired plans, failed writes, duplicate
+suppression, cancelling an unacknowledged boost, thermostat limits/steps, releasing removed rooms, mode changes,
+restart ownership, source-recovery debouncing and summer/winter fallbacks.
+Restart tests create a fresh coordinator after a one-hour outage and verify
+both heating-to-idle and idle-to-heating target changes, a forced initial write
+despite matching restored attributes, missing-source fallback and recovery,
+unavailable-thermostat recovery, and seasonal fallback changes. These use
+Home Assistant service doubles; physical restart behavior remains to be verified.
+Calendar and forecast tests cover the always-summer date span, inclusive threshold,
+user-configured threshold, incomplete/gapped forecasts and retained daily lows.
+Physical valve and pump response still require observation on the user's system.

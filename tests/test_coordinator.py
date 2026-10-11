@@ -25,6 +25,7 @@ class Store:
 storage.Store=Store;sys.modules[storage.__name__]=storage
 event=types.ModuleType('homeassistant.helpers.event')
 event.async_track_point_in_utc_time=lambda hass,action,point:lambda:None
+event.async_track_state_change_event=lambda hass,entities,action:lambda:None
 sys.modules[event.__name__]=event
 now=datetime(2026,1,2,0,tzinfo=timezone.utc)
 dt=types.ModuleType('homeassistant.util.dt');dt.utcnow=lambda:now
@@ -164,15 +165,11 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(call.args[0]['setback'],-.7)
         self.hass.services.async_call.assert_not_awaited()
 
-    async def test_global_simulation_pause_keeps_observations_without_planning(self):
+    async def test_legacy_simulation_off_requires_confirmation_but_still_plans(self):
         self.c.settings['simulation_enabled']=False
-        with patch('thermal_pilot.coordinator.plan') as planner:
-            result=await self.c._async_update_data()
-        planner.assert_not_called()
-        self.assertTrue(result['rooms'])
-        self.assertTrue(all(room['plan'] is None for room in result['rooms'].values()))
-        self.assertEqual(self.c.history_db.size()['rows'],1)
-        self.assertFalse(self.c.suggested_runs)
+        result=await self.c._async_update_data()
+        self.assertIsNotNone(result['rooms']['11111111-1111-4111-8111-111111111111']['plan'])
+        self.assertEqual(result['control']['mode'],'simulation')
         self.hass.services.async_call.assert_not_awaited()
 
     async def test_session_commits_at_opening_and_expires_after_delivery_end(self):
@@ -200,13 +197,229 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         with patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=lambda:None) as track:
             self.c.arm_command_timer(self.c.data,now)
             self.assertEqual(track.call_args.args[2],now+timedelta(minutes=55))
-            self.c.update_command_state(now+timedelta(minutes=55))
+            await self.c.update_command_state(now+timedelta(minutes=55))
             self.assertEqual(self.c.data['rooms']['test']['plan']['setpoint'],21.5)
             self.assertEqual(track.call_args.args[2],now+timedelta(hours=1,minutes=50))
-            self.c.update_command_state(now+timedelta(hours=1,minutes=50))
+            await self.c.update_command_state(now+timedelta(hours=1,minutes=50))
             self.assertEqual(self.c.data['rooms']['test']['plan']['setpoint'],19)
             self.assertIsNone(self.c._command_timer)
         self.hass.services.async_call.assert_not_awaited()
+
+    async def test_live_control_applies_offsets_and_releases_on_simulation(self):
+        from thermal_pilot.model import thermostat_timing
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        rows=[{'start':(now+timedelta(hours=1)).isoformat(),'end':(now+timedelta(hours=2)).isoformat(),'heat':True}]
+        timing=thermostat_timing(rows,{**DEFAULTS,'maximum':23},20,now)
+        timing['slots']=[{**rows[0],'start':now.isoformat()}]
+        self.c._plan_settings=deepcopy(self.c.settings)
+        self.c.data={'rooms':{'11111111-1111-4111-8111-111111111111':{'plan':timing}}}
+        await self.c.update_command_state(now+timedelta(minutes=55))
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],21.5)
+        self.hass.states['climate.room'].attributes['temperature']=21.5
+        await self.c.update_command_state(now+timedelta(hours=1,minutes=50))
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],19)
+        self.hass.states['climate.room'].attributes['temperature']=19
+        self.c.settings.update(simulation_enabled=True,live_control_confirmed=False)
+        await self.c._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        self.assertFalse(self.c.managed_rooms)
+
+    async def test_live_missing_inputs_and_expired_plan_use_normal_target(self):
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        self.hass.states['climate.room'].attributes['temperature']=22
+        self.hass.states['sensor.room'].state='unavailable'
+        data=await self.c._async_update_data()
+        self.assertEqual(data['control']['fallback_rooms'],['Study'])
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        self.hass.states['sensor.room'].state='20'
+        self.hass.states['sensor.price'].state='unavailable'
+        data=await self.c._async_update_data()
+        self.assertEqual(data['control']['targets']['11111111-1111-4111-8111-111111111111'],20)
+        self.hass.states['sensor.price'].state='10'
+        data=await self.c._async_update_data()
+        self.c.data=data
+        self.hass.states['climate.room'].attributes['temperature']=22
+        await self.c.update_command_state(now+timedelta(days=2))
+        self.assertEqual(self.c.data['control']['fallback_rooms'],['Study'])
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+
+    async def test_changed_settings_block_stale_timer_and_removed_room_restores_target(self):
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        data=await self.c._async_update_data()
+        self.c.data=data
+        self.c.settings['boost']=2
+        self.hass.services.async_call.reset_mock()
+        await self.c.update_command_state(now+timedelta(minutes=1))
+        self.hass.services.async_call.assert_not_awaited()
+        self.hass.states['climate.room'].attributes['temperature']=22
+        self.c.settings['rooms']=[]
+        await self.c._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        self.assertFalse(self.c.managed_rooms)
+
+    async def test_source_recovery_is_debounced_and_listener_cleanup(self):
+        from unittest.mock import Mock
+        self.c.listen_sources()
+        with patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=Mock()) as track:
+            self.c.source_changed(types.SimpleNamespace(data={'entity_id':'sensor.price','old_state':State('unavailable'),'new_state':State('10')}))
+            self.assertEqual(track.call_args.args[2],now+timedelta(seconds=5))
+            self.c.source_changed(types.SimpleNamespace(data={'entity_id':'sensor.room','old_state':State('20'),'new_state':State('21')}))
+            self.assertEqual(track.call_count,1)
+            self.c.async_request_refresh=AsyncMock()
+            await track.call_args.args[1](now+timedelta(seconds=5))
+            self.c.async_request_refresh.assert_awaited_once()
+        self.c.stop()
+        self.assertIsNone(self.c._source_unsubscribe)
+
+    async def test_live_passive_uses_winter_and_summer_fallbacks(self):
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True,heating_enabled=False)
+        self.hass.states['climate.room'].attributes['temperature']=22
+        winter=await self.c._async_update_data()
+        self.assertEqual(winter['control']['mode'],'paused')
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=now.replace(month=5,day=15)):
+            summer=await self.c._async_update_data()
+        self.assertEqual(summer['fallback_season']['season'],'summer')
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],10)
+        self.assertEqual(self.c.history_db.size()['rows'],0)
+
+    async def test_live_restart_restores_ownership_and_keeps_activation(self):
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        await self.c._async_update_data()
+        saved=self.c.storage_data()
+        self.c.managed_rooms={}
+        self.c.store.saved=deepcopy(saved)
+        await self.c.load()
+        self.assertIn('climate.room',self.c.managed_rooms)
+        self.hass.states['climate.room'].attributes['temperature']=22
+        self.c.settings.update(simulation_enabled=True,live_control_confirmed=False)
+        await self.c._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+
+    async def restarted_live_coordinator(self, reported_target):
+        """New process: only settings/model ownership survive, never old commands."""
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        saved=deepcopy(self.c.storage_data())
+        entry=types.SimpleNamespace(entry_id='test',data=deepcopy(self.c.settings),options={})
+        restarted=PilotCoordinator(self.hass,entry)
+        restarted.store.saved=saved
+        await restarted.load()
+        self.hass.states['climate.room'].attributes['temperature']=reported_target
+        self.hass.services.async_call.reset_mock()
+        return restarted
+
+    async def test_one_hour_outage_replans_and_applies_current_target_both_directions(self):
+        from thermal_pilot.model import thermostat_timing
+        restarted_at=now+timedelta(hours=1)
+        for was_heating,heat_now in [(True,False),(False,True)]:
+            with self.subTest(was_heating=was_heating,heat_now=heat_now):
+                from thermal_pilot.model import initial_model
+                rid=self.c.settings['rooms'][0]['id']
+                self.c.models[rid]={**initial_model(self.c.settings['rooms'][0]),'response':0.8}
+                self.c.previous[rid]={'time':now.timestamp(),'temperature':20}
+                restarted=await self.restarted_live_coordinator(21.5 if was_heating else 19)
+                self.assertFalse(restarted.previous)
+                # Simulate the fresh planner; the pre-crash plan must not be reused.
+                def fresh_plan(settings,model,temperature,outdoors,slots,current,*args):
+                    self.assertEqual(current,restarted_at)
+                    self.assertIsNone(settings['committed_session'])
+                    self.assertEqual(model['response'],0)
+                    rows=[{'start':current.isoformat(),'end':(current+timedelta(hours=2)).isoformat(),'heat':heat_now}]
+                    return {**thermostat_timing(rows,settings,20,current),'slots':rows,'scheduled_heat':heat_now}
+                with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restarted_at), patch('thermal_pilot.coordinator.plan',side_effect=fresh_plan) as planner, patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=lambda:None) as timer:
+                    data=await restarted._async_update_data()
+                planner.assert_called_once()
+                self.assertEqual(self.hass.services.async_call.await_count,1)
+                self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],21.5 if heat_now else 19)
+                self.assertEqual(data['control']['mode'],'live')
+                self.assertGreater(timer.call_args.args[2],restarted_at)
+                restarted.stop()
+
+    async def test_restart_writes_current_target_even_when_restored_attribute_matches(self):
+        restarted=await self.restarted_live_coordinator(20)
+        self.hass.states['sensor.price'].state='unavailable'
+        data=await restarted._async_update_data()
+        self.assertEqual(data['control']['fallback_rooms'],['Study'])
+        self.hass.services.async_call.assert_awaited_once_with('climate','set_temperature',{'entity_id':'climate.room','temperature':20},blocking=True)
+        await restarted._async_update_data()
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+        restarted.stop()
+
+    async def test_restart_missing_sources_uses_fallback_then_replans_on_recovery(self):
+        restarted=await self.restarted_live_coordinator(21.5)
+        self.hass.states['sensor.price'].state='unavailable'
+        restart_time=now+timedelta(hours=1)
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time):
+            data=await restarted._async_update_data()
+        self.assertEqual(data['control']['targets'][self.c.settings['rooms'][0]['id']],20)
+        self.hass.states['climate.room'].attributes['temperature']=20
+        self.hass.states['sensor.price'].state='10'
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time+timedelta(seconds=5)):
+            recovered=await restarted._async_update_data()
+        self.assertFalse(recovered['control']['fallback_rooms'])
+        self.assertIsNotNone(next(iter(recovered['rooms'].values()))['plan'])
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],next(iter(recovered['rooms'].values()))['plan']['setpoint'])
+        restarted.stop()
+
+    async def test_restart_unavailable_thermostat_retries_when_device_returns(self):
+        restarted=await self.restarted_live_coordinator(10)
+        restarted.settings['heating_enabled']=False
+        self.hass.states['climate.room'].state='unavailable'
+        data=await restarted._async_update_data()
+        self.assertTrue(data['control']['errors'])
+        self.hass.services.async_call.assert_not_awaited()
+        self.hass.states['climate.room'].state='heat'
+        self.hass.states['climate.room'].attributes['temperature']=20
+        await restarted._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        restarted.stop()
+
+    async def test_restart_sources_and_thermostat_take_ten_minutes_to_recover(self):
+        restarted=await self.restarted_live_coordinator(21.5)
+        entities=['sensor.out','sensor.water','sensor.price','sensor.room']
+        for entity in entities:
+            self.hass.states[entity].state='unavailable'
+        self.hass.states['climate.room'].state='unavailable'
+        restart_time=now+timedelta(hours=1)
+        for minutes in (0,5,10):
+            with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time+timedelta(minutes=minutes)):
+                data=await restarted._async_update_data()
+            self.assertEqual(data['control']['fallback_rooms'],['Study'])
+            self.assertIsNone(next(iter(data['rooms'].values()))['plan'])
+            self.assertFalse(restarted.previous)
+        self.hass.services.async_call.assert_not_awaited()
+        # Device recovers first: comfort fallback can be sent without source data.
+        self.hass.states['climate.room'].state='heat'
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time+timedelta(minutes=10,seconds=5)):
+            data=await restarted._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+        self.assertEqual(data['control']['fallback_rooms'],['Study'])
+        for entity,value in zip(entities,['-10','32','10','20']):
+            self.hass.states[entity].state=value
+        self.hass.states['climate.room'].attributes['temperature']=20
+        # Existing event listener requests recovery after five seconds.
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time+timedelta(minutes=11)), patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=lambda:None) as timer:
+            restarted.source_changed(types.SimpleNamespace(data={'entity_id':'sensor.room','old_state':State('unavailable'),'new_state':State('20')}))
+            self.assertEqual(timer.call_args.args[2],restart_time+timedelta(minutes=11,seconds=5))
+            async def refresh():
+                restarted.data=await restarted._async_update_data()
+            restarted.async_request_refresh=refresh
+            recovery=timer.call_args.args[1]
+            with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restart_time+timedelta(minutes=11,seconds=5)):
+                await recovery(restart_time+timedelta(minutes=11,seconds=5))
+        self.assertFalse(restarted.data['control']['fallback_rooms'])
+        self.assertIsNotNone(next(iter(restarted.data['rooms'].values()))['plan'])
+        self.assertTrue(restarted.data['source_status']['prices'])
+        restarted.stop()
+
+    async def test_restart_passive_recomputes_season_after_calendar_boundary(self):
+        restarted=await self.restarted_live_coordinator(20)
+        restarted.settings['heating_enabled']=False
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=now.replace(month=5,day=15)):
+            data=await restarted._async_update_data()
+        self.assertEqual(data['fallback_season']['season'],'summer')
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],10)
+        restarted.stop()
 
     async def test_passive_cancels_offset_timer(self):
         from unittest.mock import Mock
@@ -257,9 +470,11 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.c.history_db.size()['rows'],0)
     async def test_summer_target_opt_in(self):
         self.c.settings.update(heating_enabled=False,apply_season_setpoints=True,summer_setpoint=10)
-        await self.c._async_update_data()
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=now.replace(month=5,day=15)):
+            await self.c._async_update_data()
         self.hass.services.async_call.assert_awaited_once_with('climate','set_temperature',{'entity_id':'climate.room','temperature':10},blocking=True)
-        await self.c._async_update_data()
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=now.replace(month=5,day=15)):
+            await self.c._async_update_data()
         self.assertEqual(self.hass.services.async_call.await_count,1)
     async def test_active_restores_room_target(self):
         self.c.settings.update(heating_enabled=False,apply_season_setpoints=True)

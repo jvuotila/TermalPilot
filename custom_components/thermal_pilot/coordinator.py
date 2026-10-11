@@ -1,4 +1,4 @@
-"""Read HA states, learn observed response, persist data, publish shadow plans."""
+"""Read HA states, learn observed response, persist data, publish plans and reconcile opt-in thermostat control."""
 from datetime import timedelta
 from copy import deepcopy
 import logging
@@ -6,12 +6,13 @@ from zoneinfo import ZoneInfo
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
+from .control import ThermostatControl
 from .config import stored_settings
-from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state
+from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,47 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.applied_season_targets = {}
         self.sensor_health = {'rooms':{},'last_notification_day':None}
         self._command_timer = None
+        # Restored HA attributes may not reflect the device after an outage.
+        self.control = ThermostatControl(hass, require_initial_write=True)
+        self.managed_rooms = {}
+        self.fallback_state = {}
+        self._plan_settings = None
+        self._source_timer = None
+        self._source_unsubscribe = None
+
+    def stop(self):
+        self.cancel_command_timer()
+        if self._source_timer:
+            self._source_timer()
+            self._source_timer = None
+        if self._source_unsubscribe:
+            self._source_unsubscribe()
+            self._source_unsubscribe = None
+
+    def listen_sources(self):
+        if self._source_unsubscribe:
+            self._source_unsubscribe()
+        entities = {self.settings[key] for key in ('price_entity','outdoor_entity','water_entity','weather_entity','fireplace_entity') if self.settings[key]}
+        entities.update(room[key] for room in self.settings['rooms'] for key in ('temperature_entity','thermostat','activity_entity') if room[key])
+        self._source_unsubscribe = async_track_state_change_event(self.hass,entities,self.source_changed)
+
+    @callback
+    def source_changed(self, event):
+        """Recover promptly after startup and react to source/relay changes."""
+        entity = event.data.get('entity_id')
+        old, new = event.data.get('old_state'), event.data.get('new_state')
+        if entity == self.settings['weather_entity']:
+            self.forecast_updated = None
+        thermostats = {room['thermostat'] for room in self.settings['rooms']}
+        if entity in thermostats and old and new and old.state == new.state and old.attributes.get('hvac_action') == new.attributes.get('hvac_action'):
+            return  # Own target acknowledgements do not require replanning.
+        if self._source_timer:
+            return
+        urgent = not old or not new or old.state in ('unknown','unavailable') or new.state in ('unknown','unavailable') or entity == self.settings['price_entity']
+        async def refresh(_now):
+            self._source_timer = None
+            await self.async_request_refresh()
+        self._source_timer = async_track_point_in_utc_time(self.hass,refresh,dt_util.utcnow()+timedelta(seconds=5 if urgent else 30))
 
     def cancel_command_timer(self):
         if self._command_timer is not None:
@@ -46,17 +88,22 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.cancel_command_timer()
         future = [stamp(command['time']) for room in data.get('rooms',{}).values()
                   for command in (room.get('plan') or {}).get('commands',[]) if stamp(command['time']) > now]
+        for room in data.get('rooms',{}).values():
+            rows = (room.get('plan') or {}).get('slots',[])
+            if rows and stamp(rows[-1]['end']) > now:
+                future.append(stamp(rows[-1]['end']))
         if future:
             self._command_timer = async_track_point_in_utc_time(self.hass,self.update_command_state,min(future))
 
-    @callback
-    def update_command_state(self, now):
-        """Publish offset transitions without replanning, learning or device writes."""
+    async def update_command_state(self, now):
+        """Apply offset transitions without waiting for the regular planning refresh."""
         data = deepcopy(self.data or {})
         for room in data.get('rooms',{}).values():
             if room.get('plan'):
                 room['plan'].update(thermostat_state(room['plan'],now))
         data['updated'] = now.isoformat()
+        data['control'] = await self.apply_live_targets(data,now)
+        data['warnings'] = [w for w in data.get('warnings',[]) if not w.startswith('Thermostat control:')]+[f'Thermostat control: {w}' for w in data['control']['errors']]
         self.async_set_updated_data(data)
         self.arm_command_timer(data,now)
 
@@ -67,6 +114,8 @@ class PilotCoordinator(DataUpdateCoordinator):
             model['response'] = 0.0  # Slab state cannot be trusted across downtime.
         self.season = saved.get('season', {})
         self.applied_season_targets = saved.get('applied_season_targets', {})
+        self.fallback_state = saved.get('fallback_state',{})
+        self.managed_rooms = {room['thermostat']:room for room in saved.get('managed_rooms',{}).values()}
         self.sensor_health = saved.get('sensor_health', {'rooms':{},'last_notification_day':None})
         await self.hass.async_add_executor_job(self.history_db.initialize)
         self.config_fingerprint = saved.get('fingerprints', {})
@@ -98,7 +147,7 @@ class PilotCoordinator(DataUpdateCoordinator):
     def storage_data(self):
         return {'models':self.models,'season':self.season,
                 'applied_season_targets':self.applied_season_targets,
-                'fingerprints':self.config_fingerprint,'sensor_health':self.sensor_health}
+                'fingerprints':self.config_fingerprint,'sensor_health':self.sensor_health,'managed_rooms':self.managed_rooms,'fallback_state':self.fallback_state}
 
     async def check_temperature_sensors(self, now, active):
         """Warn once per local day after six hours of continuous suspect readings."""
@@ -203,9 +252,12 @@ class PilotCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         self.cancel_command_timer()
         now = dt_util.utcnow()
+        plan_settings = deepcopy(self.settings)
         outdoor = self.value(self.settings['outdoor_entity'])
         source = self.hass.states.get(self.settings['price_entity'])
         heating_active = self.settings['heating_enabled']
+        forecasts = await self.get_forecast(now)
+        self.fallback_state = fallback_season(self.fallback_state,forecasts,self.forecast_type,outdoor,now,ZoneInfo(self.hass.config.time_zone),self.settings['summer_minimum_temperature'])
         await self.check_temperature_sensors(now,heating_active)
         setpoint_errors = await self.apply_season_targets(heating_active)
         previous_season = dict(self.season)
@@ -231,15 +283,19 @@ class PilotCoordinator(DataUpdateCoordinator):
             cutoff = now.timestamp()-HISTORY_DAYS*86400
             await self.hass.async_add_executor_job(self.history_db.append, [], cutoff, self.season['season_id'])
             self.store.async_delay_save(self.storage_data,20)
-            return {'updated':now.isoformat(),'simulation_only':not self.settings['apply_season_setpoints'],'heating_active':False,
+            data = {'updated':now.isoformat(),'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'],'heating_active':False,
                 'collection':self.season,'collection_evidence':self.collection_evidence(),'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
                 'rooms':{},'outdoor':outdoor,'water':None,
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}
+            self._plan_settings = plan_settings
+            data['fallback_season'] = self.fallback_summary()
+            data['control'] = await self.apply_live_targets(data,now)
+            data['warnings'].extend(f'Thermostat control: {w}' for w in data['control']['errors'])
+            return data
         warnings = list(setpoint_errors)
-        if not self.settings['simulation_enabled']:
-            self.suggested_runs.clear()
-            warnings.append('Simulation is paused for all rooms. Observation and learning follow Active/Passive; live heating schedules are not enabled.')
+        if not self.settings['simulation_enabled'] and not self.settings.get('live_control_confirmed'):
+            warnings.append('Live control awaits confirmation. Enable simulation, save, then disable it and confirm to activate thermostat control.')
         if not self.season['collecting']:
             warnings.append('History collection and learning paused because outdoor temperature is unavailable. Existing model parameters are retained.')
         slots = []
@@ -256,7 +312,6 @@ class PilotCoordinator(DataUpdateCoordinator):
                 warnings.append(str(error))
         if not slots:
             warnings.append('No continuous prices from now: no heating plan is available.')
-        forecasts = await self.get_forecast(now)
         if not forecasts:
             warnings.append('No weather forecast: current outdoor temperature is held constant. '+(self.forecast_error or 'No usable forecast was returned.'))
         outdoors = []
@@ -312,7 +367,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                     self.previous[rid] = current
                 else:
                     self.previous.pop(rid,None)
-                if self.settings['simulation_enabled'] and slots and all(t is not None for t in outdoors):
+                if slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':RESERVE_HOURS,
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
@@ -350,21 +405,89 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.store.async_delay_save(self.storage_data,20)
         archives = await self.hass.async_add_executor_job(self.history_db.summaries)
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
-        data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
+        data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
                 'rooms':room_data,'price_chart':chart_prices,
                 'collection_evidence':self.collection_evidence(),
-                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None}}
+                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None},
+                'fallback_season':self.fallback_summary()}
+        self._plan_settings = plan_settings
+        data['control'] = await self.apply_live_targets(data,now)
+        data['warnings'].extend(f'Thermostat control: {w}' for w in data['control']['errors'])
         self.arm_command_timer(data,now)
         return data
 
+    def fallback_summary(self):
+        return {'season':'summer' if self.fallback_state.get('summer') else 'winter',
+                'daily_minimum':self.fallback_state.get('daily_minimum'),
+                'forecast_complete':self.fallback_state.get('complete',False),'threshold':self.settings['summer_minimum_temperature']}
+
+    def fallback_target(self, room):
+        return self.settings['summer_setpoint'] if self.fallback_state.get('summer') else room['baseline']
+
+    def live_enabled(self):
+        return not self.settings['simulation_enabled'] and self.settings.get('live_control_confirmed',False)
+
+    async def release_managed_rooms(self, now, force=False):
+        """Restore normal comfort targets on relinquishing thermostat ownership."""
+        snapshot = deepcopy(self.settings)
+        configured = {r['thermostat']:r for r in snapshot['rooms']}
+        released = [{**old,'id':entity} for entity,old in self.managed_rooms.items()
+                    if force or not self.live_enabled() or entity not in configured]
+        targets = {old['id']:self.fallback_target(configured.get(old['thermostat'],old)) for old in released}
+        errors = await self.control.apply(released,targets,now.timestamp(),lambda:self.settings==snapshot)
+        for room in released:
+            if room['id'] in self.control.results:
+                self.managed_rooms.pop(room['thermostat'],None)
+        if released:
+            await self.store.async_save(self.storage_data())
+        return errors
+
+    async def apply_live_targets(self, data, now):
+        """Reconcile current windows and restore comfort targets when inputs fail."""
+        release_errors = await self.release_managed_rooms(now)
+        if not self.live_enabled():
+            return {'mode':'simulation','errors':release_errors,'fallback_rooms':[]}
+        snapshot = deepcopy(self.settings)
+        if self._plan_settings != snapshot:
+            return {'mode':'waiting','errors':[],'fallback_rooms':[]}
+        targets, fallback = {}, []
+        sources_ok = self.value(snapshot['outdoor_entity']) is not None
+        water_state = self.hass.states.get(snapshot['water_entity'])
+        water = number(water_state.attributes.get('current_temperature') if snapshot['water_entity'].startswith('climate.') else water_state.state) if water_state else None
+        price_state = self.hass.states.get(snapshot['price_entity'])
+        try:
+            prices = price_slots(price_state.attributes,snapshot,now,ZoneInfo(self.hass.config.time_zone)) if price_state and price_state.state not in ('unknown','unavailable') else []
+        except ValueError:
+            prices = []
+        sources_ok = sources_ok and water is not None and bool(prices)
+        for room in snapshot['rooms']:
+            planned = data.get('rooms',{}).get(room['id'],{}).get('plan')
+            rows = (planned or {}).get('slots',[])
+            current_plan = rows and stamp(rows[0]['start']) <= now < stamp(rows[-1]['end'])
+            if snapshot['heating_enabled'] and sources_ok and self.value(room['temperature_entity']) is not None and current_plan:
+                target = thermostat_state(planned,now)['setpoint']
+            else:
+                target = self.fallback_target(room)
+                fallback.append(room['name'])
+            targets[room['id']] = target
+        permitted = lambda: self.settings == snapshot and self.live_enabled()
+        errors = release_errors+await self.control.apply(snapshot['rooms'],targets,now.timestamp(),permitted)
+        for room in snapshot['rooms']:
+            if room['id'] in self.control.results:
+                self.managed_rooms[room['thermostat']] = deepcopy(room)
+        if fallback and snapshot['heating_enabled']:
+            errors.append(f"{self.fallback_summary()['season'].capitalize()} fallback targets are being used because required data or a current heating plan is unavailable: "+', '.join(fallback)+'.')
+        await self.store.async_save(self.storage_data())
+        return {'mode':'live' if snapshot['heating_enabled'] else 'paused','errors':errors,'fallback_rooms':fallback,'targets':dict(self.control.results)}
+
     async def apply_season_targets(self, heating_active):
         errors = []
-        if not self.settings['apply_season_setpoints']:
+        if not self.settings['apply_season_setpoints'] or self.live_enabled():
             self.applied_season_targets.clear()
             return errors
         for room in self.settings['rooms']:
-            target = room['baseline'] if heating_active else self.settings['summer_setpoint']
+            target = room['baseline'] if heating_active else self.fallback_target(room)
             state = self.hass.states.get(room['thermostat'])
             if target is None or state is None or state.state in ('unknown','unavailable'):
                 errors.append(f"{room['name']}: season setpoint could not be applied; source or thermostat unavailable.")

@@ -1,4 +1,4 @@
-"""ThermalPilot: simulation-first heating planner with optional season setpoints."""
+"""ThermalPilot: simulation-first heating planner with opt-in scheduled thermostat control."""
 from pathlib import Path
 try:
     import probatio as vol
@@ -7,9 +7,10 @@ except ImportError:
 from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import callback
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS
-from .config import validate, stored_settings, SOURCE_FIELDS, ROOM_FIELDS
+from .config import validate, stored_settings, confirm_control_settings, SOURCE_FIELDS, ROOM_FIELDS
 from .coordinator import PilotCoordinator
 
 
@@ -22,8 +23,9 @@ async def async_setup_entry(hass, entry):
             websocket_api.async_register_command(hass, handler)
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
-    entry.async_on_unload(coordinator.cancel_command_timer)
+    entry.async_on_unload(coordinator.stop)
     await coordinator.load()
+    coordinator.listen_sources()
     domain[entry.entry_id] = coordinator
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -37,7 +39,9 @@ async def async_setup_entry(hass, entry):
 
 async def _options_updated(hass, entry):
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator.cancel_command_timer()
     coordinator.settings = stored_settings(entry.data, entry.options)
+    coordinator.listen_sources()
     await coordinator.async_request_refresh()
     # Re-create entities when rooms change; entities derive stable IDs from room UUIDs.
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -47,8 +51,9 @@ async def _options_updated(hass, entry):
 async def async_unload_entry(hass, entry):
     if await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        await coordinator.store.async_save({'models':coordinator.models, 'season':coordinator.season,'applied_season_targets':coordinator.applied_season_targets,
-                                            'fingerprints':coordinator.config_fingerprint})
+        coordinator.stop()
+        await coordinator.release_managed_rooms(dt_util.utcnow(),force=True)
+        await coordinator.store.async_save(coordinator.storage_data())
         frontend.async_remove_panel(hass, DOMAIN)
         return True
     return False
@@ -76,7 +81,7 @@ def ws_get(hass, connection, msg):
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS})
 
 
-@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_save(hass, connection, msg):
@@ -84,6 +89,7 @@ async def ws_save(hass, connection, msg):
         return
     try:
         settings = validate(msg['settings'], hass)
+        settings = confirm_control_settings(settings,c.settings,msg.get('enable_live_control',False))
     except ValueError as error:
         connection.send_error(msg['id'], 'invalid_settings', str(error))
         return

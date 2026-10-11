@@ -45,6 +45,6 @@ class PilotSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         row = (self.coordinator.data or {}).get('rooms',{}).get(self.room_id,{})
-        return {'simulation_only':True, 'reason':(row.get('plan') or {}).get('reason',row.get('error')),
+        return {'simulation_only':not self.coordinator.live_enabled(), 'reason':(row.get('plan') or {}).get('reason',row.get('error')),
                 'thermostat_commands':(row.get('plan') or {}).get('commands',[]),
                 'learning':row.get('learning_note')}

@@ -103,7 +103,7 @@ panel._hass={states:{'sensor.price':{entity_id:'sensor.price',attributes:{friend
 panel.settings={heating_enabled:true,apply_season_setpoints:false,rooms:[]};
 panel.info={settings:panel.settings,source_fields:[['price_entity','Price sensor','sensor']],room_fields:[],room_defaults:{},data:{warnings:[],rooms:{},history_info:{rows:0,bytes:0},collection:{collecting:false},heating_active:true}};
 panel.tab='settings';panel.render();assert.match(panel.shadowRoot.innerHTML,/Save settings/);assert.match(panel.shadowRoot.innerHTML,/data-field="source.price_entity"/);assert.match(panel.shadowRoot.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/<script>alert/);
-panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/Simulation status/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
+panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/ThermalPilot status/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
 panel.settings.apply_season_setpoints=true;panel.render();assert.match(panel.shadowRoot.innerHTML,/SEASON SETPOINT CONTROL ENABLED/);
 panel.tab='history';panel.history=[];panel.render();assert.match(panel.shadowRoot.innerHTML,/Season archives/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Download observations|id="export"/);
 console.log('Panel template tests passed (settings, status, history, command-mode banner, escaping).');
@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.26 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.27 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -300,8 +300,8 @@ for(const [hours,label] of [[0,'Low'],[3,'Limited'],[12,'Developing'],[48,'Good'
 badgePanel.info.data.history_info.started_at=new Date('2026-10-11T00:00:00Z').getTime()/1000;assert.equal(badgePanel.collectionQuality().label,'Low');
 assert.match(badgePanel.controlBadges(),/Sources ready/);
 badgePanel.info.data.source_status.water=false;assert.match(badgePanel.controlBadges(),/Sources missing/);assert.match(badgePanel.controlBadges(),/Missing or unusable: Heating water temperature/);
-badgePanel.settings.simulation_enabled=false;assert.match(badgePanel.controlBadges(),/Simulation paused/);assert.doesNotMatch(badgePanel.controlBadges(),/>Live control</);
-badgePanel.settings.apply_season_setpoints=true;assert.match(badgePanel.controlBadges(),/Season setpoint control/);
+badgePanel.settings.simulation_enabled=false;assert.match(badgePanel.controlBadges(),/Confirmation required/);assert.doesNotMatch(badgePanel.controlBadges(),/>Live control</);
+badgePanel.settings.simulation_enabled=true;badgePanel.settings.apply_season_setpoints=true;assert.match(badgePanel.controlBadges(),/Season setpoint control/);
 assert.equal(vm.runInContext("dateLabel(new Date(2026,9,11,12))",context),'11.10.2026');
 assert.equal(vm.runInContext("timeLabel(new Date(2026,9,11,12,15))",context),'11.10.2026 12:15');
 console.log('Collection coverage levels, source readiness, honest control modes and Finnish dates passed.');
@@ -311,3 +311,19 @@ assert.match(statusPanel.overview(),/Data coverage: Low/);
 const operationBadgeView=statusPanel.overview();
 assert.doesNotMatch(operationBadgeView,/<div class="status-heading">[^]*?status-badges[^]*?<dl/);
 assert.match(operationBadgeView,/<dt>Operation<\/dt>[^]*?status-badges[^]*?Sources not checked[^]*?<dt>Outdoor temperature/);
+
+const flamePanel=new Component();flamePanel.settings={rooms:[{id:'flame',name:'Room',activity_entity:'switch.relay',thermostat:'climate.room'}]};
+assert.match(flamePanel.roomHeatingBadge({actual_activity:1,plan:{heat:false}},'flame'),/room-heating actual/);
+assert.match(flamePanel.roomHeatingBadge({actual_activity:0,plan:{heat:true}},'flame'),/room-heating idle/);
+assert.match(flamePanel.roomHeatingBadge({actual_activity:0,plan:{heat:false}},'flame'),/room-heating idle/);
+assert.match(flamePanel.roomHeatingBadge({actual_activity:null},'flame'),/room-heating unknown/);
+flamePanel._hass={states:{'switch.relay':{state:'off'}}};assert.match(flamePanel.roomHeatingBadge({actual_activity:1,plan:{heat:false}},'flame'),/room-heating idle/);
+flamePanel._hass.states['switch.relay'].state='on';assert.match(flamePanel.roomHeatingBadge({actual_activity:0},'flame'),/Actual heating: On/);
+flamePanel._hass.states['switch.relay'].state='unavailable';assert.match(flamePanel.roomHeatingBadge({actual_activity:1},'flame'),/room-heating unknown/);
+flamePanel.settings.rooms[0].activity_entity='';flamePanel._hass.states['climate.room']={state:'heat',attributes:{hvac_action:'heating'}};assert.match(flamePanel.roomHeatingBadge({},'flame'),/room-heating actual/);
+flamePanel.info={data:{rooms:{flame:{name:'Room',actual_activity:1}}}};flamePanel.history=[];
+assert.match(flamePanel.overview(),/<summary><h2>Room [^]*?room-heating actual/);
+assert.match(flamePanel.historyView(),/<summary><h2>Room [^]*?room-heating actual/);
+console.log('Room-header flame checks passed: Plan/History, current demand, Off/Unknown, unavailable relay and climate fallback.');
+
+assert.doesNotMatch(flamePanel.roomHeatingBadge({actual_activity:0,plan:{heat:true}},'flame'),/Suggested heating|suggested/);

@@ -1,4 +1,4 @@
-"""Master activity switch controls the simulator, never physical heating."""
+"""Master activity switch controls learning, planning and confirmed live control."""
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN

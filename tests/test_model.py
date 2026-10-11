@@ -186,7 +186,7 @@ class SettingsTests(unittest.TestCase):
                     self.assertIn((n.args[0].value,n.args[1].value),{('weather','get_forecasts'),('climate','set_temperature'),('persistent_notification','create')})
                     if n.args[0].value=='climate':
                         method=next(f for f in ast.walk(tree) if isinstance(f,ast.AsyncFunctionDef) and n in list(ast.walk(f)))
-                        self.assertEqual(method.name,'apply_season_targets')
+                        self.assertIn((path.name,method.name),{('coordinator.py','apply_season_targets'),('control.py','apply')})
 
 if __name__=='__main__':unittest.main()
 

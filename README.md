@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.26 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.27 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -70,9 +70,11 @@ estimates are internal model seeds. Each room has a target temperature; minimum
 and maximum allowed temperatures are shared across the house. Learning collects
 valid observations automatically while active collection is enabled.
 
-A shared **Enable simulation for all rooms** toggle controls suggested plans for
-every room. Disabling it does not enable live heating schedules. Observation and
-learning continue while ThermalPilot is Active.
+A shared **Enable simulation** toggle selects simulated or real scheduled control
+for every room. Disabling it and confirming activates thermostat target control.
+Disable your existing heating automation manually first. Observation and learning
+continue in both modes while ThermalPilot is Active. Initial-data percentages
+do not prove model reliability and do not automatically activate control.
 
 Room settings use two columns of collapsible cards, with two columns of fields
 inside each card on wider screens. Boolean settings use keyboard-accessible toggles.
@@ -158,12 +160,23 @@ published session reaches its advance valve-opening time, subsequent calculation
 retain that session through its planned delivery end. Its original start time is
 preserved so valve offsets are not reapplied to the clipped remaining period.
 This continuity applies while the integration runs with valid inputs; disabling
-operation or simulation, missing required inputs, or restarting can interrupt it.
+operation, changing settings, missing required inputs, or restarting can interrupt it.
+A restart recomputes the current plan from available inputs rather than replaying old commands.
+While Home Assistant is offline, ThermalPilot cannot send commands; thermostats
+normally retain their last target and continue their own local regulation.
+On startup, confirmed live control sends each available thermostat its newly
+calculated current target once, even if Home Assistant's restored target attribute
+already matches. Missed commands are not replayed. If essential sources have not
+returned, seasonal comfort fallback targets are used instead. Source recovery
+triggers a new calculation, normally after a five-second debounce; unavailable
+thermostats are retried when they return and on regular updates. Downtime is not
+counted as observed heating or cooling, and estimated slab response is reset.
 
 The Plan page shows intended heating periods and the offset-adjusted thermostat
 commands separately. Suggested-state entities update at command boundaries
-without waiting for the next five-minute planning/learning cycle. These are
-simulation outputs: scheduled thermostat commands are not physically executed.
+without waiting for the next five-minute planning/learning cycle. In simulation
+mode these outputs do not operate thermostats. In confirmed live mode the same
+boundaries apply the thermostat targets, including the shared valve timing offsets.
 The temperature forecast assumes intended heat-delivery periods; advance timing
 is not a measured model of valve travel or pump shutdown and cannot guarantee
 that all energy use stops before a higher tariff.
@@ -173,18 +186,36 @@ that all energy use stops before a higher tariff.
 **Default: simulation only.** No physical thermostat or heat-pump commands are sent.
 Your existing heating automation continues controlling the building.
 
-The optional **Apply Active/Passive season setpoints to real thermostats** setting
-has a narrow physical effect:
+**Live control is opt-in.** Turn off Enable simulation, save and confirm after
+manually disabling the old heating automation. Existing installations with a
+legacy simulation-off preference do not silently activate control: explicit
+confirmation is required. Returning to simulation releases controlled thermostats
+at their seasonal fallback temperatures. Physical commands use [Home Assistant’s thermostat target action](https://www.home-assistant.io/actions/climate.set_temperature/); thermostat HVAC modes, relays and the heat pump are not
+operated directly. Thermostats must already be able to heat in their current mode.
 
-- Effective Passive: set configured rooms' thermostats to the shared summer setpoint.
-- Effective Active: set each room's thermostat to its configured target temperature.
-- Commands are issued on a target/mode change, not repeatedly to overwrite an
-  existing automation's heating boost. Failed commands are retried and reported.
-- Thermostat on/off mode is not changed. The pump is never commanded.
-- Planning output is never used to operate the thermostats in this release.
+Missing essential inputs or an expired plan returns affected rooms to seasonal
+fallback temperatures. Turning ThermalPilot active off cancels the scheduled
+commands and applies the same fallback, without collecting new room observations:
 
-Keep this setting disabled while conducting a completely read-only shadow trial.
-The panel visibly identifies when physical season-setpoint application is enabled.
+- Summer: the shared summer thermostat setpoint.
+- Winter: each room's normal target temperature.
+- 15 May through 30 September is always summer. Outside those dates, a complete
+  day's minimum forecast temperature equal to or above Summer temperature (default
+  6°C) also selects summer. Lower readings already observed that day are retained.
+  Unknown/incomplete daily coverage outside the summer dates selects winter.
+
+The threshold is configurable under Weather and forecast settings. Hourly
+forecasts need coverage across the full local day; complete daily forecasts can
+also establish the minimum. Daily evidence survives restarts. Calendar summer
+requires no forecast. Failed thermostat writes are reported and retried; duplicate
+writes awaiting state acknowledgement are suppressed briefly. Device temperature
+limits and target steps are respected. Source changes trigger a debounced refresh
+instead of always waiting for the five-minute poll.
+
+The optional **Apply season setpoints** setting also allows real thermostat writes
+in simulation: Active sets normal room targets, while Passive applies seasonal
+fallback. Keep it disabled for a completely read-only trial. In live mode the
+scheduled controller handles targets, so the two paths do not compete.
 
 ## Installation through HACS
 
@@ -391,7 +422,7 @@ of rate tracking, an approximate days-remaining estimate uses up to seven days
 of observed rates. An estimated initial-data completion date is shown alongside
 the percentage and days remaining when enough rate data is available. It predicts
 when those initial thresholds may be reached,
-not when predictions become trustworthy or live control becomes available.
+not when predictions become trustworthy. Live control requires your explicit activation.
 
 
 Plan and History include a shared electricity-price chart above all room timelines.
@@ -423,7 +454,7 @@ Future relay activity is left blank. Tomorrow is included when prices are availa
 The Plan, History and Settings pages use a tabbed frame. Dates use Finnish numeric
 format (DD.MM.YYYY), with 24-hour times. The Operation card groups Active/Passive,
 simulation/season-setpoint mode and required-source readiness. These mode badges
-never imply that live scheduled heating control is available.
+distinguish simulation, confirmed live control and optional season-only control.
 
 Data collection keeps its Active/Paused badge and adds Data coverage: Low,
 Limited, Developing, Good or High. Coverage uses the least-observed configured

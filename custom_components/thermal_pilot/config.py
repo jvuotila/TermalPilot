@@ -16,6 +16,7 @@ SOURCE_FIELDS = [
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('simulation_enabled','Enable simulation','bool'),
+ ('summer_minimum_temperature','Summer temperature (°C)','number',-20,25,0.1),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
  ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),
@@ -164,10 +165,21 @@ def validate(payload, hass=None):
             raise ValueError(f"{room['name']}: normal temperature must be within the allowed temperature range.")
         rooms.append(room)
     result['rooms'] = rooms
-    if hass is not None and result['apply_season_setpoints']:
+    if hass is not None and (result['apply_season_setpoints'] or not result['simulation_enabled']):
         for room in rooms:
             state = hass.states.get(room['thermostat'])
             low, high = state.attributes.get('min_temp',5), state.attributes.get('max_temp',35)
             if not low <= result['summer_setpoint'] <= high:
                 raise ValueError(f"{room['name']}: summer setpoint is outside thermostat limits.")
     return result
+
+
+def confirm_control_settings(settings, previous, confirmed=False):
+    """A legacy simulation-off preference must never silently enable device writes."""
+    settings['live_control_confirmed'] = False
+    if not settings['simulation_enabled']:
+        already_live = not previous.get('simulation_enabled',True) and previous.get('live_control_confirmed',False)
+        if not already_live and confirmed is not True:
+            raise ValueError('Confirm live control and disable your existing heating automation before turning simulation off.')
+        settings['live_control_confirmed'] = True
+    return settings

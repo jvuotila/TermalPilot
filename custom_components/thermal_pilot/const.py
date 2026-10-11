@@ -1,6 +1,6 @@
-"""ThermalPilot constants; scheduled heating remains simulated in this release."""
+"""ThermalPilot constants; scheduled control is opt-in; simulation is enabled by default."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.26'
+VERSION = '0.1.27'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7
@@ -13,7 +13,8 @@ DEFAULTS = {
     'water_entity': '', 'fireplace_entity': '',
     'fireplace_active_state': 'on',
     'heating_enabled': True, 'simulation_enabled': True,
-    'summer_setpoint': 10.0, 'apply_season_setpoints': False,
+    'live_control_confirmed': False,
+    'summer_minimum_temperature': 6.0, 'summer_setpoint': 10.0, 'apply_season_setpoints': False,
     'boost': 1.5, 'setback': -1.0, 'minimum': 19.0, 'maximum': 23.0,
     'start_offset_minutes': 5, 'stop_offset_minutes': 10,
     'lag_hours': 3.0, 'curve_warm_temp': 0.0, 'curve_cold_temp': -18.0,
