@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.18 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.19 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -385,8 +385,10 @@ Background references:
 
 MIT licensed.
 
-Initial learning progress is shown per room on Plan. The bar measures collection
+Initial data collection progress is shown per room on Plan and History. The bar measures collection
 of 12 accepted heating hours and 12 accepted idle hours. After at least 24 hours
 of rate tracking, an approximate days-remaining estimate uses up to seven days
-of observed rates. It predicts when those initial thresholds may be reached,
+of observed rates. An estimated initial-data completion date is shown alongside
+the percentage and days remaining when enough rate data is available. It predicts
+when those initial thresholds may be reached,
 not when predictions become trustworthy or live control becomes available.

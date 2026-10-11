@@ -147,7 +147,9 @@ def learning_progress(model, now):
     return {'percent':round(percent,1),'heating_hours':round(heating,1),
             'idle_hours':round(idle,1),'required_hours_each':12,
             'initial_complete':remaining_heat==0 and remaining_idle==0,
-            'estimated_days_to_initial':eta,'rate_history_hours':round(elapsed/3600,1)}
+            'estimated_days_to_initial':eta,
+            'estimated_initial_completion':(now+timedelta(days=eta)).isoformat() if eta is not None and (remaining_heat or remaining_idle) else None,
+            'rate_history_hours':round(elapsed/3600,1)}
 
 
 def learn(model, room, previous, current, enabled=True):

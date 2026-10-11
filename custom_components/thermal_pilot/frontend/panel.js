@@ -153,7 +153,7 @@ class ThermalPilotPanel extends HTMLElement {
   }
   learningBadge(room){
     const percent=this.learningPercent(room);
-    return `<span class="room-learning" title="Initial observation progress: 12 heating hours and 12 idle hours. This is not a reliability rating." aria-label="Initial learning progress ${percent.toFixed(0)} percent">${percent.toFixed(0)}% learning</span>`;
+    return `<span class="room-learning" title="Initial observation progress: 12 heating hours and 12 idle hours. This is not a reliability rating." aria-label="Initial data collection ${percent.toFixed(0)} percent">${percent.toFixed(0)}% initial data</span>`;
   }
   learningView(room){
     const model=room.model||{},progress=room.learning_progress||{};
@@ -161,8 +161,11 @@ class ThermalPilotPanel extends HTMLElement {
     const percent=Math.max(0,Math.min(100,progress.percent??100*(Math.min(12,heating)+Math.min(12,idle))/24));
     const complete=progress.initial_complete??(heating>=12&&idle>=12);
     const days=progress.estimated_days_to_initial;
+    const completion=progress.estimated_initial_completion||(days!=null&&!complete?new Date(Date.now()+days*86400000).toISOString():null);
+    const completionDate=completion?new Date(completion):null;
+    const dateText=completionDate&&!Number.isNaN(completionDate.getTime())?completionDate.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}):null;
     const estimate=complete?'Initial observation thresholds reached.':days!=null?`About ${days<1?'less than 1':Math.ceil(days)} more ${days<=1?'day':'days'} to the initial thresholds at recent observation rates.`:(progress.rate_history_hours??0)<24?'Time estimate available after at least 24 hours of rate tracking.':'Waiting for enough heating and idle observations to estimate the remaining time.';
-    return `<div class="learning-card"><div class="learning-heading"><strong>Initial learning progress</strong><span>${percent.toFixed(0)}%</span></div><progress max="100" value="${percent}" aria-label="Initial learning observation progress">${percent.toFixed(0)}%</progress><div class="learning-counts"><span>Heating <strong>${Number(heating).toFixed(1)} / 12 h</strong></span><span>Idle <strong>${Number(idle).toFixed(1)} / 12 h</strong></span></div><p>${escapeHTML(estimate)}</p><small>${escapeHTML(room.learning_note||'')} · ${model.samples||0} accepted observations. This measures initial data collection, not model trustworthiness. Continue validating forecasts and heating suggestions; live heating schedule control is not available in this version.</small></div>`;
+    return `<div class="learning-card"><div class="learning-heading"><strong>Initial data collection</strong><span>${percent.toFixed(0)}%</span></div><progress max="100" value="${percent}" aria-label="Initial learning observation progress">${percent.toFixed(0)}%</progress><div class="learning-counts"><span>Heating <strong>${Number(heating).toFixed(1)} / 12 h</strong></span><span>Idle <strong>${Number(idle).toFixed(1)} / 12 h</strong></span></div><p>${escapeHTML(estimate)}</p>${dateText?`<p class="learning-date">Estimated initial-data completion: <strong>${escapeHTML(dateText)}</strong></p>`:''}<small>${escapeHTML(room.learning_note||'')} · ${model.samples||0} accepted observations. This measures initial data collection, not model trustworthiness. Continue validating forecasts and heating suggestions; live heating schedule control is not available in this version.</small></div>`;
   }
   overview(){
     const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));

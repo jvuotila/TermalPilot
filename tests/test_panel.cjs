@@ -49,15 +49,17 @@ console.log('Readable history tests passed (quarter-hour latest observations, le
 const accordionPanel=new Component();accordionPanel.settings={rooms:[{id:'room-a',name:'Study'}],heating_enabled:true};
 accordionPanel.info={data:{rooms:{'room-a':{name:'Study',learning_progress:{percent:62.5}}}}};accordionPanel.tab='overview';
 assert.doesNotMatch(accordionPanel.overview(),/data-room-accordion="room-a" open/);
-assert.match(accordionPanel.overview(),/63% learning/);
+assert.match(accordionPanel.overview(),/63% initial data/);
 accordionPanel.roomDisclosureState.set('overview:room-a',true);
 assert.match(accordionPanel.overview(),/data-room-accordion="room-a" open/);
 accordionPanel.tab='history';assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
-assert.match(accordionPanel.historyView(),/63% learning/);
+assert.match(accordionPanel.historyView(),/63% initial data/);
 accordionPanel.roomDisclosureState.set('history:room-a',true);
 assert.match(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
 accordionPanel.roomDisclosureState.set('history:room-a',false);
 assert.doesNotMatch(accordionPanel.historyView(),/data-room-accordion="room-a" open/);
+const dateLearning=accordionPanel.learningView({model:{heated_hours:6,idle_hours:12},learning_progress:{percent:75,estimated_days_to_initial:2,estimated_initial_completion:'2026-10-13T12:00:00+00:00',rate_history_hours:48}});
+assert.match(dateLearning,/Estimated initial-data completion/);assert.match(dateLearning,/2026/);assert.match(dateLearning,/75%/);
 console.log('Room accordion tests passed (closed by default, summary learning progress, independently remembered Plan/History states).');
 
 (async()=>{
@@ -246,4 +248,4 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.18 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.19 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');

@@ -216,6 +216,7 @@ class LearningProgressTests(unittest.TestCase):
         model={'heated_hours':4,'idle_hours':12,'learning_rate_since':NOW.timestamp()-86400,
                'learning_rates':[{'time':NOW.timestamp()-3600,'heat':4,'idle':12}]}
         self.assertEqual(learning_progress(model,NOW)['estimated_days_to_initial'],2)
+        self.assertEqual(learning_progress(model,NOW)['estimated_initial_completion'],(NOW+timedelta(days=2)).isoformat())
         model['learning_rate_since']=NOW.timestamp()-23*3600
         self.assertIsNone(learning_progress(model,NOW)['estimated_days_to_initial'])
     def test_missing_heating_rate_does_not_invent_eta(self):
