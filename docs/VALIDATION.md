@@ -95,3 +95,7 @@ Mobile panel checks verify the Home Assistant sidebar event crosses the shadow
 root, shared charts reflow ten room lanes at 320/390/600-pixel panel widths, and
 charts return to their desktop layout after resizing. These are template and
 event checks, not a phone browser or installed Home Assistant visual test.
+
+Chart detail checks cover price interval values/times, contiguous recorded heating
+periods, known versus incomplete start/stop observations, delegated hover/focus/tap
+handling, Escape/tap dismissal and tooltip positioning within phone viewports.

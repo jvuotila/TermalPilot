@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.29 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.30 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -476,3 +476,8 @@ history cleanup and recovered from older season records when available.
 The header includes a Home Assistant menu button. On narrow screens cards and
 settings stack, room names appear above the shared chart timelines, temperature
 charts use fewer labels, and wide data tables scroll inside their cards.
+
+Price bars and heating periods show immediate details on hover, keyboard focus,
+or tap. Heating observations are grouped into continuous On periods. Times reflect
+recorded observations; when the start or stop is unknown, the tooltip says
+First observed On or Observed until instead. Tap again or press Escape to dismiss.
