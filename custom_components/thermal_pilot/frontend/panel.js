@@ -186,28 +186,27 @@ class ThermalPilotPanel extends HTMLElement {
   }
   priceChart(history=false){
   const rooms=[...(this.settings?.rooms||[])].sort(compareRoomNames);
-  let values;
+  const published=(this.info.data?.price_chart||[]).map(s=>({time:new Date(s.start).getTime(),end:new Date(s.end).getTime(),price:Number(s.price)})).filter(s=>s.price!=null&&Number.isFinite(s.time)&&Number.isFinite(s.end)&&Number.isFinite(s.price)&&s.end>s.time).sort((a,b)=>a.time-b.time);
+  const now=Date.now();
+  let values=published;
   if(history){
    const unique=new Map();
-   const now=Date.now(),cutoff=now-this.historyHours*3600000;
-   // Recover known past intervals from today's published list, never future data.
-   for(const slot of this.info.data?.price_chart||[]){
-    const a=new Date(slot.start).getTime(),b=new Date(slot.end).getTime(),price=Number(slot.price);
-    if(slot.price==null||!Number.isFinite(a)||!Number.isFinite(b)||!Number.isFinite(price))continue;
-    for(let time=Math.max(a,Math.floor(cutoff/900000)*900000);time<Math.min(b,now);time+=900000){
-     unique.set(time/1000,{time,end:Math.min(time+900000,b,now),price});
-    }
+   const localMidnight=new Date(now);localMidnight.setHours(0,0,0,0);
+   const rangeStart=published[0]?.time??localMidnight.getTime(),rangeEnd=published.at(-1)?.end??now;
+   for(const slot of published){
+    for(let time=slot.time;time<slot.end;time+=900000)unique.set(time/1000,{time,end:Math.min(time+900000,slot.end),price:slot.price});
    }
    for(const row of this.history||[]){
-    if(row.price!=null&&Number.isFinite(Number(row.price)))unique.set(Math.floor(row.time/900)*900,{time:Math.floor(row.time/900)*900000,end:Math.min((Math.floor(row.time/900)*900+900)*1000,now),price:Number(row.price)});
+    const time=Math.floor(row.time/900)*900000;
+    if(time>=rangeStart&&time<rangeEnd&&row.time*1000<=now&&row.price!=null&&Number.isFinite(Number(row.price)))unique.set(time/1000,{time,end:Math.min(time+900000,rangeEnd),price:Number(row.price)});
    }
    values=[...unique.values()].sort((a,b)=>a.time-b.time);
-  }else values=(this.info.data?.price_chart||[]).map(s=>({time:new Date(s.start).getTime(),end:new Date(s.end).getTime(),price:Number(s.price)})).filter(s=>Number.isFinite(s.time)&&Number.isFinite(s.end)&&Number.isFinite(s.price)&&s.end>s.time);
+  }
   const open=this.priceAccordionState?.[history?'history':'overview']!==false;
   const heading=`<details class="observation-accordion" id="price-accordion" ${open?'open':''}><summary><h2 style="margin:0">Electricity prices and heating</h2></summary><div style="padding-top:16px">`;
   if(!values.length)return `<section class="price-card">${heading}<p>${history?'No past electricity prices are available yet. History uses recorded prices and known past intervals from the published price list.':'No usable electricity price list is available.'}</p></div></details></section>`;
-  const start=history?Math.floor(Math.min(values[0].time,Date.now()-this.historyHours*3600000)/900000)*900000:Math.floor(values[0].time/900000)*900000;
-  const end=history?Math.ceil(Math.max(values.at(-1).end,Date.now())/900000)*900000:Math.ceil(values.at(-1).end/900000)*900000;
+  const start=Math.floor((published[0]?.time??values[0].time)/900000)*900000;
+  const end=Math.ceil((published.at(-1)?.end??Math.max(values.at(-1).end,now))/900000)*900000;
   const span=end-start;
   const viewWidth=Math.max(900,this.priceChartWidth||900);
   const left=history?310:210,roomNameWidth=history?190:180,width=viewWidth-left-30,top=15,height=120,max=Math.max(25,Math.ceil(Math.max(...values.map(v=>v.price))/5)*5),min=Math.min(0,Math.floor(Math.min(...values.map(v=>v.price))/5)*5);
@@ -226,15 +225,16 @@ class ThermalPilotPanel extends HTMLElement {
    const rows=(this.history||[]).filter(r=>r.room_id===room.id).sort((a,b)=>a.time-b.time),y=roomTop+roomIndex*rowHeight;
    const plan=this.info.data?.rooms?.[room.id]?.plan;
    const commands=[...(plan?.commands||[])].sort((a,b)=>new Date(a.time)-new Date(b.time));
-   const intervals=history?rows.map((r,i)=>({start:r.time*1000,end:Math.min((rows[i+1]?.time??(r.time+300))*1000,r.time*1000+1800000),suggested_heat:r.suggested_heat,activity:r.activity})):
-     commands.map((c,i)=>({start:new Date(c.time).getTime(),end:commands[i+1]?new Date(commands[i+1].time).getTime():end,suggested_heat:c.action==='raise',activity:null}));
+   const recorded=rows.map((r,i)=>({start:r.time*1000,end:Math.min((rows[i+1]?.time??(r.time+300))*1000,r.time*1000+1800000,now),suggested_heat:r.suggested_heat,activity:r.activity}));
+   const planned=commands.map((c,i)=>({start:Math.max(history?now:start,new Date(c.time).getTime()),end:commands[i+1]?new Date(commands[i+1].time).getTime():end,suggested_heat:c.action==='raise',activity:null}));
+   const intervals=history?[...recorded,...planned]:planned;
    const lane=(key,offset,color)=>`<rect x="${left}" y="${y+offset}" width="${width}" height="14" rx="3" fill="#dbe5ea"/>`+intervals.map(v=>{
     const a=Math.max(start,v.start),b=Math.min(end,v.end);
     return v[key]&&b>a?`<rect x="${x(a)}" y="${y+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"><title>${escapeHTML(room.name)} · ${escapeHTML(timeLabel(a))} · ${key==='activity'?'Actual relay':'Suggested heating'} On</title></rect>`:'';
    }).join('');
    return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
   }).join('');
-  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Past prices, suggested heating and observed relay activity for all rooms':'Published prices · suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px;font-size:12px;color:#526b75" aria-label="Price color thresholds">${priceThresholds.map(([value,color],index)=>`<span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${color};border:1px solid #526b7533;vertical-align:middle;margin-right:5px"></i>${index===0?'<'+priceThresholds[1][0]:index===priceThresholds.length-1?'≥'+value:value+'–<'+priceThresholds[index+1][0]} c/kWh</span>`).join('')}</div><div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:900px;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. ${history?'Past prices use recorded observations and the currently published list. Older unavailable prices remain blank. ':''}Times align to 15-minute boundaries; wider views show fewer labels. Hover for details.</small></div></details></section>`;
+  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?'Today and tomorrow · recorded heating and future suggestions for all rooms':'Today and tomorrow · published prices and suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div><div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:900px;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)+5}" y="12" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</svg></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. ${history?'Recorded heating is shown before now; future suggestions come from the current plan. Tomorrow appears when its prices are published. ':''}Times align to 15-minute boundaries; wider views show fewer labels. Hover for details.</small></div></details></section>`;
   }
   mountPriceChartSizing(){
     this.priceResizeObserver?.disconnect();

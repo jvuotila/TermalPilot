@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.23 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.24 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -412,3 +412,9 @@ Outdoor colors follow temperature thresholds from -30 to 35 °C; supply water
 uses a green line. New observations include supply-water readings; older rows
 without them remain usable but do not contribute to that trend. The price chart
 measures its rendered container immediately and responds to width changes.
+
+The shared electricity chart on both Plan and History focuses on today and
+tomorrow's published prices. The History period selector continues to control
+the detailed room charts below. Before Now, the shared History chart shows
+recorded heating activity; after Now, it shows the current plan's suggestions.
+Future relay activity is left blank. Tomorrow is included when prices are available.

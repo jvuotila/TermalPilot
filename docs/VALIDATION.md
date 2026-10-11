@@ -62,3 +62,6 @@ with ellipsis and full-name tooltips for long room names.
 
 History price chart checks cover known past intervals from the published list,
 missing older observations, and time labels aligned to quarter-hour boundaries.
+
+Shared-chart checks verify the published today/tomorrow horizon, exclusion of
+yesterday, the Now marker, and removal of the numeric price color key.
