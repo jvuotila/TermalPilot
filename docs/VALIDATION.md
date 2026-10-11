@@ -56,3 +56,6 @@ missing heating evidence, bounded rate history and excluded observations.
 
 Frontend checks also cover price color boundaries, responsive container sizing,
 full-width status temperature trends, and every outdoor temperature color threshold.
+
+History chart label checks verify separate room-name and activity columns,
+with ellipsis and full-name tooltips for long room names.

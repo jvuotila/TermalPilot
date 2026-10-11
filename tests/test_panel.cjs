@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.21 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.22 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -274,3 +274,7 @@ console.log('Status temperature trends use observations within the price chart p
 for(const [temperature,color] of [[-40,'#154360'],[-30,'#154360'],[-25,'#1B4F72'],[-20,'#2874A6'],[-10,'#3498DB'],[-5,'#85C1E9'],[0,'#82E0AA'],[5,'#2ECC71'],[10,'#239B56'],[20,'#186A3B'],[25,'#B7950B'],[30,'#CB4335'],[35,'#E74C3C'],[40,'#E74C3C']])assert.equal(vm.runInContext(`outdoorColor(${temperature})`,context).toLowerCase(),color.toLowerCase());
 assert.match(trend.statusSparkline('outdoor','#2196f3'),/linearGradient/);assert.doesNotMatch(trend.statusSparkline('water','#16b957'),/linearGradient/);
 console.log('Outdoor temperature gradient checks passed for every threshold and out-of-range readings.');
+
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:20,suggested_heat:1,activity:1}];
+const spacedLabels=pricePanel.priceChart(true);assert.match(spacedLabels,/<foreignObject x="20"[^>]*width="190"/);assert.match(spacedLabels,/<text x="298"[^>]*>Suggested/);assert.match(spacedLabels,/text-overflow:ellipsis/);
+console.log('History room names and activity labels occupy separate columns; long names retain a tooltip.');
