@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.28 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.29 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -444,11 +444,14 @@ uses a green line. New observations include supply-water readings; older rows
 without them remain usable but do not contribute to that trend. The price chart
 measures its rendered container immediately and responds to width changes.
 
-The shared electricity chart on both Plan and History focuses on today and
-tomorrow's published prices. The History period selector continues to control
-the detailed room charts below. Before Now, the shared History chart shows
-recorded heating activity; after Now, it shows the current plan's suggestions.
-Future relay activity is left blank. Tomorrow is included when prices are available.
+The Plan electricity chart shows today and tomorrow's published prices and
+future heating suggestions. The shared History chart follows the selected
+past period (24, 48 or 168 hours), and extends through today and tomorrow
+when their prices are published. Future heating suggestions come from the current plan.
+It shows recorded suggested heating and observed thermostat activity even
+when no prices are available. Known prices are shown only where available;
+gaps are left empty. Winter fallback badges use cold blue and summer fallback
+badges use warm green.
 
 
 The Plan, History and Settings pages use a tabbed frame. Dates use Finnish numeric

@@ -248,13 +248,13 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.28 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.29 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
 pricePanel.info={data:{price_chart:[{start:new Date(priceTime).toISOString(),end:new Date(priceTime+900000).toISOString(),price:-5}],rooms:{r0:{plan:{commands:[{time:new Date(priceTime).toISOString(),action:'raise'},{time:new Date(priceTime+600000).toISOString(),action:'lower'}]}}}}};
 let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:506px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:506px/);
-pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:686px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No past electricity prices are available yet/);pricePanel.info.data.price_chart=savedPublished;
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:686px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
 console.log('Electricity chart checks passed: thresholds, negative prices, real windows, missing history, ten rooms, fixed height.');
 // Size the SVG from its rendered viewport immediately and on resize.
 let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
@@ -285,8 +285,8 @@ pricePanel.history=[];assert.match(pricePanel.priceChart(true),/Total electricit
 console.log('History chart uses known past source prices without old observation prices, and labels quarter-hour boundaries.');
 
 pricePanel.history=[{room_id:'r0',time:priceTime/1000-86400,price:99,activity:1,suggested_heat:1}];
-const focusedHistory=pricePanel.priceChart(true);assert.match(focusedHistory,/Today and tomorrow/);assert.doesNotMatch(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
-console.log('Shared chart focuses on published today/tomorrow, excludes yesterday, and omits the numeric color key.');
+const focusedHistory=pricePanel.priceChart(true);assert.match(focusedHistory,/Selected period: 48 hours/);assert.match(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
+console.log('History chart includes selected past days and omits the numeric color key.');
 
 const statusPanel=new Component();statusPanel.settings={rooms:[],heating_enabled:true};statusPanel.info={data:{rooms:{},history_info:{started_at:1791590400}}};const statusOrder=statusPanel.overview();const order=['Operation','Outdoor temperature','Heating water temperature','Data collection','Stored history','Last update'];for(let i=1;i<order.length;i++)assert(statusOrder.indexOf('<dt>'+order[i-1])<statusOrder.indexOf('<dt>'+order[i]));assert.doesNotMatch(statusOrder,/toggle-active/);assert.match(statusOrder,/Collection started:/);
 statusPanel.render();assert.match(statusPanel.shadowRoot.innerHTML,/role="tablist"/);assert.match(statusPanel.shadowRoot.innerHTML,/role="tabpanel"/);assert.match(statusPanel.shadowRoot.innerHTML,/aria-selected="true"/);assert.match(statusPanel.shadowRoot.innerHTML,/status-pill.active\{background:#2ecc7126/);
@@ -352,3 +352,34 @@ for(const screen of [320,390,600]){
 resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 746"/);
 resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 506"/);
 console.log('Mobile checks passed: bubbling Home Assistant menu event, ten readable room lanes, narrow temperature charts and desktop/mobile resizing.');
+
+// History retains activity when all price data is missing, for every selected period.
+const periodPanel=new Component();periodPanel.settings={rooms:[{id:'period-room',name:'Room'}]};
+periodPanel.info={data:{price_chart:[],rooms:{}}};
+const periodNow=Date.now();
+for(const hours of [24,48,168]){
+ periodPanel.historyHours=hours;
+ periodPanel.history=[{room_id:'period-room',time:(periodNow-3600000)/1000,activity:1,suggested_heat:1}];
+ const html=periodPanel.priceChart(true);
+ assert.match(html,/No electricity prices are available for this period/);assert.match(html,/Actual relay On/);assert.match(html,/Suggested heating On/);assert.doesNotMatch(html,/NaN|Infinity/);
+ const start=Number(html.match(/data-range-start="(\d+)"/)[1]),end=Number(html.match(/data-range-end="(\d+)"/)[1]);
+ assert.ok(Math.abs(start-(periodNow-hours*3600000))<900000);assert.ok(Math.abs(end-periodNow)<900000);
+}
+periodPanel.historyHours=24;periodPanel.history=[{room_id:'period-room',time:(periodNow-48*3600000)/1000,activity:1}];
+assert.doesNotMatch(periodPanel.priceChart(true),/Actual relay On/);
+periodPanel.info.data.price_chart=[{start:new Date(periodNow+3600000).toISOString(),end:new Date(periodNow+7200000).toISOString(),price:77}];
+assert.match(periodPanel.priceChart(true),/77.00 c\/kWh/);assert.match(periodPanel.priceChart(false),/77.00 c\/kWh/);
+console.log('History period checks passed: all periods, no prices, retained activity, omitted out-of-range activity and included published future prices.');
+
+const tomorrowEnd=new Date(periodNow);tomorrowEnd.setHours(0,0,0,0);tomorrowEnd.setDate(tomorrowEnd.getDate()+2);
+periodPanel.info.data.price_chart=[{start:new Date(periodNow).toISOString(),end:tomorrowEnd.toISOString(),price:15}];
+periodPanel.historyHours=24;
+const todayTomorrow=periodPanel.priceChart(true);
+assert.ok(Number(todayTomorrow.match(/data-range-end="(\d+)"/)[1])>=tomorrowEnd.getTime());
+assert.ok(Number(todayTomorrow.match(/data-range-start="(\d+)"/)[1])<=periodNow-24*3600000);
+assert.match(todayTomorrow,/today and tomorrow when prices are published/);
+periodPanel.historyHours=168;
+const extended=periodPanel.priceChart(true);
+assert.ok(Number(extended.match(/data-range-start="(\d+)"/)[1])<=periodNow-168*3600000);
+assert.ok(Number(extended.match(/data-range-end="(\d+)"/)[1])>=tomorrowEnd.getTime());
+console.log('History includes the selected past period plus published today/tomorrow prices, even with 24 hours selected.');

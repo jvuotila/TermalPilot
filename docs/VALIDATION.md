@@ -63,8 +63,10 @@ with ellipsis and full-name tooltips for long room names.
 History price chart checks cover known past intervals from the published list,
 missing older observations, and time labels aligned to quarter-hour boundaries.
 
-Shared-chart checks verify the published today/tomorrow horizon, exclusion of
-yesterday, the Now marker, and removal of the numeric price color key.
+Shared-chart checks verify the Plan published-price horizon and all three selected
+History periods, including retained thermostat activity without prices, exclusion
+of out-of-range activity and inclusion of published today/tomorrow prices even
+with 24 hours selected, and removal of the numeric color key.
 
 
 Status badge checks cover source availability, weakest-room data coverage,
