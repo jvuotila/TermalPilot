@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.22 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.23 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -401,7 +401,9 @@ to dark red. Prices are normalized using the selected source unit. Plan displays
 published prices and suggested thermostat boost windows, including timing offsets.
 History shows recorded prices, suggested boost windows and actual heating demand.
 Price history starts with this version's new observations while collection is active;
-older observations without prices are not backfilled. Gaps are left blank.
+Known past intervals from the currently published list are also displayed in History.
+Older days without recorded or published prices remain blank. Time labels align to
+15-minute boundaries; wider periods use fewer labels to keep the axis readable.
 
 The outdoor and supply-water status cards show subtle temperature trends from
 collected observations within the published price period. Available readings

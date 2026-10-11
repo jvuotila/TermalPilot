@@ -59,3 +59,6 @@ full-width status temperature trends, and every outdoor temperature color thresh
 
 History chart label checks verify separate room-name and activity columns,
 with ellipsis and full-name tooltips for long room names.
+
+History price chart checks cover known past intervals from the published list,
+missing older observations, and time labels aligned to quarter-hour boundaries.
