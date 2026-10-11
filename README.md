@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.24 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.25 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
