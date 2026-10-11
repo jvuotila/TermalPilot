@@ -1,6 +1,6 @@
 # Validation status
 
-- 77 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 79 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -65,3 +65,11 @@ missing older observations, and time labels aligned to quarter-hour boundaries.
 
 Shared-chart checks verify the published today/tomorrow horizon, exclusion of
 yesterday, the Now marker, and removal of the numeric price color key.
+
+
+Status badge checks cover source availability, weakest-room data coverage,
+all five coverage levels, elapsed-time criteria, explicit simulation/season modes,
+placement inside the Operation card, Finnish dates and preserved Active/Paused
+badges. Collection-start storage survives retention and migrates existing season
+records. Preview scripts pass syntax checks; browser visual rendering has not
+been verified by these template tests.

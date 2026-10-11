@@ -31,9 +31,24 @@ class HistoryDatabase:
             con.execute('CREATE INDEX IF NOT EXISTS observations_time ON observations(time)')
             con.execute('CREATE TABLE IF NOT EXISTS season_accumulators (season TEXT NOT NULL, room_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(season,room_id))')
             con.execute('CREATE TABLE IF NOT EXISTS season_summaries (season TEXT NOT NULL, room_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(season,room_id))')
+            # Recover the original collection date from retained season aggregates.
+            if not con.execute("SELECT 1 FROM metadata WHERE key='collection_started_at'").fetchone():
+                times=[]
+                first=con.execute('SELECT MIN(time) FROM observations').fetchone()[0]
+                if first is not None:times.append(first)
+                for payload, in con.execute('SELECT payload FROM season_accumulators'):
+                    value=json.loads(payload).get('first_time')
+                    if value is not None:times.append(value)
+                for payload, in con.execute('SELECT payload FROM season_summaries'):
+                    value=json.loads(payload).get('statistics',{}).get('first_time')
+                    if value is not None:times.append(value)
+                if times:con.execute("INSERT INTO metadata VALUES ('collection_started_at',?)",(str(min(times)),))
 
     def append(self, rows, cutoff, season='unknown'):
         with self._connect() as con:
+            if rows:
+                first=min(r['time'] for r in rows)
+                con.execute("INSERT OR IGNORE INTO metadata VALUES ('collection_started_at',?)",(str(first),))
             # Five-minute buckets prevent unbounded growth from manual refreshes.
             for r in rows:
                 bucket = int(r['time'])//300*300
@@ -63,8 +78,10 @@ class HistoryDatabase:
     def size(self):
         with self._connect() as con:
             count = con.execute('SELECT COUNT(*) FROM observations').fetchone()[0]
+            first=con.execute("SELECT value FROM metadata WHERE key='collection_started_at'").fetchone()
+            started_at=float(first[0]) if first else None
         files = [Path(self.path), Path(self.path+'-wal'), Path(self.path+'-shm')]
-        return {'rows':count, 'bytes':sum(p.stat().st_size for p in files if p.exists())}
+        return {'rows':count,'started_at':started_at, 'bytes':sum(p.stat().st_size for p in files if p.exists())}
 
     def compact_season(self, season, models, fingerprints, keep_since):
         """Keep sufficient learning statistics and full-season aggregates, not raw rows.

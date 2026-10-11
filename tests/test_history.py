@@ -18,6 +18,15 @@ class HistoryTests(unittest.TestCase):
         self.db.append([self.row(),self.row(901)],0,'2026-2027')
         self.assertEqual(self.db.size()['rows'],1)
         self.assertEqual(self.db.read(0)[0]['time'],901)
+    def test_collection_start_survives_retention_and_migrates(self):
+        self.assertIsNone(self.db.size()['started_at'])
+        self.db.append([self.row(900),self.row(1200)],0,'2026-2027')
+        self.db.append([],2000,'2026-2027')
+        self.assertEqual(self.db.size()['started_at'],900)
+        with self.db._connect() as con:
+            con.execute("DELETE FROM metadata WHERE key='collection_started_at'")
+        self.db.initialize()
+        self.assertEqual(self.db.size()['started_at'],900)
     def test_retention(self):
         self.db.append([self.row(0),self.row(3600)],3000,'2026-2027')
         self.assertEqual(self.db.size()['rows'],1)

@@ -1,6 +1,7 @@
 /* Native custom panel. All data is escaped; settings are validated server-side. */
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const timeLabel = value => new Date(value).toLocaleString('en-GB',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
+const dateLabel = value => new Date(value).toLocaleDateString('fi-FI',{day:'2-digit',month:'2-digit',year:'numeric'});
+const timeLabel = value => `${dateLabel(value)} ${new Date(value).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false})}`;
 const entityLabel = state => state?.attributes?.friendly_name || (state?.entity_id?.split('.').slice(1).join('.').replace(/_/g,' ')) || 'Unavailable entity';
 const settingHelp = {
   fireplace_reduction: 'Negative values reduce estimated heat loss while the fireplace is active; −20% means a 20% reduction.',
@@ -181,7 +182,7 @@ class ThermalPilotPanel extends HTMLElement {
     const days=progress.estimated_days_to_initial;
     const completion=progress.estimated_initial_completion||(days!=null&&!complete?new Date(Date.now()+days*86400000).toISOString():null);
     const completionDate=completion?new Date(completion):null;
-    const dateText=completionDate&&!Number.isNaN(completionDate.getTime())?completionDate.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}):null;
+    const dateText=completionDate&&!Number.isNaN(completionDate.getTime())?dateLabel(completionDate):null;
     const estimate=complete?'Initial observation thresholds reached.':days!=null?`About ${days<1?'less than 1':Math.ceil(days)} more ${days<=1?'day':'days'} to the initial thresholds at recent observation rates.`:(progress.rate_history_hours??0)<24?'Time estimate available after at least 24 hours of rate tracking.':'Waiting for enough heating and idle observations to estimate the remaining time.';
     return `<div class="learning-card"><div class="learning-heading"><strong>Initial data collection</strong><span>${percent.toFixed(0)}%</span></div><progress max="100" value="${percent}" aria-label="Initial learning observation progress">${percent.toFixed(0)}%</progress><div class="learning-counts"><span>Heating <strong>${Number(heating).toFixed(1)} / 12 h</strong></span><span>Idle <strong>${Number(idle).toFixed(1)} / 12 h</strong></span></div><p>${escapeHTML(estimate)}</p>${dateText?`<p class="learning-date">Estimated initial-data completion: <strong>${escapeHTML(dateText)}</strong></p>`:''}<small>${escapeHTML(room.learning_note||'')} · ${model.samples||0} accepted observations. This measures initial data collection, not model trustworthiness. Continue validating forecasts and heating suggestions; live heating schedule control is not available in this version.</small></div>`;
   }
@@ -294,15 +295,41 @@ class ThermalPilotPanel extends HTMLElement {
     }).join('');
     return `<svg class="status-sparkline" viewBox="0 0 300 50" preserveAspectRatio="none" aria-hidden="true">${definitions}${paths}</svg>`;
   }
+  collectionQuality(){
+    const data=this.info?.data||{};
+    const models=(this.settings?.rooms||[]).map(room=>data.rooms?.[room.id]?.model||{});
+    const evidence=data.collection_evidence||{rooms:models.length,
+      heating_hours:models.length?Math.min(...models.map(m=>m.heated_hours||0)):0,
+      idle_hours:models.length?Math.min(...models.map(m=>m.idle_hours||0)):0};
+    const heating=Math.max(0,Number(evidence.heating_hours)||0),idle=Math.max(0,Number(evidence.idle_hours)||0);
+    const start=data.history_info?.started_at;
+    const now=data.updated?new Date(data.updated).getTime()/1000:Date.now()/1000;
+    const days=start!=null?Math.max(0,(now-start)/86400):0;
+    const levels=[['Low',0,0],['Limited',3,1],['Developing',12,3],['Good',48,14],['High',120,42]];
+    let level=0;
+    if(evidence.rooms)levels.forEach(([,hours,age],i)=>{if(heating>=hours&&idle>=hours&&days>=age)level=i;});
+    return {label:levels[level][0],level,
+      detail:`Collected-data coverage, not model reliability. Least-observed room: ${heating.toFixed(1)} heating hours and ${idle.toFixed(1)} idle hours. Collection began ${Math.floor(days)} days ago. Limited: 3 hours each / 1 day; Developing: 12 hours each / 3 days; Good: 48 hours each / 14 days; High: 120 hours each / 42 days. All criteria must be met. Learning continues at every level.`};
+  }
+  controlBadges(){
+    const data=this.info?.data||{},settings=this.settings||{};
+    const mode=settings.apply_season_setpoints?'Season setpoint control':settings.simulation_enabled===false?'Simulation paused':'Simulation';
+    const modeHelp=settings.apply_season_setpoints?'Active/Passive season setpoints can change real thermostats. Heating schedules remain simulated.':settings.simulation_enabled===false?'Suggested schedules are paused. Disabling simulation does not enable live heating schedules.':'Heating schedules are simulated; your existing automation remains in control.';
+    const status=data.source_status;
+    const missing=status?Object.entries({prices:'Electricity prices from now',outdoor:'Outdoor temperature',water:'Heating water temperature'}).filter(([key])=>!status[key]).map(([,name])=>name):[];
+    const sourceLabel=!status?'Sources not checked':missing.length?'Sources missing':'Sources ready';
+    const sourceHelp=!status?'Source checks are available while ThermalPilot is active.':missing.length?`Missing or unusable: ${missing.join(', ')}.`:'Electricity prices from now, outdoor temperature and heating water temperature are available. Weather forecast details are reported separately below.';
+    return `<div class="status-badges"><span class="status-pill mode" tabindex="0" title="${escapeHTML(modeHelp)}">${mode}</span><span class="status-pill ${!status?'neutral':missing.length?'missing':'active'}" tabindex="0" title="${escapeHTML(sourceHelp)}">${sourceLabel}</span></div>`;
+  }
   overview(){
-    const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));
-    return `<section class="status-card"><div class="status-heading"><h2>Simulation status</h2><button id="toggle-active" class="primary">${this.settings.heating_enabled?'Set passive':'Set active'}</button></div>
+    const quality=this.collectionQuality();const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>compareRoomNames(a[1],b[1]));
+    return `<section class="status-card"><div class="status-heading"><h2>Simulation status</h2></div>
     <dl class="status-grid">
-      <div class="status-block"><dt>Operation</dt><dd><span class="status-pill ${data.heating_active===false?'paused':'active'}">${data.heating_active===false?'Passive':'Active'}</span></dd><small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
-      <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span></dd><small>Room observations for learning.</small></div>
-      <div class="status-block"><dt>Stored history</dt><dd>${escapeHTML(Number(data.history_info?.rows??0).toLocaleString())}<span class="status-unit"> samples</span></dd><small>Local database: ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</small></div>
-      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd><small>Current outdoor reading.</small>${this.statusSparkline('outdoor','#2196f3')}</div>
-      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Supply water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd><small>Measured heating-water temperature.</small>${this.statusSparkline('water','#16b957')}</div>
+      <div class="status-block"><dt>Operation</dt><dd><span class="status-pill ${data.heating_active===false?'paused':'active'}">${data.heating_active===false?'Passive':'Active'}</span></dd>${this.controlBadges()}<small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
+      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('outdoor','#2196f3')}</div>
+      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Heating water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('water','#16b957')}</div>
+      <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span><span class="status-pill quality quality-${quality.level}" tabindex="0" title="${escapeHTML(quality.detail)}">Data coverage: ${quality.label}</span></dd></div>
+      <div class="status-block"><dt>Stored history</dt><dd>${escapeHTML(Number(data.history_info?.rows??0).toLocaleString())}<span class="status-unit"> samples</span></dd><small class="collection-date">Collection started: ${data.history_info?.started_at!=null?escapeHTML(dateLabel(data.history_info.started_at*1000)):'No observations yet'}</small><small>Local database: ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</small></div>
       <div class="status-block"><dt>Last update</dt><dd class="status-time">${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><small>Latest calculation and observation.</small></div>
     </dl>${(data.warnings||[]).map(w=>`<p class="warning">${escapeHTML(w)}</p>`).join('')}</section>${!rooms.length?'<section>Add rooms on the Settings page.</section>':''}
     ${this.priceChart(false)}<div class="observation-cards">${rooms.map(([id,r])=>{const p=r.plan,m=r.model||{};return `<section class="observation-card"><details class="observation-accordion" data-room-accordion="${escapeHTML(id)}" ${this.roomDisclosureOpen(id)?'open':''}><summary><h2>${escapeHTML(r.name)} ${this.learningBadge(r)} <small>${p?(p.heat?'Boosted thermostat target':'Reduced thermostat target temperature'):'No suggestion'}</small></h2></summary><div class="observation-content"><div class="metrics"><div>Measured<strong>${escapeHTML(r.temperature??'—')} °C</strong></div><div>Suggested thermostat target<strong>${escapeHTML(p?.setpoint??'—')} °C</strong></div><div>Actual heating<strong>${heatingLabel(r.actual_activity)}</strong></div><div>Short-term prediction error<strong>${m.mae==null?'—':m.mae.toFixed(3)+' °C'}</strong></div></div><p>${escapeHTML(r.error||p?.reason||'Waiting for data.')}</p>${this.learningView(r)}
@@ -388,6 +415,15 @@ select{appearance:none;-webkit-appearance:none;padding-right:36px;background-ima
 
 /* Use parallel room cards on Plan and History without shrinking mobile layouts. */
 .page-layout{max-width:none;padding:16px 24px}
+header.page-layout{padding-bottom:0}
+.tab-list{gap:5px;margin-top:22px;padding:0;align-items:flex-end}
+.tab-list button{margin:0 0 -1px;border:1px solid #91a5ad;border-radius:9px 9px 0 0;padding:12px 28px;background:var(--secondary-background-color,#eaf0f4);color:var(--secondary-text-color,#526671);font-weight:500;min-width:105px}
+.tab-list button:hover{color:var(--primary-text-color,#213547);background:var(--card-background-color,#fff)}
+.tab-list button.active{border-top:3px solid #087c85;border-bottom-color:var(--card-background-color,#fff);padding-top:10px;background:var(--card-background-color,#fff);color:var(--primary-color,#087c85);font-weight:700;position:relative;z-index:1}
+.tab-list button:focus-visible{outline:2px solid #087c85;outline-offset:-5px}
+.tab-panel.page-layout{margin:0 24px 24px;border:1px solid #91a5ad;border-radius:0 12px 12px 12px;padding:24px;background:var(--card-background-color,#fff);min-height:320px;box-shadow:0 2px 6px #00000008}
+.collection-date{display:block;margin-bottom:6px}
+@media(max-width:600px){.tab-panel.page-layout{margin:0 12px 12px;padding:12px}.tab-list{padding:0;gap:3px}.tab-list button{min-width:0;padding-left:18px;padding-right:18px}}
 .observation-cards,.history-summary{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 .observation-cards>section,.history-summary>section{min-width:0;margin:0;padding:20px}
 .history-summary{margin-bottom:16px}
@@ -471,7 +507,16 @@ section{margin-bottom:30px}
 .status-unit{font-size:14px;font-weight:normal}
 .status-block .status-time{font-size:20px}
 .status-pill{display:inline-flex;padding:5px 10px;border-radius:7px;font-size:16px;background:var(--secondary-background-color,#eef2f4)}
-.status-pill.active{background:#00857720;color:var(--primary-text-color,#213547);border-left:3px solid #087c85}
+.status-pill.active{background:#2ecc7126;color:var(--primary-text-color,#166534);border-left:3px solid #229954}
+.status-badges{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.status-block dd{display:flex;align-items:baseline;flex-wrap:wrap;gap:7px}
+.status-pill.mode{background:#087c8518;border-left:3px solid #087c85}
+.status-pill.missing,.quality-0{background:#e74c3c20;border-left:3px solid #c0392b}
+.status-pill.quality-1{background:#e67e2220;border-left:3px solid #d35400}
+.status-pill.quality-2{background:#f1c40f26;border-left:3px solid #b7950b}
+.status-pill.quality-3{background:#82e0aa30;border-left:3px solid #52a56d}
+.status-pill.quality-4{background:#2ecc7126;border-left:3px solid #229954}
+.status-pill:focus-visible{outline:2px solid #087c85;outline-offset:2px}
 .status-pill.paused{background:#e4902520;color:var(--primary-text-color,#213547);border-left:3px solid #b77918}
 @supports(color:color-mix(in srgb,white,black)){.status-block{border-color:color-mix(in srgb,var(--primary-text-color,#213547) 34%,var(--card-background-color,white))}}
 @media(max-width:600px){.status-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.status-block{padding:12px}.status-block dd{font-size:21px}}
@@ -514,10 +559,21 @@ section{margin-bottom:30px}
 
 .room-learning{display:inline-block;margin-left:8px;font-size:14px;font-weight:normal;vertical-align:middle;white-space:nowrap;color:var(--secondary-text-color,#526671)}
 </style>
-    <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav>${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
+    <header class="page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}"><h1>ThermalPilot</h1><div class="badge">${this.settings?.apply_season_setpoints?'SEASON SETPOINT CONTROL ENABLED · heating schedules remain simulated':'SIMULATION · your existing automation remains in control'}</div><nav class="tab-list" role="tablist" aria-label="ThermalPilot pages">${[['overview','Plan'],['history','History'],['settings','Settings']].map(([id,label])=>`<button id="tab-${id}" role="tab" aria-selected="${this.tab===id}" aria-controls="thermal-pilot-tab-panel" tabindex="${this.tab===id?0:-1}" data-tab="${id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</nav>${this.message&&!this.saveConfirmation?`<p class="message">${escapeHTML(this.message)}</p>`:''}</header><main id="thermal-pilot-tab-panel" role="tabpanel" aria-labelledby="tab-${this.tab}" class="tab-panel page-layout ${this.tab==='settings'?'settings-layout':this.tab==='history'?'history-layout observation-layout':'plan-layout observation-layout'}">${!this.info?'Loading…':this.tab==='settings'?this.settingsView():this.tab==='history'?this.historyView():this.overview()}</main>${this.message&&this.saveConfirmation?`<div class="message save-toast" role="status" aria-live="polite">${escapeHTML(this.message)}</div>`:''}`;
     const priceAccordion=this.shadowRoot.querySelector('#price-accordion');if(priceAccordion){const tab=this.tab;priceAccordion.addEventListener('toggle',()=>{this.priceAccordionState??={};this.priceAccordionState[tab]=priceAccordion.open;});}
     this.shadowRoot.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.tab;this.loaded=false;this.load();});
-    this.shadowRoot.querySelector('#toggle-active')?.addEventListener('click',async()=>{try{await this.call('save',{settings:{...this.settings,heating_enabled:!this.settings.heating_enabled}});this.settings.heating_enabled=!this.settings.heating_enabled;this.message='Activity setting saved. Effective status updates shortly.';this.render();}catch(error){this.message=error.message;this.render();}});
+    this.shadowRoot.querySelector('.tab-list')?.addEventListener('keydown',event=>{
+      const tabs=['overview','history','settings'],index=tabs.indexOf(event.target.dataset.tab);
+      let next;
+      if(event.key==='ArrowRight')next=(index+1)%tabs.length;
+      else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;
+      else if(event.key==='Home')next=0;
+      else if(event.key==='End')next=tabs.length-1;
+      else return;
+      event.preventDefault();this.tab=tabs[next];this.focusTabRequested=true;this.loaded=false;this.load();
+    });
+    if(this.focusTabRequested){this.shadowRoot.querySelector(`[data-tab="${this.tab}"]`)?.focus();this.focusTabRequested=false;}
+
     this.shadowRoot.querySelector('#add')?.addEventListener('click',()=>{this.message='';this.capture();this.settings.rooms.push({...this.info.room_defaults,id:roomId()});this.render();});
     this.shadowRoot.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{this.capture();const index=Number(b.dataset.remove),room=this.settings.rooms[index];if(!room||!confirm(`Remove room "${room.name||'New room'}"? Save settings to apply this change.`))return;this.message='';this.settings.rooms.splice(index,1);this.render();});
     this.shadowRoot.querySelectorAll('[data-reset]').forEach(b=>b.onclick=async()=>{if(!confirm('Reset the learned parameters for this room? Observation history will be retained.'))return;try{await this.call('reset',{room_id:b.dataset.reset});this.message='Room learning reset.';}catch(e){this.message=e.message;}this.capture();this.render();});
@@ -537,7 +593,7 @@ section{margin-bottom:30px}
       const saveButton=settingsForm.querySelector('button[type=submit]');
       if(saveButton)saveButton.textContent='Saving…';
       settingsForm.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
-      try{await this.call('save',{settings:this.settings});this.message=`Settings saved at ${new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'})}. Suggestions will update shortly.`;this.saveConfirmation=true;
+      try{await this.call('save',{settings:this.settings});this.message=`Settings saved at ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}. Suggestions will update shortly.`;this.saveConfirmation=true;
         const confirmation=this.message;
         clearTimeout(this.saveMessageTimer);
         this.saveMessageTimer=setTimeout(()=>{if(this.saveConfirmation&&this.message===confirmation){this.message='';this.saveConfirmation=false;this.shadowRoot.querySelector('.save-toast')?.remove();}},5000);

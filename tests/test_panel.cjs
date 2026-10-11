@@ -103,7 +103,7 @@ panel._hass={states:{'sensor.price':{entity_id:'sensor.price',attributes:{friend
 panel.settings={heating_enabled:true,apply_season_setpoints:false,rooms:[]};
 panel.info={settings:panel.settings,source_fields:[['price_entity','Price sensor','sensor']],room_fields:[],room_defaults:{},data:{warnings:[],rooms:{},history_info:{rows:0,bytes:0},collection:{collecting:false},heating_active:true}};
 panel.tab='settings';panel.render();assert.match(panel.shadowRoot.innerHTML,/Save settings/);assert.match(panel.shadowRoot.innerHTML,/data-field="source.price_entity"/);assert.match(panel.shadowRoot.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/<script>alert/);
-panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/Simulation status/);assert.match(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
+panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/Simulation status/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
 panel.settings.apply_season_setpoints=true;panel.render();assert.match(panel.shadowRoot.innerHTML,/SEASON SETPOINT CONTROL ENABLED/);
 panel.tab='history';panel.history=[];panel.render();assert.match(panel.shadowRoot.innerHTML,/Season archives/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Download observations|id="export"/);
 console.log('Panel template tests passed (settings, status, history, command-mode banner, escaping).');
@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.25 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.26 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -287,3 +287,27 @@ console.log('History chart uses known past source prices without old observation
 pricePanel.history=[{room_id:'r0',time:priceTime/1000-86400,price:99,activity:1,suggested_heat:1}];
 const focusedHistory=pricePanel.priceChart(true);assert.match(focusedHistory,/Today and tomorrow/);assert.doesNotMatch(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
 console.log('Shared chart focuses on published today/tomorrow, excludes yesterday, and omits the numeric color key.');
+
+const statusPanel=new Component();statusPanel.settings={rooms:[],heating_enabled:true};statusPanel.info={data:{rooms:{},history_info:{started_at:1791590400}}};const statusOrder=statusPanel.overview();const order=['Operation','Outdoor temperature','Heating water temperature','Data collection','Stored history','Last update'];for(let i=1;i<order.length;i++)assert(statusOrder.indexOf('<dt>'+order[i-1])<statusOrder.indexOf('<dt>'+order[i]));assert.doesNotMatch(statusOrder,/toggle-active/);assert.match(statusOrder,/Collection started:/);
+statusPanel.render();assert.match(statusPanel.shadowRoot.innerHTML,/role="tablist"/);assert.match(statusPanel.shadowRoot.innerHTML,/role="tabpanel"/);assert.match(statusPanel.shadowRoot.innerHTML,/aria-selected="true"/);assert.match(statusPanel.shadowRoot.innerHTML,/status-pill.active\{background:#2ecc7126/);
+console.log('Tabs and status cards checks passed (accessible roles, green active badges, order, collection date, no duplicate passive button).');
+
+assert.doesNotMatch(statusOrder,/Current outdoor reading\.|Measured heating-water temperature\.|Room observations for learning\./);
+const badgePanel=new Component();badgePanel.settings={rooms:[{id:'a'},{id:'b'}],simulation_enabled:true};
+badgePanel.info={data:{updated:'2026-10-11T12:00:00Z',history_info:{started_at:new Date('2026-08-01T12:00:00Z').getTime()/1000},collection_evidence:{rooms:2,heating_hours:120,idle_hours:120},source_status:{prices:true,outdoor:true,water:true}}};
+assert.equal(badgePanel.collectionQuality().label,'High');
+for(const [hours,label] of [[0,'Low'],[3,'Limited'],[12,'Developing'],[48,'Good'],[120,'High']]){badgePanel.info.data.collection_evidence.heating_hours=hours;assert.equal(badgePanel.collectionQuality().label,label);}
+badgePanel.info.data.history_info.started_at=new Date('2026-10-11T00:00:00Z').getTime()/1000;assert.equal(badgePanel.collectionQuality().label,'Low');
+assert.match(badgePanel.controlBadges(),/Sources ready/);
+badgePanel.info.data.source_status.water=false;assert.match(badgePanel.controlBadges(),/Sources missing/);assert.match(badgePanel.controlBadges(),/Missing or unusable: Heating water temperature/);
+badgePanel.settings.simulation_enabled=false;assert.match(badgePanel.controlBadges(),/Simulation paused/);assert.doesNotMatch(badgePanel.controlBadges(),/>Live control</);
+badgePanel.settings.apply_season_setpoints=true;assert.match(badgePanel.controlBadges(),/Season setpoint control/);
+assert.equal(vm.runInContext("dateLabel(new Date(2026,9,11,12))",context),'11.10.2026');
+assert.equal(vm.runInContext("timeLabel(new Date(2026,9,11,12,15))",context),'11.10.2026 12:15');
+console.log('Collection coverage levels, source readiness, honest control modes and Finnish dates passed.');
+
+assert.match(statusPanel.overview(),/Data coverage: Low/);
+
+const operationBadgeView=statusPanel.overview();
+assert.doesNotMatch(operationBadgeView,/<div class="status-heading">[^]*?status-badges[^]*?<dl/);
+assert.match(operationBadgeView,/<dt>Operation<\/dt>[^]*?status-badges[^]*?Sources not checked[^]*?<dt>Outdoor temperature/);

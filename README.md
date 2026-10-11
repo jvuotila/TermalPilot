@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.25 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.26 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -418,3 +418,21 @@ tomorrow's published prices. The History period selector continues to control
 the detailed room charts below. Before Now, the shared History chart shows
 recorded heating activity; after Now, it shows the current plan's suggestions.
 Future relay activity is left blank. Tomorrow is included when prices are available.
+
+
+The Plan, History and Settings pages use a tabbed frame. Dates use Finnish numeric
+format (DD.MM.YYYY), with 24-hour times. The Operation card groups Active/Passive,
+simulation/season-setpoint mode and required-source readiness. These mode badges
+never imply that live scheduled heating control is available.
+
+Data collection keeps its Active/Paused badge and adds Data coverage: Low,
+Limited, Developing, Good or High. Coverage uses the least-observed configured
+room's accepted heating and idle hours plus time since collection started.
+Limited requires 3 hours of each and 1 day; Developing requires 12 hours of each
+and 3 days; Good requires 48 hours of each and 14 days; High requires 120 hours
+of each and 42 days. These are descriptive coverage thresholds, not an accuracy
+rating or permission to replace an existing heating automation. The tooltip
+explains the criteria. Learning continues at every level.
+
+Stored history displays the original collection start date, retained after raw
+history cleanup and recovered from older season records when available.

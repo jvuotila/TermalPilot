@@ -71,6 +71,13 @@ class PilotCoordinator(DataUpdateCoordinator):
         await self.hass.async_add_executor_job(self.history_db.initialize)
         self.config_fingerprint = saved.get('fingerprints', {})
 
+    def collection_evidence(self):
+        """Use the least-observed configured room for house-wide coverage."""
+        models = [self.models.get(room['id'], {}) for room in self.settings['rooms']]
+        return {'rooms':len(models),
+                'heating_hours':min((m.get('heated_hours',0) for m in models),default=0),
+                'idle_hours':min((m.get('idle_hours',0) for m in models),default=0)}
+
     def value(self, entity):
         state = self.hass.states.get(entity) if entity else None
         return number(state.state) if state else None
@@ -225,7 +232,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(self.history_db.append, [], cutoff, self.season['season_id'])
             self.store.async_delay_save(self.storage_data,20)
             return {'updated':now.isoformat(),'simulation_only':not self.settings['apply_season_setpoints'],'heating_active':False,
-                'collection':self.season,'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
+                'collection':self.season,'collection_evidence':self.collection_evidence(),'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
                 'rooms':{},'outdoor':outdoor,'water':None,
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}
@@ -345,7 +352,9 @@ class PilotCoordinator(DataUpdateCoordinator):
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
-                'rooms':room_data,'price_chart':chart_prices}
+                'rooms':room_data,'price_chart':chart_prices,
+                'collection_evidence':self.collection_evidence(),
+                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None}}
         self.arm_command_timer(data,now)
         return data
 

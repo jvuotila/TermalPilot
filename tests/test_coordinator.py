@@ -44,6 +44,18 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_status_badges_use_usable_sources_and_least_observed_room(self):
+        data = await self.c._async_update_data()
+        self.assertEqual(data['source_status'], {'prices':True,'outdoor':True,'water':True})
+        self.c.models[self.c.settings['rooms'][0]['id']].update(heated_hours=150,idle_hours=160)
+        self.c.settings['rooms'].append({**self.c.settings['rooms'][0],'id':'new-room'})
+        self.assertEqual(self.c.collection_evidence()['heating_hours'],0)
+        self.c.models['new-room']={'heated_hours':4,'idle_hours':8}
+        self.assertEqual(self.c.collection_evidence(),{'rooms':2,'heating_hours':4,'idle_hours':8})
+        self.hass.states.pop('sensor.water')
+        data = await self.c._async_update_data()
+        self.assertFalse(data['source_status']['water'])
+
     async def test_chart_prices_are_exposed_and_recorded(self):
         data=await self.c._async_update_data()
         self.assertEqual(data['price_chart'][0]['price'],10)
