@@ -97,6 +97,38 @@ accepted solely on regular 24-hour days, with their interval detected from
     return output
 
 
+def price_forecast_reserve(attributes, confirmed_end, base_hours=6):
+    """Use relative price trends only; raw predictions never become payable prices.
+
+An expensive next-six-hour period compared with the following day increases
+thermal reserve at the end of confirmed prices. Missing forecasts leave the
+ordinary reserve unchanged. Only the next day matters for this bounded signal.
+"""
+    points={}
+    for row in attributes.get('forecast') or []:
+        if not isinstance(row,dict):continue
+        raw=row.get('timestamp');moment=stamp(raw)
+        numeric=number(raw)
+        if moment is None and numeric is not None:
+            try:moment=datetime.fromtimestamp(numeric/1000 if numeric>1e11 else numeric,timezone.utc)
+            except (ValueError,OverflowError,OSError):continue
+        value=number(row.get('value'))
+        if moment is not None and value is not None:
+            points[moment.timestamp()]=value
+    start=confirmed_end.timestamp()
+    future=sorted((t,v) for t,v in points.items() if start<=t<start+24*3600)
+    if len(future)<12 or future[0][0]-start>3600 or future[-1][0]<start+18*3600 or any(b[0]-a[0]>3600 for a,b in zip(future,future[1:])):
+        return {'reserve_hours':base_hours,'available':False,'reason':'No continuous next-day price forecast beyond confirmed prices.'}
+    near=[v for t,v in future if t<start+6*3600]
+    if not near:
+        return {'reserve_hours':base_hours,'available':False,'reason':'No near-term forecast prices.'}
+    values=sorted(v for _,v in future);spread=values[-1]-values[0]
+    percentile=sum(v<=sum(near)/len(near) for v in values)/len(values) if spread>1e-9 else .5
+    reserve=max(base_hours,12 if percentile>=.8 else 9 if percentile>=.65 else base_hours)
+    return {'reserve_hours':reserve,'available':True,
+            'reason':'Expensive period forecast after confirmed prices; extra heat reserve considered.' if reserve>base_hours else 'Forecast does not call for extra heat reserve.'}
+
+
 def curve_hours(room, outdoor):
     room = {**DEFAULTS, **room}
     fraction = (room['curve_warm_temp']-outdoor)/(room['curve_warm_temp']-room['curve_cold_temp'])

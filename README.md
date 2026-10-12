@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.31 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.32 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -96,14 +96,14 @@ Forecasts refresh hourly; changing the source refreshes immediately.
 ## Room sensor checks
 
 While Active, ThermalPilot checks whether each room's temperature reading has
-changed. After six hours of unchanged or unavailable readings, one persistent
+changed. After the configured unchanged temperature interval (default six hours) of unchanged or unavailable readings, one persistent
 Home Assistant notification lists the suspect rooms. Stable room temperatures
 can produce this warning too; it identifies a possible issue rather than a
 confirmed sensor failure. A changed reading resets the timer.
 
 Notifications are limited to once per local calendar day, including across
 restarts. Passive mode resets observation timers; monitoring resumes on activation.
-A monitoring gap longer than 30 minutes also restarts the six-hour observation
+A monitoring gap longer than 30 minutes also restarts the sensor-warning observation
 period. The notification ID is reused so unresolved alerts do not accumulate.
 
 ## Native Home Assistant heating timelines
@@ -125,8 +125,8 @@ previously published suggestions and observed demand.
 ## Reading room history
 
 Room charts have a legend: blue is measured temperature; the dashed orange line
-is the model prediction using actual heating demand. This checks short-term model
-accuracy, not the simulated outcome of the suggested schedule. Both lines are
+is the selected saved 1-, 3- or 6-hour forecast under the proposed heating plan.
+Actual heating differences are reported separately in the accuracy cards. Both lines are
 included in the temperature-axis scale. Short views use quarter-hour time labels.
 
 History tables show the latest observation in each 15-minute interval. Suggested
@@ -386,7 +386,8 @@ See [MODEL.md](docs/MODEL.md) for the equations and assumptions.
 - Planning cost is normalized to one kW per room. Standing charges do not affect
   scheduling. There is no validated euro savings estimate or room energy metering.
 - A shadow simulation cannot measure what would have happened under commands never
-  issued. Short-term prediction error uses the actual observed heating activity.
+  issued. Saved forecasts show outcomes under the proposed plan; heating-match
+  counts help separate forecasts with similar demand from those with different heating.
 
 ## Development and validation
 
@@ -481,3 +482,36 @@ Price bars and heating periods show immediate details on hover, keyboard focus,
 or tap. Heating observations are grouped into continuous On periods. Times reflect
 recorded observations; when the start or stop is unknown, the tooltip says
 First observed On or Observed until instead. Tap again or press Escape to dismiss.
+
+Under **ThermalPilot settings → Miscellaneous**, **Sensor warning delay (hours)** sets the warning delay from 1 to 72 whole hours. The default is 6 hours;
+the once-per-day notification limit remains unchanged.
+
+### Forecast accuracy
+
+History compares measured room temperatures with forecasts saved 1, 3 and 6 hours
+beforehand. The first forecast for each horizon in each hour is kept unchanged
+in SQLite; later readings and model updates do not rewrite it. Only horizons
+covered by the known-price plan are stored. Predictions are compared against an
+observation within five minutes of their due time; missing endpoints are skipped.
+The chart horizon can be selected, and average errors are shown alongside the
+error from assuming no temperature change. Observed heating may differ from the
+proposed plan, particularly in simulation. Similar heating counts require at
+least 90% matching demand observations with no gaps longer than 15 minutes.
+A good result requires considering both prediction error and heating differences.
+The Plan card's 3-hour forecast error summarizes the last seven days. Initial
+comparisons appear after updating and waiting for the relevant horizon; previous
+next-reading predictions cannot be reconstructed as saved long-range forecasts.
+
+### Optional price forecast
+
+Under Electricity price settings, Price forecast (optional) accepts a sensor with
+forecast timestamp/value entries, such as sensor.nordpool_predict_fi_price.
+The source remains optional and disabled by default. ThermalPilot compares only
+relative prices within the forecast's next day beyond the confirmed-price horizon.
+An expensive first six hours can increase the terminal heat reserve from 6 to
+9 or 12 hours; a cheap/flat outlook never lowers the normal comfort reserve.
+Forecast values are not mixed with confirmed total prices and do not require a
+separate unit or additional-cost setting. Plans and charts still use confirmed
+prices. Missing confirmed prices still trigger the existing comfort fallback.
+Forecast changes trigger a refresh, and confirmed tomorrow prices take precedence.
+This is a bounded planning hint, not a seven-day executable heating schedule.

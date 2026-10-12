@@ -57,6 +57,23 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         data = await self.c._async_update_data()
         self.assertFalse(data['source_status']['water'])
 
+    async def test_optional_price_forecast_guides_reserve_but_never_replaces_confirmed_prices(self):
+        self.c.settings['price_forecast_entity']='sensor.forecast'
+        self.hass.states['sensor.forecast']=State('10',{'forecast':[
+            {'timestamp':(now+timedelta(hours=24+i)).timestamp()*1000,'value':40 if i<6 else 5} for i in range(24)]})
+        from thermal_pilot.model import plan as real_plan
+        with patch('thermal_pilot.coordinator.plan',side_effect=real_plan) as planner:
+            data=await self.c._async_update_data()
+        self.assertEqual(planner.call_args.args[0]['terminal_reserve_hours'],12)
+        self.assertTrue(data['price_outlook']['available'])
+        self.assertTrue(all(row['price']==10 for row in data['price_chart']))
+        self.assertEqual(len(data['price_chart']),96)
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        self.hass.states['sensor.price'].state='unavailable'
+        data=await self.c._async_update_data()
+        self.assertEqual(data['control']['fallback_rooms'],['Study'])
+        self.assertEqual(data['control']['targets'][self.c.settings['rooms'][0]['id']],20)
+
     async def test_chart_prices_are_exposed_and_recorded(self):
         data=await self.c._async_update_data()
         self.assertEqual(data['price_chart'][0]['price'],10)
@@ -84,6 +101,26 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         await self.c.check_temperature_sensors(now+timedelta(days=1),True)
         self.assertEqual(self.hass.services.async_call.await_count,2)
         self.assertEqual(self.hass.services.async_call.await_args.args[2]['notification_id'],notification['notification_id'])
+
+    async def test_configured_sensor_warning_interval_and_daily_limit(self):
+        self.c.settings['sensor_warning_hours']=2
+        for minute in range(0,120,30):
+            await self.c.check_temperature_sensors(now+timedelta(minutes=minute),True)
+        self.hass.services.async_call.assert_not_awaited()
+        await self.c.check_temperature_sensors(now+timedelta(hours=2),True)
+        self.hass.services.async_call.assert_awaited_once()
+        self.assertIn('at least 2 hours',self.hass.services.async_call.call_args.args[2]['message'])
+        await self.c.check_temperature_sensors(now+timedelta(hours=2,minutes=30),True)
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+
+    async def test_sensor_warning_interval_validation_and_legacy_default(self):
+        from thermal_pilot.config import validate
+        legacy=deepcopy(self.c.settings);legacy.pop('sensor_warning_hours')
+        self.assertEqual(validate(legacy)['sensor_warning_hours'],6)
+        self.assertEqual(validate({**legacy,'sensor_warning_hours':12})['sensor_warning_hours'],12)
+        for value in [0,73,1.5,'invalid']:
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                validate({**legacy,'sensor_warning_hours':value})
 
     async def test_sensor_changes_passive_and_monitoring_gaps_reset_timer(self):
         for step in range(12):
@@ -324,7 +361,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(current,restarted_at)
                     self.assertIsNone(settings['committed_session'])
                     self.assertEqual(model['response'],0)
-                    rows=[{'start':current.isoformat(),'end':(current+timedelta(hours=2)).isoformat(),'heat':heat_now}]
+                    rows=[{'start':current.isoformat(),'end':(current+timedelta(hours=2)).isoformat(),'heat':heat_now,'predicted_demand':heat_now,'temperature':20.5}]
                     return {**thermostat_timing(rows,settings,20,current),'slots':rows,'scheduled_heat':heat_now}
                 with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=restarted_at), patch('thermal_pilot.coordinator.plan',side_effect=fresh_plan) as planner, patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=lambda:None) as timer:
                     data=await restarted._async_update_data()

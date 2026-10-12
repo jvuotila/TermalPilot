@@ -2,6 +2,7 @@
 from pathlib import Path
 import json
 import sqlite3
+from bisect import bisect_left
 from contextlib import contextmanager
 
 
@@ -29,6 +30,8 @@ class HistoryDatabase:
                 raise ValueError('Unsupported history database schema version')
             con.execute('CREATE TABLE IF NOT EXISTS observations (room_id TEXT NOT NULL, time INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(room_id,time))')
             con.execute('CREATE INDEX IF NOT EXISTS observations_time ON observations(time)')
+            con.execute('CREATE TABLE IF NOT EXISTS forecasts (room_id TEXT NOT NULL, issued_bucket INTEGER NOT NULL, horizon INTEGER NOT NULL, due REAL NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(room_id,issued_bucket,horizon))')
+            con.execute('CREATE INDEX IF NOT EXISTS forecasts_due ON forecasts(due)')
             con.execute('CREATE TABLE IF NOT EXISTS season_accumulators (season TEXT NOT NULL, room_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(season,room_id))')
             con.execute('CREATE TABLE IF NOT EXISTS season_summaries (season TEXT NOT NULL, room_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(season,room_id))')
             # Recover the original collection date from retained season aggregates.
@@ -71,9 +74,88 @@ class HistoryDatabase:
                 con.execute('INSERT OR REPLACE INTO season_accumulators VALUES (?,?,?)',(season,r['room_id'],json.dumps(stat,separators=(',',':'))))
             con.execute('DELETE FROM observations WHERE time < ?', (int(cutoff),))
 
-    def read(self, cutoff):
+    def record_forecasts(self, rooms, issued, cutoff):
+        """Freeze the first forecast each hour. Later measurements never rewrite it."""
+        from .model import stamp
         with self._connect() as con:
-            return [json.loads(row[0]) for row in con.execute('SELECT payload FROM observations WHERE time >= ? ORDER BY time,room_id', (int(cutoff),))]
+            for rid, room in rooms.items():
+                plan=room.get('plan') or {}
+                slots=plan.get('slots',[])
+                if not slots or room.get('temperature') is None:
+                    continue
+                for hours in (1,3,6):
+                    due=issued+hours*3600
+                    left_time,left_temp=issued,room['temperature']
+                    predicted=None
+                    for slot in slots:
+                        end=stamp(slot['end']).timestamp()
+                        if left_time < due <= end:
+                            predicted=left_temp+(slot['temperature']-left_temp)*(due-left_time)/(end-left_time)
+                            break
+                        left_time,left_temp=end,slot['temperature']
+                    if predicted is None:
+                        continue  # Never extrapolate beyond known forecast coverage.
+                    payload={'issued':issued,'due':due,'horizon':hours,'temperature':predicted,
+                             'initial_temperature':room['temperature'],'context':room.get('forecast_context'),
+                             'demand':[{'start':max(issued,stamp(v['start']).timestamp()),
+                                        'end':min(due,stamp(v['end']).timestamp()),
+                                        'on':bool(v['predicted_demand'])} for v in slots
+                                       if stamp(v['start']).timestamp()<due]}
+                    con.execute('INSERT OR IGNORE INTO forecasts VALUES (?,?,?,?,?)',
+                                (rid,int(issued)//3600*3600,hours,due,json.dumps(payload,allow_nan=False)))
+            con.execute('DELETE FROM forecasts WHERE due < ?',(cutoff,))
+
+    def read(self, cutoff):
+        """Join frozen forecasts to later observations, allowing five-minute timing tolerance."""
+        with self._connect() as con:
+            all_rows=[json.loads(row[0]) for row in con.execute('SELECT payload FROM observations WHERE time >= ? ORDER BY time,room_id',(int(cutoff-6*3600-300),))]
+            forecasts=[(rid,json.loads(payload)) for rid,payload in con.execute('SELECT room_id,payload FROM forecasts WHERE due >= ? ORDER BY due',(cutoff,))]
+        grouped={}
+        for row in all_rows:
+            grouped.setdefault(row['room_id'],[]).append(row)
+        times={rid:[r['time'] for r in rows] for rid,rows in grouped.items()}
+        for rid,f in forecasts:
+            rows=grouped.get(rid,[])
+            if not rows:continue
+            index=bisect_left(times[rid],f['due'])
+            candidates=[i for i in (index-1,index) if 0<=i<len(rows)]
+            index=min(candidates,key=lambda i:abs(rows[i]['time']-f['due']))
+            actual=rows[index]
+            if abs(actual['time']-f['due'])>300 or actual['time']<f['issued'] or actual.get('forecast_context')!=f.get('context'):
+                continue
+            history=rows[bisect_left(times[rid],f['issued']):index+1]
+            complete=bool(history) and history[0]['time']-f['issued']<=900 and all(b['time']-a['time']<=900 for a,b in zip(history,history[1:]))
+            comparisons=[]
+            for observed in history:
+                expected=next((v['on'] for v in f['demand'] if v['start']<=observed['time']<v['end']),None)
+                if expected is not None:
+                    if observed.get('activity') is None or observed.get('forecast_context')!=f.get('context'):complete=False
+                    else:comparisons.append(bool(observed['activity'])==expected)
+            match=sum(comparisons)/len(comparisons) if complete and comparisons else None
+            key=f"forecast_{f['horizon']}h"
+            actual[key]=f['temperature']
+            actual[key+'_details']={'issued':f['issued'],'due':f['due'],
+                                    'error':abs(actual['temperature']-f['temperature']),
+                                    'persistence_error':abs(actual['temperature']-f['initial_temperature']),
+                                    'heating_match':match}
+        return [r for r in all_rows if r['time']>=cutoff]
+
+    def forecast_accuracy(self, cutoff):
+        results={}
+        for row in self.read(cutoff):
+            for hours in (1,3,6):
+                detail=row.get(f'forecast_{hours}h_details')
+                if not detail:continue
+                stat=results.setdefault(row['room_id'],{}).setdefault(str(hours),{'count':0,'error_sum':0,'persistence_sum':0,'similar_heating_count':0,'similar_error_sum':0})
+                stat['count']+=1;stat['error_sum']+=detail['error'];stat['persistence_sum']+=detail['persistence_error']
+                if detail['heating_match'] is not None and detail['heating_match']>=.9:
+                    stat['similar_heating_count']+=1;stat['similar_error_sum']+=detail['error']
+        for room in results.values():
+            for stat in room.values():
+                stat['mae']=stat.pop('error_sum')/stat['count']
+                stat['persistence_mae']=stat.pop('persistence_sum')/stat['count']
+                stat['similar_heating_mae']=stat.pop('similar_error_sum')/stat['similar_heating_count'] if stat['similar_heating_count'] else None
+        return results
 
     def size(self):
         with self._connect() as con:

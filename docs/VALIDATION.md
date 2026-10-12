@@ -1,6 +1,6 @@
 # Validation status
 
-- 97 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 107 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -99,3 +99,13 @@ event checks, not a phone browser or installed Home Assistant visual test.
 Chart detail checks cover price interval values/times, contiguous recorded heating
 periods, known versus incomplete start/stop observations, delegated hover/focus/tap
 handling, Escape/tap dismissal and tooltip positioning within phone viewports.
+
+Saved-forecast checks cover immutable hourly issuance, restart persistence, 1/3/6-hour
+comparison, a no-change benchmark, missing measurements and recording gaps,
+different observed heating, sensor mapping changes and limited price horizons.
+Preview forecast comparisons are synthetic examples, not saved home measurements.
+
+Optional price forecast tests cover relative trend signals, invariance to price
+unit scaling and fixed fees, missing/stale/gapped forecasts, increased terminal
+reserve, confirmed-price chart preservation and live fallback when confirmed
+prices are unavailable.

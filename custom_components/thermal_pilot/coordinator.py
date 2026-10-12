@@ -12,7 +12,7 @@ from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REF
 from .history import HistoryDatabase
 from .control import ThermostatControl
 from .config import stored_settings
-from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season
+from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class PilotCoordinator(DataUpdateCoordinator):
     def listen_sources(self):
         if self._source_unsubscribe:
             self._source_unsubscribe()
-        entities = {self.settings[key] for key in ('price_entity','outdoor_entity','water_entity','weather_entity','fireplace_entity') if self.settings[key]}
+        entities = {self.settings[key] for key in ('price_entity','price_forecast_entity','outdoor_entity','water_entity','weather_entity','fireplace_entity') if self.settings[key]}
         entities.update(room[key] for room in self.settings['rooms'] for key in ('temperature_entity','thermostat','activity_entity') if room[key])
         self._source_unsubscribe = async_track_state_change_event(self.hass,entities,self.source_changed)
 
@@ -73,7 +73,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             return  # Own target acknowledgements do not require replanning.
         if self._source_timer:
             return
-        urgent = not old or not new or old.state in ('unknown','unavailable') or new.state in ('unknown','unavailable') or entity == self.settings['price_entity']
+        urgent = not old or not new or old.state in ('unknown','unavailable') or new.state in ('unknown','unavailable') or entity in (self.settings['price_entity'],self.settings['price_forecast_entity'])
         async def refresh(_now):
             self._source_timer = None
             await self.async_request_refresh()
@@ -150,12 +150,13 @@ class PilotCoordinator(DataUpdateCoordinator):
                 'fingerprints':self.config_fingerprint,'sensor_health':self.sensor_health,'managed_rooms':self.managed_rooms,'fallback_state':self.fallback_state}
 
     async def check_temperature_sensors(self, now, active):
-        """Warn once per local day after six hours of continuous suspect readings."""
+        """Warn once per local day after the configured interval of continuous suspect readings."""
         tracking = self.sensor_health.setdefault('rooms',{})
         if not active:
             tracking.clear()
             return
         timestamp = now.timestamp()
+        warning_hours = self.settings['sensor_warning_hours']
         configured = {room['id'] for room in self.settings['rooms']}
         for rid in list(tracking):
             if rid not in configured:
@@ -173,9 +174,9 @@ class PilotCoordinator(DataUpdateCoordinator):
             previous['last_seen'] = timestamp
             previous.setdefault('since',timestamp)
             tracking[rid] = previous
-            if timestamp-previous['since'] >= 6*3600:
+            if timestamp-previous['since'] >= warning_hours*3600:
                 reason = 'unavailable' if value is None else f'unchanged at {value:g} °C'
-                suspect.append(f"- {room['name']}: {reason} for at least 6 hours ({entity}).")
+                suspect.append(f"- {room['name']}: {reason} for at least {warning_hours:g} hours ({entity}).")
         day = now.astimezone(ZoneInfo(self.hass.config.time_zone)).date().isoformat()
         if not suspect or self.sensor_health.get('last_notification_day') == day:
             return
@@ -314,6 +315,13 @@ class PilotCoordinator(DataUpdateCoordinator):
             warnings.append('No continuous prices from now: no heating plan is available.')
         if not forecasts:
             warnings.append('No weather forecast: current outdoor temperature is held constant. '+(self.forecast_error or 'No usable forecast was returned.'))
+        price_outlook = {'enabled':bool(self.settings['price_forecast_entity']),'reserve_hours':RESERVE_HOURS,'available':False}
+        if price_outlook['enabled'] and slots:
+            predicted_source=self.hass.states.get(self.settings['price_forecast_entity'])
+            attrs=predicted_source.attributes if predicted_source and predicted_source.state not in ('unknown','unavailable') else {}
+            price_outlook.update(price_forecast_reserve(attrs,slots[-1].end,RESERVE_HOURS))
+            if not price_outlook['available']:
+                warnings.append('Optional price forecast unavailable; planning uses confirmed prices and the normal heat reserve.')
         outdoors = []
         for slot in slots:
             points = []
@@ -349,7 +357,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             thermostat_state = self.hass.states.get(room['thermostat'])
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
-                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None}
+                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint}
             if temperature is None or outdoor is None or baseline is None or water is None:
                 result['error'] = 'Room temperature, outdoor temperature, supply water temperature or target temperature is unavailable.'
                 self.previous.pop(rid, None)
@@ -369,7 +377,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                     self.previous.pop(rid,None)
                 if slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
-                    settings = {**room, 'terminal_reserve_hours':RESERVE_HOURS,
+                    settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
@@ -385,7 +393,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['model'] = deepcopy(model)
                 result['one_step_prediction'] = prediction
                 if self.season['collecting']:
-                    readings.append({'room_id':rid, **current, 'actual_setpoint':actual_request,
+                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint, 'actual_setpoint':actual_request,
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None,
                                  'price':slots[0].price if slots else None})
@@ -401,13 +409,17 @@ class PilotCoordinator(DataUpdateCoordinator):
             room_data[rid] = result
         cutoff = now.timestamp()-HISTORY_DAYS*86400
         await self.hass.async_add_executor_job(self.history_db.append, readings, cutoff, self.season['season_id'])
+        await self.hass.async_add_executor_job(self.history_db.record_forecasts,room_data,now.timestamp(),cutoff)
+        accuracy = await self.hass.async_add_executor_job(self.history_db.forecast_accuracy,now.timestamp()-7*86400)
+        for rid, room in room_data.items():
+            room['forecast_accuracy']=accuracy.get(rid,{})
         # Model parameters are small; sample history lives in SQLite.
         self.store.async_delay_save(self.storage_data,20)
         archives = await self.hass.async_add_executor_job(self.history_db.summaries)
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
-                'rooms':room_data,'price_chart':chart_prices,
+                'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,
                 'collection_evidence':self.collection_evidence(),
                 'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None},
                 'fallback_season':self.fallback_summary()}

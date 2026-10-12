@@ -233,3 +233,23 @@ class LearningProgressTests(unittest.TestCase):
         self.assertEqual(model['learning_rates'][0]['heat'],.25)
         learn(model,room,{**old,'excluded':True},{**old,'time':NOW.timestamp()+900})
         self.assertEqual(model['learning_rates'][0]['heat'],.25)
+
+class PriceForecastTests(unittest.TestCase):
+    def forecast(self, values):
+        return {'forecast':[{'timestamp':(NOW+timedelta(hours=i)).timestamp()*1000,'value':v} for i,v in enumerate(values)]}
+    def test_expensive_outlook_increases_reserve_without_mixing_price_units(self):
+        from thermal_pilot.model import price_forecast_reserve
+        for values in ([40]*6+[5]*18,[140]*6+[105]*18,[.4]*6+[.05]*18):
+            result=price_forecast_reserve(self.forecast(values),NOW)
+            self.assertTrue(result['available']);self.assertEqual(result['reserve_hours'],12)
+    def test_cheap_or_flat_outlook_preserves_normal_comfort_reserve(self):
+        from thermal_pilot.model import price_forecast_reserve
+        for values in ([5]*6+[40]*18,[5]*24):
+            self.assertEqual(price_forecast_reserve(self.forecast(values),NOW)['reserve_hours'],6)
+    def test_stale_gapped_invalid_and_short_forecasts_do_not_replace_confirmed_prices(self):
+        from thermal_pilot.model import price_forecast_reserve
+        invalid=self.forecast([10]*24);invalid['forecast'][10]['timestamp']='invalid'
+        stale=self.forecast([10]*24)
+        for attrs,end in [({},NOW),(self.forecast([10]*5),NOW),(invalid,NOW),(stale,NOW+timedelta(days=2))]:
+            result=price_forecast_reserve(attrs,end)
+            self.assertFalse(result['available']);self.assertEqual(result['reserve_hours'],6)

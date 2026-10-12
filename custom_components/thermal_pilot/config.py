@@ -7,6 +7,7 @@ from .model import number
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
  ('price_entity','Price sensor with additional costs','sensor',{'kind':'price'}),
+ ('price_forecast_entity','Price forecast (optional)','sensor',{'kind':'price_forecast'}),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
  ('pricing_mode','Scheduling mode','select:hourly,quarterly,flexible'),
  ('minimum_run_minutes','Minimum flexible heating run (minutes)','number',15,360,15),
@@ -29,6 +30,7 @@ SOURCE_FIELDS = [
  ('curve_cold_temp','Cold outdoor endpoint (°C)','number',-40,25),
  ('apply_season_setpoints','Apply season setpoints','bool'),
  ('heating_enabled','ThermalPilot active','bool'),
+ ('sensor_warning_hours','Sensor warning delay (hours)','number',1,72,1),
 ]
 ROOM_FIELDS = [
  ('name','Room name','text'), ('thermostat','Thermostat','climate'),
@@ -55,6 +57,8 @@ def entity_matches(state, rule, settings=None):
         return temperature
     if kind == 'power':
         return device_class == 'power' or (not device_class and unit in ('w', 'kw'))
+    if kind == 'price_forecast':
+        return domain == 'sensor' and isinstance(attrs.get('forecast'),(list,tuple))
     if kind == 'price':
         return any(isinstance(attrs.get(key), (list, tuple)) for key in ('today', 'tomorrow', 'raw_today', 'raw_tomorrow'))
     if kind == 'target':
@@ -131,7 +135,7 @@ def validate(payload, hass=None):
     check(result, SOURCE_FIELDS)
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
-    for key in ('minimum_run_minutes','start_offset_minutes','stop_offset_minutes'):
+    for key in ('minimum_run_minutes','start_offset_minutes','stop_offset_minutes','sensor_warning_hours'):
         if result[key] != int(result[key]):
             raise ValueError(f'{key}: use an integer.')
         result[key] = int(result[key])
