@@ -159,6 +159,57 @@ def response_step(response, heating, hours, lag):
     return end, average
 
 
+def effective_loss(model, wind=None):
+    """Optional learned wind correction around a shared 3 m/s reference.
+
+Missing wind uses the ordinary loss coefficient; never interpret absence as calm.
+"""
+    speed=number(wind)
+    if speed is None or not 0<=speed<=60:return model['loss']
+    coefficient=max(0,min(number(model.get('wind_loss'),0),model['loss']/6))
+    return max(.001,min(.05,model['loss']+coefficient*(min(speed,20)-3)))
+
+
+def _solve_three(matrix, vector):
+    rows=[list(row)+[value] for row,value in zip(matrix,vector)]
+    for i in range(3):
+        pivot=max(range(i,3),key=lambda j:abs(rows[j][i]))
+        rows[i],rows[pivot]=rows[pivot],rows[i]
+        if abs(rows[i][i])<1e-12:return None
+        scale=rows[i][i];rows[i]=[v/scale for v in rows[i]]
+        for j in range(3):
+            if j!=i:
+                scale=rows[j][i];rows[j]=[a-scale*b for a,b in zip(rows[j],rows[i])]
+    return [row[-1] for row in rows]
+
+
+def learn_wind(model, room, x, y, z, wind, hours):
+    """Joint, regularized fit; no correction until varied wind and both heat states exist."""
+    speed=number(wind)
+    if speed is None or not 0<=speed<=60:return
+    speed=min(speed,20)
+    stat=model.setdefault('wind_statistics',{'matrix':[[0.0]*3 for _ in range(3)],'vector':[0.0]*3,'hours':0.0,'sum':0.0,'squared':0.0})
+    features=[x,y,x*(speed-3)]
+    for i in range(3):
+        stat['vector'][i]+=features[i]*z*hours
+        for j in range(3):stat['matrix'][i][j]+=features[i]*features[j]*hours
+    stat['hours']+=hours;stat['sum']+=speed*hours;stat['squared']+=speed*speed*hours
+    variance=stat['squared']/stat['hours']-(stat['sum']/stat['hours'])**2
+    if stat['hours']<24 or variance<1 or model.get('heated_hours',0)<12 or model.get('idle_hours',0)<12:return
+    matrix=[row[:] for row in stat['matrix']];vector=stat['vector'][:]
+    prior=initial_model(room)
+    for i,weight in enumerate((200,20,10000)):matrix[i][i]+=weight
+    vector[0]+=200*prior['loss'];vector[1]+=20*prior['gain']
+    solved=_solve_three(matrix,vector)
+    if solved is None:return
+    loss,gain,wind_loss=solved
+    if .001<=loss<=.05 and .03<=gain<=3 and 0<=wind_loss<=loss/6:
+        model['loss']=.98*model['loss']+.02*loss
+        model['gain']=.98*model['gain']+.02*gain
+        model['wind_loss']=.98*model.get('wind_loss',0)+.02*wind_loss
+        model['wind_updates']=model.get('wind_updates',0)+1
+
+
 def heat_retention(model):
     """Comparable modeled cooling with identical reference conditions, not energy efficiency.
 
@@ -214,7 +265,7 @@ multi-day counterfactual cost savings are asserted from these observations.
     response, average = response_step(model['response'], previous['activity'], dt, room['lag_hours'])
     x = previous['outdoor']-previous['temperature']
     y = average * previous.get('water_factor', 1.0)
-    prediction = previous['temperature'] + dt*(model['loss']*x+model['gain']*y+model.get('base_gain',0))
+    prediction = previous['temperature'] + dt*(effective_loss(model,previous.get('wind'))*x+model['gain']*y+model.get('base_gain',0))
     model['response'] = response
     error = abs(prediction-current['temperature'])
     model['mae'] = error if model['mae'] is None else .95*model['mae']+.05*error
@@ -223,6 +274,8 @@ multi-day counterfactual cost savings are asserted from these observations.
     z = (current['temperature']-previous['temperature'])/dt-model.get('base_gain',0)
     if abs(z) > 2:
         return prediction
+    raw_z=z
+    z-=(effective_loss(model,previous.get('wind'))-model['loss'])*x
     decay = .999
     for key, value in (('xx', x*x), ('xy', x*y), ('yy', y*y), ('xz', x*z), ('yz', y*z)):
         model[key] = decay*model[key]+value*dt
@@ -248,6 +301,7 @@ multi-day counterfactual cost savings are asserted from these observations.
             model['loss'] = .98*model['loss']+.02*loss
             model['gain'] = .98*model['gain']+.02*gain
             model['parameter_updates']=model.get('parameter_updates',0)+1
+    learn_wind(model,room,x,y,raw_z,previous.get('wind') if current.get('wind') is not None else None,dt)
     return prediction
 
 
@@ -352,6 +406,10 @@ ending the known-price horizon with insufficient estimated thermal reserve.
         if hours <= 0:
             continue
         candidates = []
+        wind=number(room.get('wind_speed'))
+        if wind is not None:wind=3+(wind-3)*math.exp(-(slot.start-now).total_seconds()/10800)
+        slot_loss=effective_loss(model,wind)
+        if fireplace:slot_loss*=1+room['fireplace_reduction']/100
         for violation, shortfall, cost, temp, response, last, run, credit, path in beam:
             for mode in (0,1,2):
                 on=mode==2
@@ -369,7 +427,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                 request = min(room['maximum'],baseline+room['boost']) if on else max(room['minimum'],baseline+room['setback']) if mode==1 else baseline
                 heating = 1.0 if temp < request else 0.0
                 r, average = response_step(response, heating, hours, room['lag_hours'])
-                predicted = temp+hours*(loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0))
+                predicted = temp+hours*(slot_loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0))
                 if mode==1 and predicted<baseline:
                     continue  # Stored warmth must carry the room toward its comfort target.
                 below, above = max(0, room['minimum']-predicted), max(0, predicted-room['maximum'])

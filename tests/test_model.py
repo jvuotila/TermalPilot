@@ -352,3 +352,27 @@ class HeatRetentionTests(unittest.TestCase):
         result=heat_retention({'loss':.007})
         self.assertAlmostEqual(result['drop_6h'],30*(1-math.exp(-.007*6)),places=3)
         self.assertAlmostEqual(30*(1-math.exp(-.007*result['hours_per_degree'])),1,places=2)
+
+
+class WindModelTests(unittest.TestCase):
+    def test_missing_wind_is_normal_loss_and_correction_is_bounded(self):
+        from thermal_pilot.model import effective_loss
+        model={'loss':.007,'wind_loss':.001}
+        self.assertEqual(effective_loss(model,None),.007)
+        self.assertEqual(effective_loss(model,-1),.007)
+        self.assertEqual(effective_loss(model,3),.007)
+        self.assertGreater(effective_loss(model,10),effective_loss(model,0))
+        self.assertLessEqual(effective_loss({'loss':.04,'wind_loss':10},60),.05)
+    def test_learning_requires_varied_wind_and_sufficient_observations(self):
+        from thermal_pilot.model import learn_wind
+        model={**initial_model(ROOM_DEFAULTS),'heated_hours':20,'idle_hours':20}
+        for _ in range(200):learn_wind(model,ROOM_DEFAULTS,-30,.5,-.05,4,.25)
+        self.assertNotIn('wind_loss',model)
+        model={**initial_model(ROOM_DEFAULTS),'heated_hours':20,'idle_hours':20}
+        for i in range(240):
+            wind=1 if i%4<2 else 5;y=i%2;x=-30
+            z=.007*x+.3*y+.0005*x*(wind-3)
+            learn_wind(model,ROOM_DEFAULTS,x,y,z,wind,.25)
+        self.assertGreater(model.get('wind_updates',0),0)
+        self.assertGreater(model['wind_loss'],0)
+        self.assertLessEqual(model['wind_loss'],model['loss']/6)

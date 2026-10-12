@@ -74,6 +74,35 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['control']['fallback_rooms'],['Study'])
         self.assertEqual(data['control']['targets'][self.c.settings['rooms'][0]['id']],20)
 
+    async def test_optional_wind_missing_stale_and_invalid_never_block_live_control(self):
+        self.c.settings.update(wind_entity='sensor.netatmo_tuuli_ms',simulation_enabled=False,live_control_confirmed=True)
+        for state in [None,State('unavailable'),State('nan',{'unit_of_measurement':'m/s'}),State('10',{'unit_of_measurement':'m/s'})]:
+            if state is None:self.hass.states.pop('sensor.netatmo_tuuli_ms',None)
+            else:
+                state.last_updated=now-timedelta(hours=3);state.last_reported=now
+                self.hass.states['sensor.netatmo_tuuli_ms']=state
+            data=await self.c._async_update_data()
+            self.assertFalse(data['wind']['available'])
+            self.assertTrue(data['collection']['collecting'])
+            self.assertFalse(data['control']['fallback_rooms'])
+            self.assertIsNotNone(next(iter(data['rooms'].values()))['plan'])
+
+    async def test_wind_units_smoothing_recovery_and_sensor_change(self):
+        self.c.settings['wind_entity']='sensor.netatmo_tuuli_ms'
+        state=State('10',{'unit_of_measurement':'m/s'});state.last_updated=now;state.last_reported=now
+        self.hass.states['sensor.netatmo_tuuli_ms']=state
+        self.assertEqual(self.c.wind_reading(now)['speed'],10)
+        state.state='18';state.attributes['unit_of_measurement']='km/h';state.last_updated=now+timedelta(minutes=5);state.last_reported=state.last_updated
+        self.assertEqual(self.c.wind_reading(state.last_updated)['speed'],7.5)
+        state.state='unavailable';self.assertFalse(self.c.wind_reading(state.last_updated)['available'])
+        state.state='18';self.assertEqual(self.c.wind_reading(state.last_updated)['speed'],5)
+        data=await self.c._async_update_data()
+        rid=self.c.settings['rooms'][0]['id'];self.c.models[rid].update(wind_loss=.001,wind_updates=5,wind_statistics={'old':True})
+        self.c.settings['wind_entity']=''
+        await self.c._async_update_data()
+        self.assertNotIn('wind_statistics',self.c.models[rid]);self.assertNotIn('wind_loss',self.c.models[rid])
+        self.assertGreaterEqual(self.c.models[rid]['samples'],data['rooms'][rid]['model']['samples'])
+
     async def test_chart_prices_are_exposed_and_recorded(self):
         data=await self.c._async_update_data()
         self.assertEqual(data['price_chart'][0]['price'],10)

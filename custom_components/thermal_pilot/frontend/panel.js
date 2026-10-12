@@ -4,6 +4,7 @@ const dateLabel = value => new Date(value).toLocaleDateString('fi-FI',{day:'2-di
 const timeLabel = value => `${dateLabel(value)} ${new Date(value).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false})}`;
 const entityLabel = state => state?.attributes?.friendly_name || (state?.entity_id?.split('.').slice(1).join('.').replace(/_/g,' ')) || 'Unavailable entity';
 const settingHelp = {
+  wind_entity: 'Optional local wind sensor, for example sensor.netatmo_tuuli_ms using m/s. Valid readings are averaged over the last 30 minutes. ThermalPilot learns a separate wind effect only after enough varied observations; no fixed wind penalty is assumed. Missing, invalid or unchanged-for-two-hours readings are ignored, and normal temperature-based planning and heating continue. Fresh wind correction gradually returns to typical conditions in forecasts further ahead. A stable calm reading may also be ignored conservatively. Units are detected automatically.',
   minimum: 'Emergency lower temperature limit shared by all rooms. Each room’s own target is the normal comfort goal. ThermalPilot prioritizes avoiding this limit even when electricity is expensive; this value is not the idle thermostat target.',
   maximum: 'Upper temperature limit shared by all rooms. Extra heating and heat storage must stay within this limit.',
   price_forecast_entity: 'Optional sensor with forecast timestamp/value entries, such as Nordpool Predict FI. Only relative expensive/cheap patterns after confirmed prices are used, so no forecast price unit or additional costs are required. The Source price unit setting applies only to the confirmed total-price sensor. An expensive upcoming period can increase the heat reserve at the end of the known-price plan. Forecast prices are not compared directly with your total prices, used as confirmed prices or used to execute future heating commands. Missing forecasts keep normal planning. Confirmed prices always determine the executable schedule.',
@@ -26,7 +27,7 @@ const settingHelp = {
 const sourceSettingGroups = [
   ['Integration settings',['heating_enabled','simulation_enabled']],
   ['Electricity price settings',['price_entity','price_forecast_entity','price_unit','pricing_mode']],
-  ['Weather and forecast settings',['weather_entity','outdoor_entity','summer_minimum_temperature']],
+  ['Weather and forecast settings',['weather_entity','outdoor_entity','wind_entity','summer_minimum_temperature']],
   ['Heating settings',['minimum_run_minutes','fireplace_entity','fireplace_active_state']],
   ['Miscellaneous',['sensor_warning_hours']],
 ];
@@ -54,6 +55,7 @@ function entityMatches(state,rule={},settings={}){
   if(rule.kind==='relay')return domain==='switch';
   if(rule.kind==='water')return domain==='climate'?Object.hasOwn(attrs,'current_temperature'):domain==='sensor'&&temperature;
   if(rule.kind==='temperature')return temperature;
+  if(rule.kind==='wind')return domain==='sensor'&&['m/s','km/h','mph','kn','knots'].includes(unit);
   if(rule.kind==='power')return deviceClass==='power'||(!deviceClass&&['w','kw'].includes(unit));
   if(rule.kind==='price_forecast')return domain==='sensor'&&Array.isArray(attrs.forecast);
   if(rule.kind==='price')return ['today','tomorrow','raw_today','raw_tomorrow'].some(key=>Array.isArray(attrs[key]));

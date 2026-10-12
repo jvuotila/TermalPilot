@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.35 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.36 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -559,3 +559,17 @@ cooling. This measures the effective combination of heat leakage and thermal
 mass, not measured energy efficiency or an insulation grade. Initial estimates
 are marked; adapting models can still be affected by wind, ventilation, sensor
 placement and unmeasured gains. Reference times are not safe heating-off durations.
+
+### Optional local wind sensor
+
+Under Weather and forecast settings, select **Wind speed (optional)**, such as
+`sensor.netatmo_tuuli_ms`. Units are detected automatically; m/s, km/h, mph and
+knots are supported. Readings are averaged over 30 minutes. A separate wind
+effect is learned only after sufficient heating, idle and varied wind observations;
+selecting a sensor does not apply an assumed wind penalty.
+
+Missing, invalid or unchanged-for-two-hours readings are ignored. Heating,
+ordinary temperature-based planning and room learning continue. Stable calm
+readings can also be ignored conservatively. Wind is optional and never becomes
+an essential input for live control. Near-term forecasts use fresh wind data;
+the correction gradually returns to typical conditions further ahead.

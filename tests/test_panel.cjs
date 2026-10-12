@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.35 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.36 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -429,3 +429,11 @@ assert.ok(retentionHTML.indexOf('Slow &lt;cooling&gt;')<retentionHTML.indexOf('F
 assert.match(retentionHTML,/0.70 °C/);assert.match(retentionHTML,/8.0 hours/);assert.match(retentionHTML,/Initial estimate/);assert.match(retentionHTML,/Adapting/);assert.match(retentionHTML,/not measured energy efficiency/);
 assert.match(retentionHTML,/id="retention-accordion" open/);retentionPanel.retentionOpen=false;assert.doesNotMatch(retentionPanel.heatRetentionView(),/id="retention-accordion" open/);
 console.log('Room retention UI checks passed: common reference, slower-first sorting, escaped names, data labels and accordion state.');
+
+const windMatches=vm.runInContext('entityMatches',context);
+assert.equal(windMatches({entity_id:'sensor.netatmo_tuuli_ms',attributes:{unit_of_measurement:'m/s'}},{kind:'wind'}),true);
+assert.equal(windMatches({entity_id:'sensor.temperature',attributes:{unit_of_measurement:'°C'}},{kind:'wind'}),false);
+const weatherFields=vm.runInContext('sourceSettingGroups',context).find(group=>group[0]==='Weather and forecast settings')[1];
+assert.ok(weatherFields.includes('wind_entity'));
+assert.match(vm.runInContext('settingHelp.wind_entity',context),/planning and heating continue/);
+console.log('Optional wind settings checks passed: m\/s selector, weather group and fallback help.');

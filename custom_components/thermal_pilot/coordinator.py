@@ -44,6 +44,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         self._plan_settings = None
         self._source_timer = None
         self._source_unsubscribe = None
+        self.wind_samples = []
+        self.wind_source = None
 
     def stop(self):
         self.cancel_command_timer()
@@ -57,7 +59,7 @@ class PilotCoordinator(DataUpdateCoordinator):
     def listen_sources(self):
         if self._source_unsubscribe:
             self._source_unsubscribe()
-        entities = {self.settings[key] for key in ('price_entity','price_forecast_entity','outdoor_entity','water_entity','weather_entity','fireplace_entity') if self.settings[key]}
+        entities = {self.settings[key] for key in ('price_entity','price_forecast_entity','outdoor_entity','water_entity','weather_entity','wind_entity','fireplace_entity') if self.settings[key]}
         entities.update(room[key] for room in self.settings['rooms'] for key in ('temperature_entity','thermostat','activity_entity') if room[key])
         self._source_unsubscribe = async_track_state_change_event(self.hass,entities,self.source_changed)
 
@@ -130,6 +132,32 @@ class PilotCoordinator(DataUpdateCoordinator):
     def value(self, entity):
         state = self.hass.states.get(entity) if entity else None
         return number(state.state) if state else None
+
+    def wind_reading(self, now):
+        """Optional, bounded, smoothed input; frozen readings expire after two hours."""
+        entity=self.settings['wind_entity']
+        if entity!=self.wind_source:self.wind_samples=[];self.wind_source=entity
+        status={'enabled':bool(entity),'available':False,'speed':None}
+        if not entity:return status
+        state=self.hass.states.get(entity)
+        value=number(state.state) if state else None
+        factors={'m/s':1,'km/h':1/3.6,'mph':.44704,'kn':.514444,'knots':.514444}
+        unit=str(state.attributes.get('unit_of_measurement','')).strip().lower() if state else ''
+        times=[getattr(state,key,None) for key in ('last_updated','last_reported')] if state else []
+        fresh=[t for t in times if hasattr(t,'timestamp')]
+        valid=state and state.state not in ('unknown','unavailable') and value is not None and unit in factors and fresh
+        if valid:
+            value*=factors[unit]
+            valid=0<=value<=60 and all(0<=now.timestamp()-t.timestamp()<=7200 for t in fresh)
+        if not valid:
+            self.wind_samples=[]
+            status['reason']='Missing, stale or invalid wind reading; normal temperature-based planning continues.'
+            return status
+        bucket=int(now.timestamp())//300*300
+        self.wind_samples=[(t,v) for t,v in self.wind_samples if t>=now.timestamp()-1800 and t!=bucket]
+        self.wind_samples.append((bucket,value))
+        status.update(available=True,speed=sum(v for _,v in self.wind_samples)/len(self.wind_samples))
+        return status
 
     def activity(self, room):
         entity = room['activity_entity'] or room['thermostat']
@@ -322,6 +350,9 @@ class PilotCoordinator(DataUpdateCoordinator):
             price_outlook.update(price_forecast_reserve(attrs,slots[-1].end,RESERVE_HOURS))
             if not price_outlook['available']:
                 warnings.append('Optional price forecast unavailable; planning uses confirmed prices and the normal heat reserve.')
+        wind_status=self.wind_reading(now)
+        if wind_status['enabled'] and not wind_status['available']:
+            warnings.append('Optional wind sensor unavailable or stale; heating and temperature-based planning continue.')
         outdoors = []
         for slot in slots:
             points = []
@@ -351,13 +382,17 @@ class PilotCoordinator(DataUpdateCoordinator):
                 model = self.models[rid] = initial_model(room)
                 self.previous.pop(rid, None)
             self.config_fingerprint[rid] = fingerprint
+            if model.get('wind_source','')!=self.settings['wind_entity']:
+                for key in ('wind_loss','wind_statistics','wind_updates'):model.pop(key,None)
+                model['wind_source']=self.settings['wind_entity']
+                self.previous.pop(rid,None)
             if not self.season['collecting']:
                 model['response'] = 0.0
             activity = self.activity(room)
             thermostat_state = self.hass.states.get(room['thermostat'])
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
-                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint}
+                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint+[self.settings['wind_entity']]}
             if temperature is None or outdoor is None or baseline is None or water is None:
                 result['error'] = 'Room temperature, outdoor temperature, supply water temperature or target temperature is unavailable.'
                 self.previous.pop(rid, None)
@@ -367,7 +402,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             else:
                 water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature)))
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
-                           'activity':activity, 'water':water, 'water_factor':water_factor, 'excluded':fireplace}
+                           'activity':activity, 'water':water, 'water_factor':water_factor, 'wind':wind_status['speed'], 'excluded':fireplace}
                 prediction = None
                 if self.season['collecting'] and rid in self.previous:
                     prediction = learn(model, room, self.previous[rid], current)
@@ -378,6 +413,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 if slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
+                        'wind_speed':wind_status['speed'],
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
@@ -395,7 +431,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['model'] = deepcopy(model)
                 result['one_step_prediction'] = prediction
                 if self.season['collecting']:
-                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint, 'actual_setpoint':actual_request,
+                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint+[self.settings['wind_entity']], 'actual_setpoint':actual_request,
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None,
                                  'price':slots[0].price if slots else None})
@@ -422,7 +458,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
-                'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,
+                'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,'wind':wind_status,
                 'collection_evidence':self.collection_evidence(),
                 'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None},
                 'fallback_season':self.fallback_summary()}

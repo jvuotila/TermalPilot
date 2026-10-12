@@ -1,6 +1,6 @@
 """ThermalPilot constants; scheduled control is opt-in; simulation is enabled by default."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.35'
+VERSION = '0.1.36'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7
@@ -9,7 +9,7 @@ WATER_REFERENCE = 32.0
 DEFAULTS = {
     'price_entity': '', 'price_forecast_entity': '', 'price_unit': 'c/kWh',
     'pricing_mode': 'flexible', 'minimum_run_minutes': 60,
-    'weather_entity': '', 'outdoor_entity': '',
+    'weather_entity': '', 'outdoor_entity': '', 'wind_entity': '',
     'water_entity': '', 'fireplace_entity': '',
     'fireplace_active_state': 'on',
     'heating_enabled': True, 'simulation_enabled': True,

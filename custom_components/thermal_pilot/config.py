@@ -13,6 +13,7 @@ SOURCE_FIELDS = [
  ('minimum_run_minutes','Minimum flexible heating run (minutes)','number',15,360,15),
  ('weather_entity','Weather forecast source','weather'),
  ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
+ ('wind_entity','Wind speed (optional)','sensor',{'kind':'wind'}),
  ('water_entity','Supply water temperature source','sensor,climate',{'kind':'water'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
@@ -55,6 +56,8 @@ def entity_matches(state, rule, settings=None):
         return (domain == 'climate' and 'current_temperature' in attrs) or (domain == 'sensor' and temperature)
     if kind == 'temperature':
         return temperature
+    if kind == 'wind':
+        return domain == 'sensor' and unit in ('m/s','km/h','mph','kn','knots')
     if kind == 'power':
         return device_class == 'power' or (not device_class and unit in ('w', 'kw'))
     if kind == 'price_forecast':

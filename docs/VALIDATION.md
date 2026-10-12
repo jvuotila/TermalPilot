@@ -1,6 +1,6 @@
 # Validation status
 
-- 123 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 127 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -133,3 +133,8 @@ additions, a refreshed saved baseline and cancellation/confirmation of tab chang
 Heat-retention comparisons are checked for a fixed reference, analytical cooling,
 monotonic room ranking, invalid parameters, initial/adapting labels and independence
 from current heating/background/slab-response inputs.
+
+Optional wind tests cover missing, invalid, unavailable and frozen readings while
+live planning continues, unit conversion, smoothing/recovery and source changes
+without resetting baseline learning. Model tests cover bounded correction, missing
+wind fallback and refusal to learn a wind effect without varied observations.

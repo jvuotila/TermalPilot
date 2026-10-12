@@ -124,3 +124,29 @@ the selected mode's setpoint. Comfort shortfall remains ahead of the price objec
 Thermostat timing applies advance boost windows, their chosen post-window state,
 and explicit normal restoration commands; an overlapping boost takes precedence.
 No fixed post-heating duration or calibrated physical slab-capacity claim is made.
+
+## Optional wind correction
+
+Valid local wind observations are smoothed over 30 minutes and normalized to m/s.
+The learned loss coefficient is `loss + wind_loss * (min(wind, 20) - 3)`,
+bounded to 0.001–0.05 per hour. The shared reference is 3 m/s; missing wind
+uses ordinary `loss`, rather than assuming calm weather. Room heat-retention
+comparisons use this same ordinary reference coefficient.
+
+A regularized three-feature fit separates outdoor temperature difference,
+heating response and the wind interaction. Wind fitting requires at least 24
+hours of valid observations, 12 heating hours, 12 idle hours and wind variance
+of at least 1 (m/s)². The nonnegative wind coefficient is limited to `loss / 6`
+and accepted fits are blended slowly. This is an empirical room-response
+estimate; appliances, ventilation and other unmeasured gains can confound it.
+
+Both update/report timestamps, when present, must be within two hours. Invalid
+values, unsupported units and speeds outside 0–60 m/s clear smoothing and are
+ignored. Unchanged calm readings may therefore also be ignored. Missing wind
+never blocks essential-source readiness, planning, base learning or thermostat
+control. Changing the wind entity resets only the wind fit and observation
+continuity, preserving accumulated heating/idle data and the baseline model.
+
+Forecast wind gradually returns to 3 m/s with a three-hour exponential time
+constant; local gusts are not projected unchanged through the entire horizon.
+Archived forecast comparisons distinguish changes in the configured wind source.
