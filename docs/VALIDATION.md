@@ -1,6 +1,6 @@
 # Validation status
 
-- 120 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 123 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -129,3 +129,7 @@ the same starting state with reduction disabled requests heat.
 
 Unsaved-setting checks cover typed values, toggle edits, reverting changes, room
 additions, a refreshed saved baseline and cancellation/confirmation of tab changes.
+
+Heat-retention comparisons are checked for a fixed reference, analytical cooling,
+monotonic room ranking, invalid parameters, initial/adapting labels and independence
+from current heating/background/slab-response inputs.

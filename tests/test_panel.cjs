@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.34 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.35 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -422,3 +422,10 @@ context.confirm=()=>true;dirtyPanel.switchTab('history');assert.equal(switched,1
 dirtyPanel.info.settings=structuredClone(dirtyPanel.settings);assert.equal(dirtyPanel.hasUnsavedSettings(),false);
 dirtyPanel.settings.rooms.push({id:'b',baseline:19.5});assert.equal(dirtyPanel.hasUnsavedSettings(),true);
 console.log('Unsaved settings checks passed: edits, toggles, undo, saved baseline, room additions and cancel/confirm tab navigation.');
+
+const retentionPanel=new Component();retentionPanel.info={data:{rooms:{fast:{name:'Fast cooling',heat_retention:{drop_6h:2,hours_per_degree:3,heating_hours:20,idle_hours:30,updated:true}},slow:{name:'Slow <cooling>',heat_retention:{drop_6h:.7,hours_per_degree:8,heating_hours:0,idle_hours:3,updated:false}}}}};
+let retentionHTML=retentionPanel.heatRetentionView();
+assert.ok(retentionHTML.indexOf('Slow &lt;cooling&gt;')<retentionHTML.indexOf('Fast cooling'));
+assert.match(retentionHTML,/0.70 °C/);assert.match(retentionHTML,/8.0 hours/);assert.match(retentionHTML,/Initial estimate/);assert.match(retentionHTML,/Adapting/);assert.match(retentionHTML,/not measured energy efficiency/);
+assert.match(retentionHTML,/id="retention-accordion" open/);retentionPanel.retentionOpen=false;assert.doesNotMatch(retentionPanel.heatRetentionView(),/id="retention-accordion" open/);
+console.log('Room retention UI checks passed: common reference, slower-first sorting, escaped names, data labels and accordion state.');

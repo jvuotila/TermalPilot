@@ -12,7 +12,7 @@ from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REF
 from .history import HistoryDatabase
 from .control import ThermostatControl
 from .config import stored_settings
-from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve
+from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -408,6 +408,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             else:
                 result['learning_note'] = 'Model adapting to observations; assess reliability from prediction error.'
             result['learning_progress'] = learning_progress(model,now)
+            result['heat_retention'] = heat_retention(model)
             room_data[rid] = result
         cutoff = now.timestamp()-HISTORY_DAYS*86400
         await self.hass.async_add_executor_job(self.history_db.append, readings, cutoff, self.season['season_id'])

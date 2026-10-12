@@ -329,3 +329,26 @@ class ThreeStatePlanningTests(unittest.TestCase):
         self.assertGreaterEqual(reduced['slots'][0]['temperature'],20)
         self.assertTrue(normal['slots'][0]['predicted_demand'])
         self.assertEqual(reduced['slots'][-1]['mode'],'normal')
+
+
+class HeatRetentionTests(unittest.TestCase):
+    def test_same_reference_conditions_allow_room_comparison(self):
+        from thermal_pilot.model import heat_retention
+        slower=heat_retention({'loss':.005,'gain':3,'response':1,'base_gain':5})
+        faster=heat_retention({'loss':.02,'gain':0,'response':0,'base_gain':0})
+        self.assertLess(slower['drop_6h'],faster['drop_6h'])
+        self.assertGreater(slower['hours_per_degree'],faster['hours_per_degree'])
+        self.assertEqual(heat_retention({'loss':.005}),slower)
+        self.assertEqual(slower['indoor'],20);self.assertEqual(slower['outdoor'],-10)
+    def test_invalid_parameters_and_honest_initial_or_adapting_state(self):
+        from thermal_pilot.model import heat_retention
+        for loss in [None,0,-1,float('nan')]:self.assertIsNone(heat_retention({'loss':loss}))
+        self.assertFalse(heat_retention({'loss':.007,'heated_hours':20,'idle_hours':20})['updated'])
+        self.assertTrue(heat_retention({'loss':.008,'heated_hours':20,'idle_hours':20})['updated'])
+        self.assertTrue(heat_retention({'loss':.007,'parameter_updates':1})['updated'])
+    def test_reference_cooling_follows_loss_equation(self):
+        from thermal_pilot.model import heat_retention
+        import math
+        result=heat_retention({'loss':.007})
+        self.assertAlmostEqual(result['drop_6h'],30*(1-math.exp(-.007*6)),places=3)
+        self.assertAlmostEqual(30*(1-math.exp(-.007*result['hours_per_degree'])),1,places=2)

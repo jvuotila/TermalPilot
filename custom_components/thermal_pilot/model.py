@@ -159,6 +159,23 @@ def response_step(response, heating, hours, lag):
     return end, average
 
 
+def heat_retention(model):
+    """Comparable modeled cooling with identical reference conditions, not energy efficiency.
+
+Use loss alone: 20°C indoors, -10°C outdoors, no heating, residual response
+or background gains. Effective loss includes both heat leakage and thermal mass.
+"""
+    loss=number(model.get('loss'))
+    if loss is None or loss<=0:
+        return None
+    drop=30*(-math.expm1(-loss*6))
+    hours=-math.log(29/30)/loss
+    return {'drop_6h':round(drop,3),'hours_per_degree':round(hours,2),
+            'indoor':20,'outdoor':-10,'heating_hours':round(model.get('heated_hours',0),1),
+            'idle_hours':round(model.get('idle_hours',0),1),
+            'updated':model.get('parameter_updates',0)>0 or ('parameter_updates' not in model and abs(loss-.007)>1e-9 and model.get('heated_hours',0)>=12 and model.get('idle_hours',0)>=12)}
+
+
 def learning_progress(model, now):
     """Initial evidence coverage and ETA, never a readiness-to-control claim."""
     heating=max(0,model.get('heated_hours',0));idle=max(0,model.get('idle_hours',0))
@@ -230,6 +247,7 @@ multi-day counterfactual cost savings are asserted from these observations.
         if 0.001 <= loss <= 0.05 and .03 <= gain <= 3:
             model['loss'] = .98*model['loss']+.02*loss
             model['gain'] = .98*model['gain']+.02*gain
+            model['parameter_updates']=model.get('parameter_updates',0)+1
     return prediction
 
 

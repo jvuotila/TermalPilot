@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.34 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.35 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -548,3 +548,14 @@ it schedules a new boost. All modes retain thermostat local temperature regulati
 Settings shows an Unsaved changes notice beside Save settings when edits differ
 from saved values. Reverting edits clears it. Switching tabs asks before discarding
 unsaved edits; a successful save establishes the new saved baseline.
+
+### Room heat retention
+
+The Plan page compares rooms using one reference experiment: 20°C indoors and
+−10°C outdoors, with heating, stored slab response and background heat omitted.
+The modeled 6-hour temperature drop is 30 × (1 − exp(−loss × 6)); the time for a
+1°C drop is −ln(29/30) / loss. Lower drop and longer time imply slower modeled
+cooling. This measures the effective combination of heat leakage and thermal
+mass, not measured energy efficiency or an insulation grade. Initial estimates
+are marked; adapting models can still be affected by wind, ventilation, sensor
+placement and unmeasured gains. Reference times are not safe heating-off durations.
