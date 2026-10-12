@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.33 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.34 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -528,3 +528,23 @@ Forecast demand, lowered commands and live control use this same clamped value.
 At or below the minimum, heating is requested regardless of price. A cold start
 or inadequate heating capacity can still cause a predicted violation; the panel
 reports that risk. Future accuracy still depends on the learned thermal model.
+
+### Temporary reduction and normal restoration
+
+The planner now chooses Boost, Reduced or Normal for every slot. Normal uses the
+room target; Boost stores warmth ahead of predicted need. Reduced is available
+only after a planned boost while predicted residual warmth supports room comfort
+and prices are above the known horizon's median. A boost always returns to Normal
+first; reduction is a separate subsequent decision. The thermal prediction and comfort ranking
+choose whether reduction is useful; it ends when warmth or the price condition
+no longer supports it. There is no fixed seven-hour setting. A small preference
+for reduced mode during qualifying expensive slots breaks otherwise equivalent
+choices, with a switching penalty to discourage unnecessary transitions.
+The setting is named Peak-hour reduction (°C). Normal restoration is an explicit timed thermostat command. A new boosted window
+overrides reduction, and minimum/maximum guards still apply. After a restart,
+prior reduction eligibility is not assumed: a fresh plan starts from Normal unless
+it schedules a new boost. All modes retain thermostat local temperature regulation.
+
+Settings shows an Unsaved changes notice beside Save settings when edits differ
+from saved values. Reverting edits clears it. Switching tabs asks before discarding
+unsaved edits; a successful save establishes the new saved baseline.

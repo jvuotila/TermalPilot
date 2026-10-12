@@ -261,6 +261,33 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
         self.assertFalse(self.c.managed_rooms)
 
+    async def test_live_timer_restores_normal_after_temporary_reduction(self):
+        from thermal_pilot.model import thermostat_timing
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        rid=self.c.settings['rooms'][0]['id']
+        rows=[{'start':now.isoformat(),'end':(now+timedelta(hours=1)).isoformat(),'heat':True,'mode':'boost'},
+              {'start':(now+timedelta(hours=1)).isoformat(),'end':(now+timedelta(hours=2)).isoformat(),'heat':False,'mode':'reduced'},
+              {'start':(now+timedelta(hours=2)).isoformat(),'end':(now+timedelta(hours=3)).isoformat(),'heat':False,'mode':'normal'}]
+        timing={**thermostat_timing(rows,self.c.settings,20,now),'slots':rows}
+        self.c._plan_settings=deepcopy(self.c.settings)
+        self.c.data={'rooms':{rid:{'plan':timing}}}
+        with patch('thermal_pilot.coordinator.async_track_point_in_utc_time',return_value=lambda:None) as timer:
+            await self.c.update_command_state(now)
+            self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],21.5)
+            self.assertEqual(timer.call_args.args[2],now+timedelta(minutes=50))
+            self.hass.states['climate.room'].attributes['temperature']=21.5
+            await self.c.update_command_state(now+timedelta(minutes=50))
+            self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+            self.assertEqual(timer.call_args.args[2],now+timedelta(hours=1))
+            self.hass.states['climate.room'].attributes['temperature']=20
+            await self.c.update_command_state(now+timedelta(hours=1))
+            self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],19)
+            self.assertEqual(timer.call_args.args[2],now+timedelta(hours=2))
+            self.hass.states['climate.room'].attributes['temperature']=19
+            await self.c.update_command_state(now+timedelta(hours=2))
+            self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],20)
+            self.assertEqual(self.c.data['rooms'][rid]['plan']['mode'],'normal')
+
     async def test_live_missing_inputs_and_expired_plan_use_normal_target(self):
         self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
         self.hass.states['climate.room'].attributes['temperature']=22

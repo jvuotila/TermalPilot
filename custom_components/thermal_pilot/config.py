@@ -22,7 +22,7 @@ SOURCE_FIELDS = [
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
  ('maximum','Maximum allowed temperature (°C)','number',5,35,0.1),
  ('boost','Heating setpoint boost (°C)','number',0,5),
- ('setback','Idle setpoint reduction (°C)','number',-5,0,0.1),
+ ('setback','Peak-hour reduction (°C)','number',-5,0,0.1),
  ('start_offset_minutes','Raise thermostat before heating starts (minutes)','number',0,30),
  ('stop_offset_minutes','Lower thermostat before heating stops (minutes)','number',0,30),
  ('lag_hours','Estimated thermal response lag (hours)','number',.25,12),

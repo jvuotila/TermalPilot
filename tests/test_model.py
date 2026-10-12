@@ -293,3 +293,39 @@ class RoomComfortGoalTests(unittest.TestCase):
         result=plan(room,initial_model(room),18.8,[-10]*128,self.prices(1000),NOW,20)
         self.assertTrue(result['scheduled_heat'])
         self.assertEqual(result['setpoint'],21.5)
+
+class ThreeStatePlanningTests(unittest.TestCase):
+    def run_plan(self, temperature, previous='normal', prices=None):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'previous_control_mode':previous,'previous_suggested_heat':previous=='boost','previous_run_hours':1,'terminal_reserve_hours':0}
+        prices=prices or [40]*8+[5]*8
+        slots=[Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),p) for i,p in enumerate(prices)]
+        model=initial_model(room)
+        if previous in ('boost','reduced'):model['response']=.3
+        return plan(room,model,temperature,[4]*len(slots),slots,NOW,20)
+    def test_no_previous_session_defaults_to_normal_instead_of_indefinite_reduction(self):
+        result=self.run_plan(22)
+        self.assertTrue(all(row['mode']=='normal' for row in result['slots']))
+        self.assertEqual(result['mode'],'normal');self.assertEqual(result['setpoint'],20)
+    def test_stored_warmth_bridges_expensive_hours_then_restores_normal(self):
+        result=self.run_plan(21,previous='boost')
+        self.assertEqual(result['slots'][0]['mode'],'normal')
+        self.assertTrue(any(row['mode']=='reduced' for row in result['slots'][1:8]))
+        self.assertEqual(result['slots'][-1]['mode'],'normal')
+        self.assertTrue(any(c['action']=='restore' for c in result['commands']))
+    def test_reduction_ends_if_room_is_below_target_despite_high_price(self):
+        result=self.run_plan(19.8,previous='reduced',prices=[100]*8+[5]*8)
+        self.assertNotEqual(result['slots'][0]['mode'],'reduced')
+        self.assertTrue(all(row['setpoint']>=19 for row in result['slots']))
+
+    def test_reduction_avoids_demand_when_residual_slab_heat_can_restore_comfort(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'terminal_reserve_hours':0,
+              'previous_control_mode':'reduced','reduction_available':True}
+        model={**initial_model(room),'response':.8}
+        slots=[Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),40 if i<8 else 5) for i in range(16)]
+        reduced=plan(room,model,19.98,[4]*16,slots,NOW,20)
+        normal=plan({**room,'reduction_available':False},model,19.98,[4]*16,slots,NOW,20)
+        self.assertEqual(reduced['slots'][0]['mode'],'reduced')
+        self.assertFalse(reduced['slots'][0]['predicted_demand'])
+        self.assertGreaterEqual(reduced['slots'][0]['temperature'],20)
+        self.assertTrue(normal['slots'][0]['predicted_demand'])
+        self.assertEqual(reduced['slots'][-1]['mode'],'normal')

@@ -383,13 +383,15 @@ class PilotCoordinator(DataUpdateCoordinator):
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
                         'committed_session':self.committed_session(rid,now),
                         'previous_suggested_heat':run.get('heat',False),
+                        'previous_control_mode':run.get('mode','boost' if run.get('heat') else 'normal'),
+                        'reduction_available':run.get('reduction_available',run.get('heat',False)),
                         'previous_run_hours':max(0,(now.timestamp()-run.get('since',now.timestamp()))/3600)}
                     result['plan'] = await self.hass.async_add_executor_job(plan, settings, deepcopy(model),
                         temperature, outdoors, slots, now, baseline, water_factor, fireplace)
                 if result['plan']:
                     heat = result['plan']['scheduled_heat']
                     old = self.suggested_runs.get(rid,{})
-                    self.suggested_runs[rid] = {'heat':heat,'since':old.get('since',now.timestamp()) if old.get('heat')==heat else now.timestamp()}
+                    self.suggested_runs[rid] = {'heat':heat,'mode':result['plan'].get('scheduled_mode','boost' if heat else 'normal'),'reduction_available':result['plan'].get('reduction_available',heat),'since':old.get('since',now.timestamp()) if old.get('heat')==heat else now.timestamp()}
                 result['model'] = deepcopy(model)
                 result['one_step_prediction'] = prediction
                 if self.season['collecting']:

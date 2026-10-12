@@ -37,3 +37,22 @@ class OffsetTests(unittest.TestCase):
         self.assertEqual(timing['setpoint'],19)
         self.assertEqual(timing['commands'][-1]['setpoint'],19)
         self.assertEqual(thermostat_state(timing,T+timedelta(hours=1))['setpoint'],19)
+    def test_three_states_restore_normal_after_a_temporary_reduction(self):
+        rows=[{'start':T.isoformat(),'end':(T+timedelta(hours=1)).isoformat(),'heat':True,'mode':'boost'},
+              {'start':(T+timedelta(hours=1)).isoformat(),'end':(T+timedelta(hours=3)).isoformat(),'heat':False,'mode':'reduced'},
+              {'start':(T+timedelta(hours=3)).isoformat(),'end':(T+timedelta(hours=4)).isoformat(),'heat':False,'mode':'normal'}]
+        timing=thermostat_timing(rows,DEFAULTS,20,T-timedelta(hours=1))
+        self.assertEqual(timing['mode'],'normal');self.assertEqual(timing['setpoint'],20)
+        self.assertEqual([c['action'] for c in timing['commands']],['raise','restore','lower','restore'])
+        self.assertEqual(thermostat_state(timing,T+timedelta(minutes=10))['mode'],'boost')
+        self.assertEqual(thermostat_state(timing,T+timedelta(minutes=50))['mode'],'normal')
+        restored=thermostat_state(timing,T+timedelta(hours=3))
+        self.assertEqual(restored['setpoint'],20);self.assertEqual(restored['mode'],'normal')
+    def test_next_boost_overrides_reduction_and_later_normal_is_restored(self):
+        rows=[{'start':T.isoformat(),'end':(T+timedelta(hours=1)).isoformat(),'heat':False,'mode':'reduced'},
+              {'start':(T+timedelta(hours=1)).isoformat(),'end':(T+timedelta(hours=2)).isoformat(),'heat':True,'mode':'boost'},
+              {'start':(T+timedelta(hours=2)).isoformat(),'end':(T+timedelta(hours=3)).isoformat(),'heat':False,'mode':'normal'}]
+        timing=thermostat_timing(rows,DEFAULTS,20,T)
+        self.assertEqual(timing['setpoint'],19)
+        self.assertEqual(thermostat_state(timing,T+timedelta(minutes=55))['setpoint'],21.5)
+        self.assertEqual(thermostat_state(timing,T+timedelta(hours=1,minutes=50))['setpoint'],20)

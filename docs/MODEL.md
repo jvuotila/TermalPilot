@@ -111,3 +111,16 @@ prices; emergency recovery can override minimum run length near horizon expiry.
 The target is not a hard feasibility constraint: below-target recovery can occur
 when the room starts cold or capacity is insufficient. Reported safety risk still
 refers to the shared absolute minimum/maximum limits.
+
+## Three control states
+
+Beam states carry Normal/Reduced/Boost modes. Only Boost is a planned heat-storage
+session and is subject to the flexible minimum run. Reduced is eligible after a
+planned Boost with remaining model response, a next-slot prediction at or above
+room target, and above-median confirmed price. A boost must return to Normal
+first. Eligibility can continue across Normal while residual warmth remains; it
+ends when the model response dissipates or the comfort forecast no longer supports it. Demand is calculated from
+the selected mode's setpoint. Comfort shortfall remains ahead of the price objective.
+Thermostat timing applies advance boost windows, their chosen post-window state,
+and explicit normal restoration commands; an overlapping boost takes precedence.
+No fixed post-heating duration or calibrated physical slab-capacity claim is made.

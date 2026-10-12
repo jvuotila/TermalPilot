@@ -1,6 +1,6 @@
 # Validation status
 
-- 113 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 120 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -118,3 +118,14 @@ with immediate comfort recovery.
 
 Thermostat step rounding also respects configured minimum/maximum bounds;
 unsupported narrow ranges report an error instead of sending an out-of-range target.
+
+Three-state checks cover default Normal, post-boost expensive-period reduction,
+restoration during cheap hours or below-target recovery, advance valve offsets,
+new-boost precedence and live timer commands through Boost → Normal → Reduced → Normal.
+
+A residual-heat regression verifies that reduction avoids a predicted thermostat
+call during expensive hours while stored response raises the room back to target;
+the same starting state with reduction disabled requests heat.
+
+Unsaved-setting checks cover typed values, toggle edits, reverting changes, room
+additions, a refreshed saved baseline and cancellation/confirmation of tab changes.
