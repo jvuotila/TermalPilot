@@ -71,7 +71,7 @@ console.log('Room accordion tests passed (closed by default, summary learning pr
  const handlers={},form={addEventListener:(name,handler)=>handlers[name]=handler,querySelector:()=>null,querySelectorAll:()=>[]};let removed=0;
  toastPanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:selector==='.save-toast'?{remove:()=>removed++}:null;
  toastPanel.call=async()=>{};toastPanel.render();await handlers.submit({preventDefault(){}});
- assert.match(toastPanel.shadowRoot.innerHTML,/<div class="message save-toast" role="status"/);
+ assert.match(toastPanel.shadowRoot.innerHTML,/<div class="message save-toast notice-info" role="status"/);
  assert.match(toastPanel.shadowRoot.innerHTML,/position:fixed;bottom:/);
  assert.equal(timers.size,1);
  await handlers.submit({preventDefault(){}});assert.equal(timers.size,1);
@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.36 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.37 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -437,3 +437,22 @@ const weatherFields=vm.runInContext('sourceSettingGroups',context).find(group=>g
 assert.ok(weatherFields.includes('wind_entity'));
 assert.match(vm.runInContext('settingHelp.wind_entity',context),/planning and heating continue/);
 console.log('Optional wind settings checks passed: m\/s selector, weather group and fallback help.');
+
+const messageLevel=vm.runInContext('statusMessageLevel',context),notice=vm.runInContext('statusNotice',context);
+assert.equal(messageLevel('ThermalPilot is passive. Planning, collection and learning are stopped.'),'info');
+assert.equal(messageLevel('Optional wind sensor unavailable or stale; heating continues.'),'warning');
+assert.equal(messageLevel('Thermostat control: Winter fallback targets are being used because required data is unavailable.'),'warning');
+assert.equal(messageLevel('Thermostat control: Study: applying target failed; will retry.'),'error');
+assert.match(notice('Save failed <retry>','error','message'),/notice-error message" role="alert"/);
+assert.match(notice('Save failed <retry>','error'),/&lt;retry&gt;/);
+console.log('Status-level checks passed: passive information, optional-source and fallback warnings, command errors and escaped alerts.');
+
+const messageIcon=vm.runInContext('statusIcon',context);
+for(const level of ['error','warning','info']){
+ assert.match(notice('Example',level),/class="notice-icon"/);
+ assert.match(messageIcon(level),/aria-hidden="true"/);
+ assert.ok(messageIcon(level).includes(level[0].toUpperCase()+level.slice(1)+': '));
+}
+assert.notEqual(messageIcon('error'),messageIcon('info'));
+assert.notEqual(messageIcon('warning'),messageIcon('error'));
+console.log('Message icons passed: distinct error/warning/info shapes, decorative SVG and accessible level labels.');

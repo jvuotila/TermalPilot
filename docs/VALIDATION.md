@@ -138,3 +138,5 @@ Optional wind tests cover missing, invalid, unavailable and frozen readings whil
 live planning continues, unit conversion, smoothing/recovery and source changes
 without resetting baseline learning. Model tests cover bounded correction, missing
 wind fallback and refusal to learn a wind effect without varied observations.
+
+Message template checks cover information, warning and error levels, distinct prefix icons, accessible level labels and escaped content. Wide Plan layouts use two columns with equal card heights; smaller layouts stack them. Visual rendering still needs user review.
