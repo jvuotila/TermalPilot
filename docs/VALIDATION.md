@@ -1,6 +1,6 @@
 # Validation status
 
-- 107 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 113 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -109,3 +109,12 @@ Optional price forecast tests cover relative trend signals, invariance to price
 unit scaling and fixed fees, missing/stale/gapped forecasts, increased terminal
 reserve, confirmed-price chart preservation and live fallback when confirmed
 prices are unavailable.
+
+Comfort regression tests cover per-room target planning over 32 hours, heating
+during expensive prices, distinct emergency limits, reduced-target clamping in
+forecast/timing commands and cold-room recovery. The flexible-run example now
+starts above the room target so price shifting can be tested without conflicting
+with immediate comfort recovery.
+
+Thermostat step rounding also respects configured minimum/maximum bounds;
+unsupported narrow ranges report an error instead of sending an out-of-range target.

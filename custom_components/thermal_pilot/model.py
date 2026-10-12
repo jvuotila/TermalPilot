@@ -262,7 +262,7 @@ def thermostat_timing(rows, settings, baseline, now):
         else:
             windows.append({'start':start.isoformat(), 'end':end.isoformat()})
     boosted = min(settings['maximum'],baseline+settings['boost'])
-    reduced = baseline+settings['setback']
+    reduced = max(settings['minimum'],baseline+settings['setback'])
     commands = [command for window in windows for command in (
         {'time':window['start'],'setpoint':boosted,'action':'raise'},
         {'time':window['end'],'setpoint':reduced,'action':'lower'})]
@@ -277,7 +277,7 @@ def thermostat_state(timing, now):
 
 
 def plan(room, model, temperature, outdoor, slots, now, baseline, water_factor=1.0, fireplace=False):
-    """Beam-search rolling horizon. Comfort violations dominate monetary ranking.
+    """Beam-search rolling horizon. Safety limits, room comfort, then price savings.
 
 Not an exact optimizer; price cost is normalized to one kW of heating input.
 The first slot uses only its remaining duration. Terminal reserve penalizes
@@ -292,60 +292,72 @@ ending the known-price horizon with insufficient estimated thermal reserve.
     loss, gain = model['loss'], model['gain']
     if fireplace:
         loss *= 1 + room['fireplace_reduction']/100
-    # violation-degree-hours, objective, temperature, response, last_on, path
+    # safety violation, target shortfall, objective, temperature, response, last_on, run, path
     minimum_run = room.get('minimum_run_minutes',60)/60
     last_on = room.get('previous_suggested_heat',False)
     run_hours = room.get('previous_run_hours',0.0) if last_on else 0.0
-    beam = [(0.0, 0.0, temperature, model['response'], int(last_on), run_hours, [])]
+    beam = [(0.0, 0.0, 0.0, temperature, model['response'], int(last_on), run_hours, [])]
     for i, slot in enumerate(slots):
         hours = (slot.end-max(now, slot.start)).total_seconds()/3600
         if hours <= 0:
             continue
         candidates = []
-        for violation, cost, temp, response, last, run, path in beam:
+        for violation, shortfall, cost, temp, response, last, run, path in beam:
             for on in (0, 1):
                 if committed_start is not None and slot.end > committed_start and max(now,slot.start) < committed_end and not on:
                     continue  # A published session has already begun its valve-opening window.
                 if not on and last and run < minimum_run-1e-6:
                     continue
-                if on and not last and (slots[-1].end-max(now,slot.start)).total_seconds()/3600 < minimum_run:
+                if on and not last and temp > room['minimum'] and (slots[-1].end-max(now,slot.start)).total_seconds()/3600 < minimum_run:
                     continue
+                if not on and temp <= room['minimum']:
+                    continue  # Restore heat at the absolute lower limit, regardless of price.
                 # Demand proxy: real thermostats may call for heat in setback too.
-                request = min(room['maximum'], baseline+room['boost']) if on else baseline+room['setback']
+                request = min(room['maximum'], baseline+room['boost']) if on else max(room['minimum'],baseline+room['setback'])
                 heating = 1.0 if temp < request else 0.0
                 r, average = response_step(response, heating, hours, room['lag_hours'])
                 predicted = temp+hours*(loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0))
                 below, above = max(0, room['minimum']-predicted), max(0, predicted-room['maximum'])
                 v = violation+hours*(below+above)
+                deficit = shortfall+hours*max(0,baseline-predicted)
                 c = cost+slot.price*heating*hours + .3*abs(on-last) + .15*hours*(predicted-baseline)**2
                 row = {'start': max(slot.start, now).isoformat(), 'end': slot.end.isoformat(),
                        'price': round(slot.price, 3), 'outdoor': round(outdoor[i], 2),
                        'heat': bool(on), 'predicted_demand': bool(heating),
                        'temperature': round(predicted, 3), 'setpoint': round(request, 2)}
-                candidates.append((v, c, predicted, r, on, min(minimum_run,(run if last else 0)+hours) if on else 0.0, path+[row]))
+                candidates.append((v, deficit, c, predicted, r, on, min(minimum_run,(run if last else 0)+hours) if on else 0.0, path+[row]))
         # Preserve different thermal states; only retain the best per bucket.
         unique = {}
-        for candidate in sorted(candidates, key=lambda c: (c[0], c[1])):
-            key = (round(candidate[2]*20), round(candidate[3]*20), candidate[4], round(candidate[5]*4))
+        for candidate in sorted(candidates, key=lambda c: (round(c[0],6),round(c[1],6),c[2])):
+            key = (round(candidate[3]*20), round(candidate[4]*20), candidate[5], round(candidate[6]*4))
             if key not in unique:
                 unique[key] = candidate
         beam = list(unique.values())[:80]
     def terminal(candidate):
-        v, c, temp, response, last, run, path = candidate
+        v, deficit, c, temp, response, last, run, path = candidate
         reserve = min(12, room.get('terminal_reserve_hours', 6))
         _, average = response_step(response, 0, max(.1, reserve), room['lag_hours'])
         final = temp+reserve*(loss*(outdoor[-1]-temp)+gain*water_factor*average+model.get('base_gain',0))
-        return (v+max(0, room['minimum']-final)*reserve, c)
+        return (round(v+max(0, room['minimum']-final)*reserve,6),round(deficit+max(0,baseline-final)*reserve,6),c)
     best = min(beam, key=terminal)
     rows = best[-1]
     if not rows:
         return None
     risk = best[0] > .01 or terminal(best)[0] > .01
     timing = thermostat_timing(rows,room,baseline,now)
+    forecast_minimum=min(row['temperature'] for row in rows)
+    forecast_maximum=max(row['temperature'] for row in rows)
+    suggested_hours=sum((stamp(row['end'])-stamp(row['start'])).total_seconds()/3600 for row in rows if row['heat'])
+    demand_hours=sum((stamp(row['end'])-stamp(row['start'])).total_seconds()/3600 for row in rows if row['predicted_demand'])
+    explanation=('No boost planned: the model expects some thermostat demand at the reduced target.' if demand_hours else
+                 f"No heating planned: lowest forecast {forecast_minimum:.1f}°C; room target {baseline:.1f}°C; minimum limit {room['minimum']:.1f}°C.")
     return {'slots': rows, 'scheduled_heat':rows[0]['heat'], **timing,
+            'forecast_minimum':forecast_minimum,'forecast_maximum':forecast_maximum,
+            'comfort_floor':room['minimum'],'comfort_target':baseline,'target_shortfall_degree_hours':round(best[1],3),'suggested_heating_hours':round(suggested_hours,2),
+            'predicted_demand_hours':round(demand_hours,2),
             'reason': ('Temperature limit risk: review model assumptions and heating capacity.' if risk else
                        'Heat storage or a bridging run ahead of predicted cooling.' if rows[0]['heat'] else
-                       'Estimated stored heat is sufficient; no setpoint boost is suggested now.'),
+                       'Heating is planned later; no boost is suggested now.' if suggested_hours else explanation),
             'comfort_risk': risk, 'violation_degree_hours': round(best[0], 3),
             'known_price_hours': round(sum((stamp(r['end'])-stamp(r['start'])).total_seconds()/3600 for r in rows),2), 'curve_hours': round(curve_hours(room, min(outdoor)), 1)}
 

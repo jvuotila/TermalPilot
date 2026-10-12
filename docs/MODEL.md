@@ -99,3 +99,15 @@ boosted-target intervals are combined to avoid contradictory commands.
 Thermostat-state publications at command boundaries do not rerun learning or
 operate devices. Price/temperature trajectories still model intended heat
 delivery, rather than a measured hydraulic/pump response to each command.
+
+## Room comfort priority
+
+Candidate schedules rank safety-limit violations first, integrated temperature
+shortfall below the individual room target second, and price/deviation/switching
+cost third. Terminal reserve protects both the minimum and room target. Idle
+setpoints are clamped to the minimum in demand calculations and thermostat timing.
+At or below the minimum, a boosted session is required even during expensive
+prices; emergency recovery can override minimum run length near horizon expiry.
+The target is not a hard feasibility constraint: below-target recovery can occur
+when the room starts cold or capacity is insufficient. Reported safety risk still
+refers to the shared absolute minimum/maximum limits.

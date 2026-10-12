@@ -29,3 +29,11 @@ class OffsetTests(unittest.TestCase):
     def test_no_heat_has_no_commands(self):
         timing=thermostat_timing([{'start':T.isoformat(),'end':(T+timedelta(hours=1)).isoformat(),'heat':False}],{**DEFAULTS,'maximum':23},20,T)
         self.assertEqual(timing['commands'],[]);self.assertEqual(timing['setpoint'],19)
+
+    def test_reduced_target_never_crosses_absolute_minimum(self):
+        rows=[{'start':T.isoformat(),'end':(T+timedelta(hours=1)).isoformat(),'heat':True}]
+        timing=thermostat_timing(rows,{**DEFAULTS,'minimum':19,'setback':-1},19.5,T-timedelta(hours=1))
+        self.assertEqual(timing['reduced_setpoint'],19)
+        self.assertEqual(timing['setpoint'],19)
+        self.assertEqual(timing['commands'][-1]['setpoint'],19)
+        self.assertEqual(thermostat_state(timing,T+timedelta(hours=1))['setpoint'],19)

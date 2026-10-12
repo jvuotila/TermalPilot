@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.32 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.33 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -515,3 +515,16 @@ separate unit or additional-cost setting. Plans and charts still use confirmed
 prices. Missing confirmed prices still trigger the existing comfort fallback.
 Forecast changes trigger a refresh, and confirmed tomorrow prices take precedence.
 This is a bounded planning hint, not a seven-day executable heating schedule.
+
+### Comfort and idle targets
+
+Each room's target is the normal comfort goal. Planning first minimizes predicted
+violations of the shared minimum/maximum limits, then shortfall below the room's
+target, then price cost and switching. Cheaper hours can be used to store warmth
+above target within the maximum; expensive prices do not make the shared minimum
+the normal operating goal. Idle reduction is temporary between heating windows:
+its thermostat target is max(minimum allowed temperature, room target + reduction).
+Forecast demand, lowered commands and live control use this same clamped value.
+At or below the minimum, heating is requested regardless of price. A cold start
+or inadequate heating capacity can still cause a predicted violation; the panel
+reports that risk. Future accuracy still depends on the learned thermal model.

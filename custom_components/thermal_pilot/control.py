@@ -1,5 +1,6 @@
 """Apply thermostat targets; never operate relays or heat-pump modes directly."""
 import asyncio
+import math
 from .model import number
 
 
@@ -32,12 +33,23 @@ class ThermostatControl:
                 if attrs.get('temperature_unit','°C') != '°C':
                     errors.append(f"{room['name']}: live control requires a thermostat using °C.")
                     continue
-                low, high = number(attrs.get('min_temp',5)), number(attrs.get('max_temp',35))
+                device_low, device_high = number(attrs.get('min_temp',5)), number(attrs.get('max_temp',35))
+                floor, ceiling = number(room.get('control_minimum')), number(room.get('control_maximum'))
+                low = max(device_low,floor) if device_low is not None and floor is not None else device_low
+                high = min(device_high,ceiling) if device_high is not None and ceiling is not None else device_high
                 if low is None or high is None or not low <= requested <= high:
                     errors.append(f"{room['name']}: target is outside thermostat limits.")
                     continue
                 step = number(attrs.get('target_temp_step'))
-                target = round(min(high,max(low,low+round((requested-low)/step)*step)) if step and step>0 else requested,3)
+                if step and step>0:
+                    first = math.ceil((low-device_low)/step-1e-9)
+                    last = math.floor((high-device_low)/step+1e-9)
+                    if first>last:
+                        errors.append(f"{room['name']}: no supported thermostat target fits the temperature limits.")
+                        continue
+                    target = round(device_low+min(last,max(first,round((requested-device_low)/step)))*step,3)
+                else:
+                    target = round(requested,3)
                 previous = self.pending.get(entity)
                 actual = number(attrs.get('temperature'))
                 if (not self.require_initial_write or entity in self.reconciled) and actual is not None and abs(actual-target)<0.001 and not (previous and previous['target']!=target):

@@ -43,6 +43,16 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await self.control.apply([self.room],{'r':22},1,lambda:True))
         self.assertEqual(self.hass.services.async_call.await_count,2)
 
+    async def test_device_step_rounding_cannot_lower_idle_target_below_minimum(self):
+        room={**self.room,'control_minimum':19.2,'control_maximum':23.2}
+        await self.control.apply([room],{'r':19.2},0,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],19.5)
+        await self.control.apply([room],{'r':23.2},1,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],23)
+        room.update(control_minimum=19.2,control_maximum=19.3)
+        self.assertTrue(await self.control.apply([room],{'r':19.2},2,lambda:True))
+        self.assertEqual(self.hass.services.async_call.await_count,2)
+
 
 class ActivationTests(unittest.TestCase):
     def test_explicit_consent_and_legacy_preference(self):

@@ -484,7 +484,9 @@ class PilotCoordinator(DataUpdateCoordinator):
                 fallback.append(room['name'])
             targets[room['id']] = target
         permitted = lambda: self.settings == snapshot and self.live_enabled()
-        errors = release_errors+await self.control.apply(snapshot['rooms'],targets,now.timestamp(),permitted)
+        control_rooms=[{**room,'control_minimum':snapshot['minimum'] if targets[room['id']]>=snapshot['minimum'] else None,
+                        'control_maximum':snapshot['maximum']} for room in snapshot['rooms']]
+        errors = release_errors+await self.control.apply(control_rooms,targets,now.timestamp(),permitted)
         for room in snapshot['rooms']:
             if room['id'] in self.control.results:
                 self.managed_rooms[room['thermostat']] = deepcopy(room)

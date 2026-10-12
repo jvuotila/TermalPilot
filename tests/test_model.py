@@ -195,7 +195,7 @@ class FlexibleRunExampleTests(unittest.TestCase):
         room={**ROOM_DEFAULTS,'boost':DEFAULTS['boost'],'setback':DEFAULTS['setback'],'lag_hours':.5,'minimum_run_minutes':60,'terminal_reserve_hours':3}
         model={**initial_model(room),'gain':1.0,'loss':.02,'base_gain':0}
         slots=[Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),1 if i<5 else 40) for i in range(32)]
-        result=plan(room,model,19.1,[-10]*32,slots,NOW,20)
+        result=plan(room,model,20.2,[-10]*32,slots,NOW,20)
         lengths=[];run=0
         for row in result['slots']:
             if row['heat']:run+=15
@@ -253,3 +253,43 @@ class PriceForecastTests(unittest.TestCase):
         for attrs,end in [({},NOW),(self.forecast([10]*5),NOW),(invalid,NOW),(stale,NOW+timedelta(days=2))]:
             result=price_forecast_reserve(attrs,end)
             self.assertFalse(result['available']);self.assertEqual(result['reserve_hours'],6)
+
+class PlannerExplanationTests(unittest.TestCase):
+    def test_idle_plan_reports_forecast_floor_and_later_sessions_are_not_hidden(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'minimum':19}
+        slots=[Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),20) for i in range(128)]
+        result=plan(room,initial_model(room),21.4,[4]*128,slots,NOW,20)
+        self.assertEqual(result['suggested_heating_hours'],0)
+        self.assertEqual(result['comfort_floor'],19)
+        self.assertEqual(result['forecast_minimum'],min(row['temperature'] for row in result['slots']))
+        self.assertIn('lowest forecast',result['reason'])
+        self.assertNotIn('stored heat is sufficient',result['reason'])
+        result=plan({**room,'minimum':19.5},initial_model(room),20.2,[4]*128,slots,NOW,20)
+        self.assertGreater(result['suggested_heating_hours'],0)
+        if not result['scheduled_heat']:self.assertIn('planned later',result['reason'])
+
+
+class RoomComfortGoalTests(unittest.TestCase):
+    def prices(self, price=20):
+        return [Slot(NOW+timedelta(minutes=i*15),NOW+timedelta(minutes=(i+1)*15),price) for i in range(128)]
+    def test_room_target_requires_heating_before_the_global_minimum(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'minimum':19}
+        result=plan(room,initial_model(room),20.2,[4]*128,self.prices(),NOW,20)
+        self.assertGreater(result['suggested_heating_hours'],0)
+        self.assertGreaterEqual(result['forecast_minimum'],19.99)
+        self.assertEqual(result['comfort_target'],20)
+        self.assertEqual(result['comfort_floor'],19)
+        lower={**room,'baseline':19}
+        result=plan(lower,initial_model(lower),20.2,[4]*128,self.prices(),NOW,19)
+        self.assertLess(result['suggested_heating_hours'],2.75)
+    def test_expensive_prices_do_not_turn_idle_setpoint_into_comfort_goal(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'minimum':19,'setback':-2}
+        result=plan(room,initial_model(room),20.2,[4]*128,self.prices(1000),NOW,20)
+        self.assertGreater(result['suggested_heating_hours'],0)
+        self.assertGreaterEqual(result['forecast_minimum'],19.99)
+        self.assertEqual(result['reduced_setpoint'],19)
+    def test_minimum_limit_overrides_price_when_room_is_already_cold(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'baseline':20,'minimum':19}
+        result=plan(room,initial_model(room),18.8,[-10]*128,self.prices(1000),NOW,20)
+        self.assertTrue(result['scheduled_heat'])
+        self.assertEqual(result['setpoint'],21.5)
