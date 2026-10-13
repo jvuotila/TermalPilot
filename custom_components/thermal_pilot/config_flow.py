@@ -19,9 +19,9 @@ class ThermalPilotFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return self.async_create_entry(title='ThermalPilot', data={**DEFAULTS, **user_input})
         return self.async_show_form(step_id='user', data_schema=vol.Schema({
-            vol.Required('price_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'price_entity')),
+            vol.Optional('price_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'price_entity')),
             vol.Required('outdoor_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'outdoor_entity')),
-            vol.Required('water_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'water_entity')),
+            vol.Optional('water_entity'): selector.EntitySelector(setup_selector_config(self.hass, 'water_entity')),
         }))
 
     @staticmethod

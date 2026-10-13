@@ -465,3 +465,12 @@ class LanguageSettingsTests(unittest.TestCase):
             self.assertEqual(validate({**payload,'language':language})['language'],language)
         self.assertEqual(stored_settings({}, {'language':'fi'})['language'],'fi')
         with self.assertRaises(ValueError):validate({**payload,'language':'invalid'})
+
+class NonElectricSettingsTests(unittest.TestCase):
+    def test_price_optional_and_live_control_disabled_for_other_heat_sources(self):
+        from thermal_pilot.config import confirm_control_settings
+        for source in ['gas_boiler','oil_boiler','wood_boiler','pellet_boiler','district_heating','other']:
+            config=validate({**DEFAULTS,'house_heat_source':source,'outdoor_entity':'sensor.out','simulation_enabled':False})
+            result=confirm_control_settings(config,{},True)
+            self.assertEqual(result['price_entity'],'')
+            self.assertTrue(result['simulation_enabled']);self.assertFalse(result['live_control_confirmed'])

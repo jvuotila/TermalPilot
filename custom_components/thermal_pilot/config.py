@@ -99,6 +99,10 @@ def setup_selector_config(hass, key):
         if not entity_matches(state, rule)]}
 
 
+def electric_heating(settings):
+    return settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance')
+
+
 def water_distribution(settings):
     return settings.get('house_distribution','water_floor') not in ('electric_floor','electric_ceiling','electric_panels','warm_air')
 
@@ -149,7 +153,7 @@ def validate(payload, hass=None):
                         raise ValueError(f'{label}: incorrect entity domain.')
                     if hass is not None and hass.states.get(value) is None:
                         raise ValueError(f'{label}: entity {value} was not found.')
-    fields=[(field[0],field[1],'text') if field[0]=='water_entity' and not water_distribution(result) else field for field in SOURCE_FIELDS]
+    fields=[(field[0],field[1],'text') if (field[0]=='water_entity' and not water_distribution(result)) or (field[0] in ('price_entity','price_forecast_entity') and not electric_heating(result)) else field for field in SOURCE_FIELDS]
     check(result,fields)
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
@@ -161,7 +165,7 @@ def validate(payload, hass=None):
         raise ValueError('Cold curve temperature must be below warm curve temperature.')
     if result['minimum_run_minutes'] % 15:
         raise ValueError('Minimum heating run must be a multiple of 15 minutes.')
-    if not result['price_entity'] or not result['outdoor_entity']:
+    if (electric_heating(result) and not result['price_entity']) or not result['outdoor_entity']:
         raise ValueError('Select price and outdoor temperature sources.')
     if not isinstance(result['rooms'], list) or len(result['rooms']) > 30:
         raise ValueError('A maximum of 30 rooms is supported.')
@@ -201,6 +205,9 @@ def validate(payload, hass=None):
 def confirm_control_settings(settings, previous, confirmed=False):
     """A legacy simulation-off preference must never silently enable device writes."""
     settings['live_control_confirmed'] = False
+    if not electric_heating(settings):
+        settings['simulation_enabled']=True
+        return settings
     if not settings['simulation_enabled']:
         already_live = not previous.get('simulation_enabled',True) and previous.get('live_control_confirmed',False)
         if not already_live and confirmed is not True:

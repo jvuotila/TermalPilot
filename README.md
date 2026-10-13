@@ -1,6 +1,14 @@
 # ThermalPilot
 
-Version **0.1.42 — experimental simulation-first Home Assistant custom integration**.
+**ThermalPilot is primarily useful for heat pumps and electric resistance heating
+with a changing electricity tariff**, such as hourly or quarter-hour spot prices.
+Its main purpose is to shift heating toward cheaper periods while maintaining
+comfort. With a fixed electricity tariff, there is little tariff-shifting benefit.
+For gas, oil, wood/pellet or district heating, the current integration offers
+limited value: temperature history and thermal-response learning, without heating
+schedules, thermostat control or a required electricity-price sensor.
+
+Version **0.1.43 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -628,3 +636,13 @@ updates immediately; Save settings persists the selection. Room/entity names
 and heating parameters are unchanged. Embedded Home Assistant history cards
 retain Home Assistant’s own language preference. Finnish translations are an
 initial version and can be corrected as users review them.
+
+### Operating purpose
+
+Electric heat sources use Electricity optimization. Other heat sources use
+Comfort planning, currently observation and learning only. Switching to a
+non-electric source disables scheduled and season-setpoint control; previously
+managed thermostats are released to fallback targets once, after which no new
+control commands are generated. The price settings and scheduling chart are
+hidden and electricity prices are not required. Initial setup allows price and
+water sensors to be omitted; select the heat source in the sidebar settings.

@@ -45,6 +45,19 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_non_electric_sources_observe_without_prices_plans_or_control(self):
+        self.c.settings.update(price_entity='',price_forecast_entity='',simulation_enabled=False,live_control_confirmed=True,apply_season_setpoints=True)
+        self.hass.states.pop('sensor.price')
+        for source in ['gas_boiler','oil_boiler','wood_boiler','pellet_boiler','district_heating','other']:
+            self.c.settings['house_heat_source']=source
+            data=await self.c._async_update_data()
+            self.assertTrue(data['collection']['collecting'])
+            self.assertTrue(all(room['plan'] is None for room in data['rooms'].values()))
+            self.assertFalse(data['source_status']['prices_required'])
+            self.assertEqual(data['control']['mode'],'observation')
+            self.assertFalse(any('Price sensor' in w or 'No continuous prices' in w for w in data['warnings']))
+            self.hass.services.async_call.assert_not_awaited()
+
     async def test_nonwater_distributions_plan_learn_and_control_without_water(self):
         rid=self.c.settings['rooms'][0]['id']
         self.hass.states.pop('sensor.water')
@@ -97,7 +110,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_badges_use_usable_sources_and_least_observed_room(self):
         data = await self.c._async_update_data()
-        self.assertEqual(data['source_status'], {'prices':True,'outdoor':True,'water':True,'water_required':False})
+        self.assertEqual(data['source_status'], {'prices':True,'prices_required':True,'outdoor':True,'water':True,'water_required':False})
         self.c.models[self.c.settings['rooms'][0]['id']].update(heated_hours=150,idle_hours=160)
         self.c.settings['rooms'].append({**self.c.settings['rooms'][0],'id':'new-room'})
         self.assertEqual(self.c.collection_evidence()['heating_hours'],0)

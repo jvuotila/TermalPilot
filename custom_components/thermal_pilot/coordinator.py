@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
 from .control import ThermostatControl
-from .config import stored_settings, water_distribution
+from .config import stored_settings, water_distribution, electric_heating
 from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention, solar_signal, solar_facing, solar_enabled
 
 _LOGGER = logging.getLogger(__name__)
@@ -322,14 +322,18 @@ class PilotCoordinator(DataUpdateCoordinator):
             data['control'] = await self.apply_live_targets(data,now)
             data['warnings'].extend(f'Thermostat control: {w}' for w in data['control']['errors'])
             return data
+        scheduling=electric_heating(self.settings)
         warnings = list(setpoint_errors)
-        if not self.settings['simulation_enabled'] and not self.settings.get('live_control_confirmed'):
+        if not scheduling:warnings.append('Observation only: this heat source does not use electricity-price scheduling or thermostat control.')
+        if scheduling and not self.settings['simulation_enabled'] and not self.settings.get('live_control_confirmed'):
             warnings.append('Live control awaits confirmation. Enable simulation, save, then disable it and confirm to activate thermostat control.')
         if not self.season['collecting']:
             warnings.append('History collection and learning paused because outdoor temperature is unavailable. Existing model parameters are retained.')
         slots = []
         chart_prices = []
-        if source is None or source.state in ('unknown','unavailable'):
+        if not scheduling:
+            pass
+        elif source is None or source.state in ('unknown','unavailable'):
             warnings.append('Price sensor is missing or unavailable.')
         else:
             try:
@@ -339,11 +343,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                     for s in (price_slots(source.attributes,self.settings,midnight,ZoneInfo(self.hass.config.time_zone)) or slots)]
             except ValueError as error:
                 warnings.append(str(error))
-        if not slots:
+        if scheduling and not slots:
             warnings.append('No continuous prices from now: no heating plan is available.')
         if not forecasts:
             warnings.append('No weather forecast: current outdoor temperature is held constant. '+(self.forecast_error or 'No usable forecast was returned.'))
-        price_outlook = {'enabled':bool(self.settings['price_forecast_entity']),'reserve_hours':RESERVE_HOURS,'available':False}
+        price_outlook = {'enabled':scheduling and bool(self.settings['price_forecast_entity']),'reserve_hours':RESERVE_HOURS,'available':False}
         if price_outlook['enabled'] and slots:
             predicted_source=self.hass.states.get(self.settings['price_forecast_entity'])
             attrs=predicted_source.attributes if predicted_source and predicted_source.state not in ('unknown','unavailable') else {}
@@ -491,7 +495,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
                 'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,'wind':wind_status,
                 'collection_evidence':self.collection_evidence(),
-                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None or not uses_water,'water_required':False},
+                'source_status':{'prices':bool(slots),'prices_required':scheduling,'outdoor':outdoor is not None,'water':water is not None or not uses_water,'water_required':False},
                 'fallback_season':self.fallback_summary()}
         self._plan_settings = plan_settings
         data['control'] = await self.apply_live_targets(data,now)
@@ -508,7 +512,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         return self.settings['summer_setpoint'] if self.fallback_state.get('summer') else room['baseline']
 
     def live_enabled(self):
-        return not self.settings['simulation_enabled'] and self.settings.get('live_control_confirmed',False)
+        return electric_heating(self.settings) and not self.settings['simulation_enabled'] and self.settings.get('live_control_confirmed',False)
 
     async def release_managed_rooms(self, now, force=False):
         """Restore normal comfort targets on relinquishing thermostat ownership."""
@@ -529,7 +533,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         """Reconcile current windows and restore comfort targets when inputs fail."""
         release_errors = await self.release_managed_rooms(now)
         if not self.live_enabled():
-            return {'mode':'simulation','errors':release_errors,'fallback_rooms':[]}
+            return {'mode':'simulation' if electric_heating(self.settings) else 'observation','errors':release_errors,'fallback_rooms':[]}
         snapshot = deepcopy(self.settings)
         if self._plan_settings != snapshot:
             return {'mode':'waiting','errors':[],'fallback_rooms':[]}
@@ -568,7 +572,7 @@ class PilotCoordinator(DataUpdateCoordinator):
 
     async def apply_season_targets(self, heating_active):
         errors = []
-        if not self.settings['apply_season_setpoints'] or self.live_enabled():
+        if not electric_heating(self.settings) or not self.settings['apply_season_setpoints'] or self.live_enabled():
             self.applied_season_targets.clear()
             return errors
         for room in self.settings['rooms']:
