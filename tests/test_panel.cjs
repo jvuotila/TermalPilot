@@ -109,8 +109,8 @@ panel._hass={states:{'sensor.price':{entity_id:'sensor.price',attributes:{friend
 panel.settings={heating_enabled:true,apply_season_setpoints:false,rooms:[]};
 panel.info={settings:panel.settings,source_fields:[['price_entity','Price sensor','sensor']],room_fields:[],room_defaults:{},data:{warnings:[],rooms:{},history_info:{rows:0,bytes:0},collection:{collecting:false},heating_active:true}};
 panel.tab='settings';panel.render();assert.match(panel.shadowRoot.innerHTML,/Save settings/);assert.match(panel.shadowRoot.innerHTML,/data-field="source.price_entity"/);assert.match(panel.shadowRoot.innerHTML,/&lt;script&gt;/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/<script>alert/);
-panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/ThermalPilot status/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/your existing automation remains in control/);
-panel.settings.apply_season_setpoints=true;panel.render();assert.match(panel.shadowRoot.innerHTML,/SEASON SETPOINT CONTROL ENABLED/);
+panel.tab='overview';panel.render();assert.match(panel.shadowRoot.innerHTML,/ThermalPilot status/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Set passive/);assert.match(panel.shadowRoot.innerHTML,/Simulation is active\. ThermalPilot does not control heating\./);
+panel.settings.apply_season_setpoints=true;panel.render();assert.match(panel.shadowRoot.innerHTML,/season transitions can change thermostat targets/);
 panel.tab='history';panel.history=[];panel.render();assert.match(panel.shadowRoot.innerHTML,/Season archives/);assert.doesNotMatch(panel.shadowRoot.innerHTML,/Download observations|id="export"/);
 console.log('Panel template tests passed (settings, status, history, command-mode banner, escaping).');
 
@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.45 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.46 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -594,3 +594,38 @@ const stateField=damperPanel.field(['fireplace_active_state','Fireplace active w
 assert.match(stateField,/<select data-field="source.fireplace_active_state">/);assert.match(stateField,/value="on" selected>Open/);assert.match(stateField,/value="off" >Closed/);
 assert.doesNotMatch(stateField,/<input data-field="source.fireplace_active_state"/);
 console.log('Fireplace state selector checks passed: Open/Closed map to on/off, enum sensor options and no free-text entry.');
+
+const currentFireplace=vm.runInContext('fireplaceCurrentState',context);
+assert.equal(currentFireplace(damper),'Open');
+assert.equal(currentFireplace({...damper,state:'off'}),'Closed');
+assert.equal(currentFireplace({...damper,state:'unknown'}),'Unknown');assert.equal(currentFireplace(null),'Unavailable');
+assert.match(damperPanel.field(['fireplace_active_state','Fireplace active when','text'],{fireplace_entity:'binary_sensor.damper',fireplace_active_state:'off'},'source'),/Current state: Open/);
+const hint={textContent:''};damperPanel.settings={language:'fi',fireplace_entity:'binary_sensor.damper'};
+damperPanel.shadowRoot.querySelector=selector=>selector==='[data-current-fireplace]'?hint:selector==='[data-field="source.fireplace_entity"]'?{value:'binary_sensor.damper'}:null;
+damperPanel.updateFireplaceReading();assert.equal(hint.textContent,'Nykyinen tila: Auki');
+damperPanel._hass.states['binary_sensor.damper'].state='off';damperPanel.updateFireplaceReading();assert.equal(hint.textContent,'Nykyinen tila: Kiinni');
+assert.equal(damperPanel.settings.fireplace_active_state,undefined);
+console.log('Current fireplace state checks passed: contact labels, unknown/missing data, Finnish and updates without changing settings.');
+
+const reading=vm.runInContext('sourceReading',context);
+assert.equal(reading('price_entity','sensor.price',{state:'0',attributes:{unit_of_measurement:'c/kWh'}}),'0 c/kWh');
+assert.equal(reading('wind_entity','sensor.wind',{state:'4.2',attributes:{unit_of_measurement:'m/s'}}),'4.2 m/s');
+assert.equal(reading('water_entity','climate.water',{state:'heat',attributes:{temperature:40,current_temperature:31}}),'31 °C');
+assert.equal(reading('water_entity','climate.water',{state:'heat',attributes:{temperature:40}}),'No temperature reading');
+assert.equal(reading('weather_entity','weather.home',{state:'cloudy',attributes:{temperature:5,temperature_unit:'°C'}}),'Cloudy · 5 °C');
+assert.equal(reading('outdoor_entity','sensor.out',null),'Unavailable');assert.equal(reading('outdoor_entity','',null),'Not selected');
+const readingPanel=new Component();readingPanel.settings={language:'fi'};readingPanel._hass={states:{'sensor.unsaved':{state:'7',attributes:{unit_of_measurement:'°C'}}}};
+const readingHint={dataset:{sourceReading:'outdoor_entity'},textContent:''};
+readingPanel.shadowRoot.querySelectorAll=()=>[readingHint];readingPanel.shadowRoot.querySelector=()=>({value:'sensor.unsaved'});
+readingPanel.updateSourceReadings();assert.equal(readingHint.textContent,'Nykyinen tila: 7 °C');
+assert.equal(readingPanel.settings.outdoor_entity,undefined);
+assert.match(previewPanel.field(['outdoor_entity','Outdoor temperature','sensor',{kind:'temperature'}],{outdoor_entity:''},'source'),/data-source-reading="outdoor_entity"/);
+console.log('Selected-source reading checks passed: units, zero values, measured climate water, weather, missing data and unsaved selection updates.');
+
+const headerPanel=new Component();headerPanel.settings={simulation_enabled:true,heating_enabled:true};
+assert.match(headerPanel.headerStatus(),/header-simulation/);assert.match(headerPanel.headerStatus(),/>Simulation</);
+headerPanel.settings.simulation_enabled=false;assert.match(headerPanel.headerStatus(),/header-paused/);
+headerPanel.settings.live_control_confirmed=true;assert.match(headerPanel.headerStatus(),/header-live/);
+headerPanel.settings.heating_enabled=false;assert.match(headerPanel.headerStatus(),/Live control paused/);assert.doesNotMatch(headerPanel.headerStatus(),/header-live/);
+headerPanel.settings={language:'fi',simulation_enabled:true};assert.match(headerPanel.headerStatus(),/>Simulointi</);assert.doesNotMatch(headerPanel.headerStatus(),/SIMULOINTI/);
+console.log('Header control badge checks passed: simulation red, confirmed live green, paused/unconfirmed distinct and Finnish normal case.');

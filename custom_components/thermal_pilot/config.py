@@ -218,6 +218,6 @@ def confirm_control_settings(settings, previous, confirmed=False):
     if not settings['simulation_enabled']:
         already_live = not previous.get('simulation_enabled',True) and previous.get('live_control_confirmed',False)
         if not already_live and confirmed is not True:
-            raise ValueError('Confirm live control and disable your existing heating automation before turning simulation off.')
+            raise ValueError('Confirm live control before turning simulation off. If another automation controls these thermostats, disable it first.')
         settings['live_control_confirmed'] = True
     return settings
