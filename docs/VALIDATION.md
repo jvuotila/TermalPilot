@@ -153,6 +153,12 @@ House-profile tests cover legacy defaults, conditional validation, electric/air 
 
 Optional water tests cover empty sensor selection, continued planning/collection when a selected sensor is missing, neutral heating factor and water-based live control without water readings. Sensor-warning tests verify the new 8-hour default and preservation of explicit 6-hour settings.
 
-Language checks cover English default, Finnish persistence/validation, flag labels, translated messages, protected user names, ignored styles and language-neutral heating data. Native HA cards retain HA’s language settings.
+Language checks cover English default, Finnish persistence/validation, flag labels, translated messages, protected user names, ignored styles and language-neutral heating data. Native HA cards receive a local Finnish locale/state-label adapter without changing HA’s global language.
 
 Non-electric regression checks cover price-free configuration, continued collection, no plans or thermostat/season commands for all non-electric sources, forced read-only activation and hidden price UI.
+
+SVG language-picker checks cover Finland/UK artwork, hidden canonical language field, selection and change notification, arrow navigation and Escape dismissal. No Windows browser rendering was exercised by these template checks.
+
+Finnish room regressions cover dynamic ETA sentences, less-than-one-day estimates, comparison counts, forecast error labels, asynchronously added history links, localized native-card entity labels and isolated locale/state translation.
+
+Completed collection badge checks cover seven-day 3-hour forecast error, missing evidence, no-change/similar-heating context, Finnish numeric format and suppression in non-electric observation mode. The badge makes no live-readiness assertion.

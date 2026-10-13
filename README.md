@@ -8,7 +8,22 @@ For gas, oil, wood/pellet or district heating, the current integration offers
 limited value: temperature history and thermal-response learning, without heating
 schedules, thermostat control or a required electricity-price sensor.
 
-Version **0.1.43 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.44 — experimental simulation-first Home Assistant custom integration**.
+
+**Start in simulation and allow time for learning and validation.** Initial data
+collection reaches 100% after at least 12 observed heating hours and 12 idle
+hours; that is a minimum evidence threshold, not proof of reliable heating
+plans. Useful validation may take weeks or months, especially in mild weather
+with little heating. There is no fixed one-to-two-month deadline, automatic
+activation or guaranteed date when simulation can safely stop. Learning
+continues after initial collection.
+
+Review saved multi-hour forecasts against actual measurements and the no-change
+benchmark, including periods where actual heating matched the proposed plan.
+Also inspect heating schedules across heating/idle cycles, cold weather and
+changes in sun or wind. A small error during stable temperatures alone does not
+validate heating capacity, timing or live control.
+
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -633,8 +648,8 @@ The water sensor is optional even for hydronic systems. Valve offsets remain wat
 Under ThermalPilot settings → Integration settings, choose 🇬🇧 English or
 🇫🇮 Finnish beside Enable simulation. English is the default. The interface
 updates immediately; Save settings persists the selection. Room/entity names
-and heating parameters are unchanged. Embedded Home Assistant history cards
-retain Home Assistant’s own language preference. Finnish translations are an
+and heating parameters are unchanged. Embedded Home Assistant history cards receive the selected language for labels,
+state text and date formatting, without changing Home Assistant’s global preference. Finnish translations are an
 initial version and can be corrected as users review them.
 
 ### Operating purpose
@@ -646,3 +661,11 @@ managed thermostats are released to fallback targets once, after which no new
 control commands are generated. The price settings and scheduling chart are
 hidden and electricity prices are not required. Initial setup allows price and
 water sensors to be omitted; select the heat source in the sidebar settings.
+
+The language selector uses bundled inline SVG flags for English (UK) and Finnish, including the dropdown choices, so it does not depend on operating-system flag emoji support. Keyboard arrows, Enter/Space, Escape and normal tab navigation are supported.
+
+After initial collection, electric-system room headers show measured 3-hour
+forecast error over the latest seven days instead of initial-data progress. The
+tooltip includes comparison counts, the no-change benchmark and similar-heating
+results. Missing results show Forecast data pending. This is an accuracy
+measurement, not a readiness score or an automatic switch to live control.
