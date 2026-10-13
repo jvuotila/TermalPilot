@@ -12,6 +12,48 @@ schedules, thermostat control or a required electricity-price sensor.
 
 Version **0.9.2 — experimental simulation-first Home Assistant custom integration**.
 
+
+## Screenshots
+
+Examples from a configured installation. Room names, selected sensors and values
+shown here are examples, not preset defaults.
+
+![Electricity prices with suggested heating windows and observed thermostat activity](docs/screenshots/electricity-and-heating.png)
+
+<details>
+<summary>Room plan and forecast accuracy</summary>
+
+### Room plan
+
+![Room temperature forecast, initial learning progress and planned thermostat targets](docs/screenshots/room-plan.png)
+
+### Room history
+
+![Observed heating and saved one-, three- and six-hour forecast accuracy](docs/screenshots/room-history.png)
+
+</details>
+
+<details>
+<summary>Settings</summary>
+
+### Integration settings
+
+![Integration settings for prices, weather, simulation and language](docs/screenshots/integration-settings.png)
+
+### House heating settings
+
+![House heating system, distribution and response settings](docs/screenshots/house-heating-settings.png)
+
+### Shared room settings
+
+![Shared temperature limits, heating boost and peak-hour reduction](docs/screenshots/shared-room-settings.png)
+
+### Rooms
+
+![Room settings with the architectural floor-plan background](docs/screenshots/rooms-settings.png)
+
+</details>
+
 **Start in simulation and allow time for learning and validation.** Initial data
 collection reaches 100% after at least 12 observed heating hours and 12 idle
 hours; that is a minimum evidence threshold, not proof of reliable heating
