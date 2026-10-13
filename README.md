@@ -422,7 +422,9 @@ Background references:
 
 New releases after v0.1.40 use the **PolyForm Noncommercial License 1.0.0**.
 Noncommercial use, modification and sharing are permitted under its terms.
-Commercial use is not licensed. See [LICENSE](LICENSE) for the full terms.
+Commercial use is not licensed. See [LICENSE](LICENSE) for the project copyright
+notice (Copyright © 2026 Juho Vuotila) and summary, and [the full license terms](docs/POLYFORM-NONCOMMERCIAL-1.0.0.md)
+for the unchanged standard license.
 This is source-available software with a noncommercial restriction, rather than
 an unrestricted open-source license.
 
