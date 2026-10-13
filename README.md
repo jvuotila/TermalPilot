@@ -1,3 +1,5 @@
+**Use ThermalPilot at your own risk; it is provided without warranty, and, to the fullest extent permitted by applicable law, its author and contributors accept no liability for additional energy costs, equipment damage, heating failures or other losses resulting from its use.**
+
 # ThermalPilot
 
 **ThermalPilot is primarily useful for heat pumps and electric resistance heating
@@ -8,7 +10,7 @@ For gas, oil, wood/pellet or district heating, the current integration offers
 limited value: temperature history and thermal-response learning, without heating
 schedules, thermostat control or a required electricity-price sensor.
 
-Version **0.1.46 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.47 — experimental simulation-first Home Assistant custom integration**.
 
 **Start in simulation and allow time for learning and validation.** Initial data
 collection reaches 100% after at least 12 observed heating hours and 12 idle
@@ -36,7 +38,7 @@ service per configuration entry. This classification follows the
 ## What this version includes
 
 - A dedicated **ThermalPilot** sidebar panel with **Plan**, **History**
-  and **Settings** pages, available in **English and Finnish**. English is the default;
+  and **Settings** pages, available in **25 languages**. English is the default;
   the language can be changed in Settings.
 - Room names, thermostats, temperature sensors and actual heating-activity sources.
 - Automatic detection of source price intervals: timestamped rows are preferred;
@@ -619,12 +621,14 @@ The water sensor is optional even for hydronic systems. Valve offsets remain wat
 
 ### Interface language
 
-Under ThermalPilot settings → Integration settings, choose 🇬🇧 English or
-🇫🇮 Finnish beside Enable simulation. English is the default. The interface
-updates immediately; Save settings persists the selection. Room/entity names
-and heating parameters are unchanged. Embedded Home Assistant history cards receive the selected language for labels,
-state text and date formatting, without changing Home Assistant’s global preference. Finnish translations are an
-initial version and can be corrected as users review them.
+Available languages: English (default), Finnish, Swedish, Norwegian Bokmål,
+Danish, German, Portuguese, Spanish, French, Estonian, Latvian, Lithuanian,
+Polish, Italian, Dutch, Icelandic, Romanian, Czech, Slovak, Bulgarian, Serbian
+(Cyrillic), Croatian, Greek, Albanian and Hungarian. Select Language under
+Integration settings and save your choice.
+Room and entity names remain unchanged. Embedded Home Assistant history follows
+the selected language where supported, without changing Home Assistant’s global
+language. Translations are an initial version and welcome corrections from speakers.
 
 ### Operating purpose
 
@@ -636,7 +640,7 @@ control commands are generated. The price settings and scheduling chart are
 hidden and electricity prices are not required. Initial setup allows price and
 water sensors to be omitted; select the heat source in the sidebar settings.
 
-The language selector uses bundled inline SVG flags for English (UK) and Finnish, including the dropdown choices, so it does not depend on operating-system flag emoji support. Keyboard arrows, Enter/Space, Escape and normal tab navigation are supported.
+All language options use bundled SVG flags, independent of operating-system emoji support.
 
 After initial collection, electric-system room headers show measured 3-hour
 forecast error over the latest seven days instead of initial-data progress. The

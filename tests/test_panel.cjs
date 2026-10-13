@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.46 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.47 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -629,3 +629,30 @@ headerPanel.settings.live_control_confirmed=true;assert.match(headerPanel.header
 headerPanel.settings.heating_enabled=false;assert.match(headerPanel.headerStatus(),/Live control paused/);assert.doesNotMatch(headerPanel.headerStatus(),/header-live/);
 headerPanel.settings={language:'fi',simulation_enabled:true};assert.match(headerPanel.headerStatus(),/>Simulointi</);assert.doesNotMatch(headerPanel.headerStatus(),/SIMULOINTI/);
 console.log('Header control badge checks passed: simulation red, confirmed live green, paused/unconfirmed distinct and Finnish normal case.');
+
+// Each selectable language must cover the same interface catalog and preserve dynamic values.
+const allLanguages=vm.runInContext('languageNames',context),catalogs=vm.runInContext('languageText',context),fiKeys=vm.runInContext('Object.keys(finnishText)',context);
+assert.equal(Object.keys(allLanguages).length,25);
+for(const [code,catalog] of Object.entries(catalogs)){
+ for(const key of fiKeys)assert.ok(catalog[key],`${code}: missing ${key}`);
+ const translated=translate('Settings',code);assert.notEqual(translated,'Settings');
+ const langPanel=new Component();langPanel.settings={language:code,simulation_enabled:true,rooms:[]};
+ assert.match(langPanel.headerStatus(),new RegExp(catalog['Simulation']));
+ assert.ok(langPanel.headerStatus().includes(catalog['Simulation is active. ThermalPilot does not control heating.']));
+ const selector=langPanel.field(['language','Language','select:en,fi'],{language:code},'source');
+ assert.ok(selector.includes(`value="${code}"`));
+ for(const candidate of Object.keys(allLanguages))assert.ok(selector.includes(`data-language="${candidate}"`));
+ assert.match(flagSVG(code),/viewBox="0 0 24 16"/);assert.doesNotMatch(flagSVG(code),/#012169/);
+ const eta=translate('About 116 more days to the initial thresholds at recent observation rates.',code);
+ assert.ok(eta.includes('116'));assert.doesNotMatch(eta,/more days|initial thresholds/);
+ const counts=translate('26 comparisons · 25 with similar heating',code);
+ assert.ok(counts.includes('26'));assert.ok(counts.includes('25'));assert.doesNotMatch(counts,/comparisons|with similar heating/);
+ const removal=translate('Remove room "South <test>"? Save settings to apply this change.',code);
+ assert.ok(removal.includes('South <test>'));assert.doesNotMatch(removal,/Save settings/);
+ // Parentheses in source text must be literal, and replacements must be single-pass.
+ assert.ok(translate('Target (°C): 20',code).includes(catalog['Target (°C)']));
+ langPanel._hass={locale:{language:'en'},localize:()=> 'Off'};
+ assert.equal(langPanel.historyCardHass().locale.language,code);
+ assert.equal(langPanel.historyCardHass().localize('off'),catalog.Off);assert.equal(langPanel._hass.locale.language,'en');
+}
+console.log('All 25 language options passed: catalog coverage, SVG flags, selection, parameterized room messages and isolated HA history locale.');

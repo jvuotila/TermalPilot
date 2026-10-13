@@ -6,7 +6,7 @@ import types
 import unittest
 ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
 pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
-from thermal_pilot.config import entity_matches, setup_selector_config, SOURCE_FIELDS, ROOM_FIELDS
+from thermal_pilot.config import entity_matches, setup_selector_config, SOURCE_FIELDS, ROOM_FIELDS, validate
 CASES=json.loads(Path(__file__).with_name('entity_selector_cases.json').read_text())
 
 class SelectorTests(unittest.TestCase):
@@ -34,3 +34,16 @@ class SelectorTests(unittest.TestCase):
         for field in SOURCE_FIELDS+ROOM_FIELDS:
             if 'sensor' in field[2].split(','):
                 self.assertIsInstance(field[3],dict,field[0])
+
+    def test_all_interface_languages_are_saved_without_changing_heating(self):
+        languages=['en','fi','sv','nb','da','de','pt','es','fr','et','lv','lt','pl','it','nl','is','ro','cs','sk','bg','sr','hr','el','sq','hu']
+        payload={'price_entity':'sensor.price','outdoor_entity':'sensor.out','rooms':[]}
+        original=validate(payload)
+        for language in languages:
+            with self.subTest(language=language):
+                saved=validate({**payload,'language':language})
+                self.assertEqual(saved['language'],language)
+                self.assertEqual({k:v for k,v in saved.items() if k!='language'},
+                                 {k:v for k,v in original.items() if k!='language'})
+        with self.assertRaises(ValueError):
+            validate({**payload,'language':'unsupported'})
