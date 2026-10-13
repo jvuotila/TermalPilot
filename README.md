@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.41 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.42 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -274,26 +274,35 @@ the new configuration entry. The new installation starts in simulation mode
 with physical season setpoint application disabled. Existing heating automations
 continue to run independently. No migration is needed for a fresh installation.
 
-## Suggested settings for the supplied system
+## Starting settings
 
-Use `sensor.nordpool` directly, rather than your already averaged sensor, to allow
-flexible quarter-hour planning. Source prices must be numeric lists or timestamped
-`raw_today` / `raw_tomorrow` records with `start`, `end`, `value`.
+Select entities from your own Home Assistant installation. ThermalPilot does not
+preselect a price, outdoor-temperature or weather entity. Price intervals are
+detected automatically from the source lists; there is no Source format setting.
 
 | Setting | Starting value |
 | --- | --- |
-| Source format | quarterly |
-| Source unit | c/kWh (verify the source) |
-| Scheduling mode | flexible |
+| Price sensor | Select your own electricity-price entity with complete price lists |
+| Source unit | c/kWh by default; change it to match your source |
+| Scheduling mode | Flexible |
 | Minimum flexible run | 60 minutes |
-| Outdoor sensor | `sensor.outdoor_lowest_temperature` |
-| Forecast source | `weather.forecast_koti` |
-| Shared summer setpoint | 10 C |
-| Actual season setpoint application | disabled for the first shadow trial |
+| Outdoor temperature | Select your own sensor measuring the current outdoor temperature |
+| Weather forecast source | Not selected; optionally choose your own weather entity |
+| Shared summer setpoint | 10°C |
+| Enable simulation | Enabled |
+| Apply season setpoints | Disabled |
+
+**Apply season setpoints** is an optional exception to read-only simulation.
+When enabled, changing ThermalPilot between Active and Passive can send real
+thermostat target commands, even while simulation is enabled. Active applies
+normal room targets; Passive applies the summer or winter fallback temperatures.
+Leave it disabled if you want simulation to make no thermostat changes. Live
+scheduled control is enabled separately by turning off simulation and confirming.
 
 Select a price source whose lists already include VAT, day/night grid charges,
-electricity tax and retailer margin. ThermalPilot adds no further costs; both the
-current and future price lists must contain final prices.
+electricity tax and retailer margin. ThermalPilot adds no further costs. The source
+can supply complete numeric `today` / `tomorrow` lists or timestamped
+`raw_today` / `raw_tomorrow` records with `start`, `end` and `value`.
 
 Set each room's target temperature and shared comfort bounds. All rooms use internal
 starting estimates; actual heating and cooling observations refine their models.

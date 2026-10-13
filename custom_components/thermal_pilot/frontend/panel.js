@@ -574,6 +574,7 @@ ${waterDistribution(this.settings)?`      <div class="status-block status-temper
 @media(min-width:1400px){
  #settings{grid-template-columns:repeat(2,minmax(0,1fr))}#settings>.settings-sources{grid-column:1;grid-row:1}#settings>.settings-house{grid-column:2;grid-row:1}#settings>.settings-shared{grid-column:1;grid-row:2}#settings>.settings-rooms{grid-column:2;grid-row:2}#settings .settings-group>.grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+@media(min-width:1800px){#settings .settings-group>.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:1000px){#settings .settings-group>.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){
  .settings-layout{padding:12px}
