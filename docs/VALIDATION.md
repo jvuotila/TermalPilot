@@ -140,3 +140,5 @@ without resetting baseline learning. Model tests cover bounded correction, missi
 wind fallback and refusal to learn a wind effect without varied observations.
 
 Message template checks cover information, warning and error levels, distinct prefix icons, accessible level labels and escaped content. Wide Plan layouts use two columns with equal card heights; smaller layouts stack them. Visual rendering still needs user review.
+
+Heating tooltip checks cover duration formatting and grouped observed/planned periods on Plan and History. Room lane spacing is 10 px; template checks verify updated desktop/mobile chart dimensions.

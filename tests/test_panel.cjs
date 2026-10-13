@@ -248,13 +248,13 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.37 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.38 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
 pricePanel.info={data:{price_chart:[{start:new Date(priceTime).toISOString(),end:new Date(priceTime+900000).toISOString(),price:-5}],rooms:{r0:{plan:{commands:[{time:new Date(priceTime).toISOString(),action:'raise'},{time:new Date(priceTime+600000).toISOString(),action:'lower'}]}}}}};
-let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:506px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:506px/);
-pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:686px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
+let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:566px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:566px/);
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:746px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
 console.log('Electricity chart checks passed: thresholds, negative prices, real windows, missing history, ten rooms, fixed height.');
 // Size the SVG from its rendered viewport immediately and on resize.
 let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
@@ -262,7 +262,7 @@ const sizingContext={...context,document:{createElement:()=>{const template={inn
 vm.createContext(sizingContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),sizingContext);
 const sized=new sizingComponent();sized.settings=pricePanel.settings;sized.info=pricePanel.info;sized.tab='overview';
 const viewport={clientWidth:3024,querySelector:()=>({replaceWith:svg=>replacedHTML=svg.html})};sized.shadowRoot.querySelector=()=>viewport;sized.mountPriceChartSizing();
-assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 506"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 506"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
+assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 566"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 566"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
 console.log('Price chart layout checks passed (immediate container measurement, resize, collapsed container, observer cleanup).');
 
 const trend=new Component();trend.info={data:{price_chart:[{start:'2026-10-10T00:00:00Z',end:'2026-10-12T00:00:00Z'}]}};
@@ -349,8 +349,8 @@ for(const screen of [320,390,600]){
  const width=Number(temperature.match(/viewBox="0 0 (\d+)/)[1]);
  assert.ok(width<=screen);assert.doesNotMatch(temperature,/NaN/);
 }
-resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 746"/);
-resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 506"/);
+resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 806"/);
+resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 566"/);
 console.log('Mobile checks passed: bubbling Home Assistant menu event, ten readable room lanes, narrow temperature charts and desktop/mobile resizing.');
 
 // History retains activity when all price data is missing, for every selected period.
@@ -456,3 +456,13 @@ for(const level of ['error','warning','info']){
 assert.notEqual(messageIcon('error'),messageIcon('info'));
 assert.notEqual(messageIcon('warning'),messageIcon('error'));
 console.log('Message icons passed: distinct error/warning/info shapes, decorative SVG and accessible level labels.');
+
+const duration=vm.runInContext('durationLabel',context);
+assert.equal(duration(10*3600000+60000),'10 h 1 min');
+assert.equal(duration(3600000),'1 h');assert.equal(duration(15*60000),'15 min');
+assert.equal(duration(10000),'Less than 1 min');
+assert.match(detailed,/Observed duration: 10 min/);
+detailsPanel.info.data.rooms.detail={plan:{commands:[{time:new Date(periodNow-300000).toISOString(),action:'raise'},{time:new Date(periodNow+3600000).toISOString(),action:'restore'}]}};
+assert.match(detailsPanel.priceChart(false),/Duration: 1 h 5 min/);
+assert.match(detailsPanel.priceChart(true),/Suggested heating On[^"]*Duration:/);
+console.log('Heating duration checks passed: grouped observed periods and planned windows on both charts, hours/minutes and short intervals.');

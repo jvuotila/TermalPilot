@@ -102,6 +102,12 @@ const outdoorColor=value=>{
   }
   return outdoorThresholds.at(-1)[1];
 };
+function durationLabel(milliseconds){
+  const minutes=Math.max(0,Math.round(milliseconds/60000));
+  if(!minutes&&milliseconds>0)return 'Less than 1 min';
+  const hours=Math.floor(minutes/60),remaining=minutes%60;
+  return hours?`${hours} h${remaining?` ${remaining} min`:''}`:`${remaining} min`;
+}
 function statusMessageLevel(text){
   if(text.startsWith('ThermalPilot is passive.'))return 'info';
   if(text.startsWith('Thermostat control:'))return text.includes('fallback targets are being used')?'warning':'error';
@@ -282,7 +288,7 @@ class ThermalPilotPanel extends HTMLElement {
   for(let time=Math.ceil(start/tickStep)*tickStep;time<=end;time+=tickStep)axisTimes.push(time);
   const axisLabel=time=>compact?`${new Date(time).getDate()}.${new Date(time).getMonth()+1}. ${new Date(time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false})}`:timeLabel(time);
   const labelRow=y=>axisTimes.map(time=>`<text x="${x(time)}" y="${y}" text-anchor="${time===start?'start':time===end?'end':'middle'}" fill="#526b75" font-size="11">${escapeHTML(axisLabel(time))}</text>`).join('');
-  const rowHeight=compact?(history?74:54):history?48:30,roomTop=180,chartHeight=roomTop+rooms.length*rowHeight+26;
+  const roomGap=10,rowHeight=compact?(history?80:60):history?54:36,roomTop=180,chartHeight=roomTop+rooms.length*rowHeight+26;
   const lanes=rooms.map((room,roomIndex)=>{
    const rows=(this.history||[]).filter(r=>r.room_id===room.id).sort((a,b)=>a.time-b.time),y=roomTop+roomIndex*rowHeight;
    const plan=this.info.data?.rooms?.[room.id]?.plan;
@@ -305,11 +311,11 @@ class ThermalPilotPanel extends HTMLElement {
     return `<rect x="${left}" y="${y+laneTop+offset}" width="${width}" height="14" rx="3" fill="#dbe5ea"/>`+periods.map(v=>{
      const a=Math.max(start,v.start),b=Math.min(end,v.end);
      const label=key==='activity'?'Actual relay':'Suggested heating';
-     const detail=`${room.name} · ${label} On\n${v.recorded&&!v.started?'First observed On':'Start'}: ${timeLabel(v.start)}\n${v.recorded&&!v.stopped?'Observed until':'Stop'}: ${timeLabel(v.end)}${v.recorded?'\nTimes are based on recorded observations; gaps are not filled.':''}`;
+     const detail=`${room.name} · ${label} On\n${v.recorded&&!v.started?'First observed On':'Start'}: ${timeLabel(v.start)}\n${v.recorded&&!v.stopped?'Observed until':'Stop'}: ${timeLabel(v.end)}\n${v.recorded?'Observed duration':'Duration'}: ${durationLabel(v.end-v.start)}${v.recorded?'\nTimes are based on recorded observations; gaps are not filled.':''}`;
      return b>a?`<rect ${detailAttributes(detail)} x="${x(a)}" y="${y+laneTop+offset}" width="${(b-a)/span*width}" height="14" fill="${color}"></rect>`:'';
     }).join('');
    };
-   return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-4}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(compact?-1:history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+laneTop+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+laneTop+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
+   return `<rect x="8" y="${y-5}" width="${viewWidth-20}" height="${rowHeight-roomGap}" rx="6" fill="${roomIndex%2?'#e6eef7':'#e5f0ee'}"/><foreignObject x="20" y="${y+(compact?-1:history?7:-1)}" width="${roomNameWidth}" height="22"><div xmlns="http://www.w3.org/1999/xhtml" title="${escapeHTML(room.name)}" style="font:600 13px system-ui;color:#253f49;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px">${escapeHTML(room.name)}</div></foreignObject>${history?`<text x="${left-12}" y="${y+laneTop+12}" text-anchor="end" fill="#526b75" font-size="10">Suggested</text><text x="${left-12}" y="${y+laneTop+30}" text-anchor="end" fill="#526b75" font-size="10">Relay</text>`:''}${lane('suggested_heat',0,'#087c85')}${history?lane('activity',18,'#e49025'):''}`;
   }).join('');
   return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<p style="margin:0;color:#526b75">${history?`Selected period: ${this.historyHours} hours · recorded activity, plus today and tomorrow when prices are published`:'Today and tomorrow · published prices and suggested heating periods for all rooms'}</p><div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px"><span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#40ff00,#ffff00,#ff9933,#ff0000,#cc0000)"></b> Total electricity price (c/kWh)</span><span><b style="color:#087c85">■</b> Suggested heating window</span>${history?'<span><b style="color:#e49025">■</b> Actual thermostat relay</span>':''}</div>${history&&!values.length?'<p>No electricity prices are available for this period. Recorded thermostat activity is shown below.</p>':''}<div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg data-range-start="${start}" data-range-end="${end}" viewBox="0 0 ${viewWidth} ${chartHeight}" role="img" aria-label="Electricity prices with heating timelines for every room" style="width:100%;min-width:0;height:${chartHeight}px;max-height:none;display:block"><text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}${lanes}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)+5}" y="12" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</svg><div class="chart-tooltip" role="tooltip" hidden></div></div><small style="display:block;margin-top:10px;color:#526b75">All room timelines share the price chart’s time axis. Teal shows the suggested thermostat boost window; amber shows observed heating demand. ${history?'The selected period controls past history. Today and tomorrow are included when prices are published. Recorded activity is shown before now; future suggestions follow the current plan. Price gaps stay empty. ':''}Times align to 15-minute boundaries; wider views show fewer labels. Hover, focus or tap a price bar or heating period for details.</small></div></details></section>`;
   }
