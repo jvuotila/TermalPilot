@@ -1,5 +1,5 @@
 """Read HA states, learn observed response, persist data, publish plans and reconcile opt-in thermostat control."""
-from datetime import timedelta
+from datetime import datetime, timedelta
 from copy import deepcopy
 import logging
 from zoneinfo import ZoneInfo
@@ -12,7 +12,7 @@ from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REF
 from .history import HistoryDatabase
 from .control import ThermostatControl
 from .config import stored_settings
-from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention
+from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention, solar_signal, solar_facing, solar_enabled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -353,6 +353,28 @@ class PilotCoordinator(DataUpdateCoordinator):
         wind_status=self.wind_reading(now)
         if wind_status['enabled'] and not wind_status['available']:
             warnings.append('Optional wind sensor unavailable or stale; heating and temperature-based planning continue.')
+        latitude=getattr(self.hass.config,'latitude',None)
+        longitude=getattr(self.hass.config,'longitude',None)
+        weather_state=self.hass.states.get(self.settings['weather_entity']) if self.settings['weather_entity'] else None
+        weather_values=None
+        if weather_state and weather_state.state not in ('unknown','unavailable'):
+            updated=getattr(weather_state,'last_updated',None)
+            if isinstance(updated,datetime) and 0<=(now-updated).total_seconds()<=7200:
+                weather_values={**weather_state.attributes,'condition':weather_state.state}
+        current_solar=solar_signal(now,latitude,longitude,weather_values)
+        solar_forecast=[]
+        for slot in slots:
+            midpoint=slot.start+(slot.end-slot.start)/2
+            matches=[]
+            for row in forecasts:
+                date=stamp(row.get('datetime'))
+                if not date:continue
+                if self.forecast_type=='daily':
+                    valid=date.astimezone(ZoneInfo(self.hass.config.time_zone)).date()==midpoint.astimezone(ZoneInfo(self.hass.config.time_zone)).date()
+                else:valid=0<=(midpoint-date).total_seconds()<= (7200 if self.forecast_type=='hourly' else 43200)
+                if valid:matches.append((date,row))
+            values=max(matches,key=lambda item:item[0])[1] if matches else None
+            solar_forecast.append(solar_signal(midpoint,latitude,longitude,values))
         outdoors = []
         for slot in slots:
             points = []
@@ -386,13 +408,18 @@ class PilotCoordinator(DataUpdateCoordinator):
                 for key in ('wind_loss','wind_statistics','wind_updates'):model.pop(key,None)
                 model['wind_source']=self.settings['wind_entity']
                 self.previous.pop(rid,None)
+            solar_context=[room.get('solar_direction','disabled'),room.get('solar_exposure','clear'),self.settings['weather_entity'],latitude,longitude]
+            if model.get('solar_context',['disabled',room.get('solar_exposure','clear'),self.settings['weather_entity'],latitude,longitude])!=solar_context:
+                for key in ('solar_gain','solar_statistics','solar_updates'):model.pop(key,None)
+                self.previous.pop(rid,None)
+            model['solar_context']=solar_context
             if not self.season['collecting']:
                 model['response'] = 0.0
             activity = self.activity(room)
             thermostat_state = self.hass.states.get(room['thermostat'])
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
-                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint+[self.settings['wind_entity']]}
+                      'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context}
             if temperature is None or outdoor is None or baseline is None or water is None:
                 result['error'] = 'Room temperature, outdoor temperature, supply water temperature or target temperature is unavailable.'
                 self.previous.pop(rid, None)
@@ -402,7 +429,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             else:
                 water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature)))
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
-                           'activity':activity, 'water':water, 'water_factor':water_factor, 'wind':wind_status['speed'], 'excluded':fireplace}
+                           'activity':activity, 'water':water, 'water_factor':water_factor, 'wind':wind_status['speed'], 'solar':(current_solar*solar_facing(now,latitude,longitude,room.get('solar_direction','south')) if current_solar is not None else None) if solar_enabled(room) else None, 'excluded':fireplace}
                 prediction = None
                 if self.season['collecting'] and rid in self.previous:
                     prediction = learn(model, room, self.previous[rid], current)
@@ -413,7 +440,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 if slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
-                        'wind_speed':wind_status['speed'],
+                        'wind_speed':wind_status['speed'], 'solar_forecast':[value*solar_facing(slot.start+(slot.end-slot.start)/2,latitude,longitude,room.get('solar_direction','south')) if value is not None else None for value,slot in zip(solar_forecast,slots)],
                         'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
@@ -431,7 +458,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['model'] = deepcopy(model)
                 result['one_step_prediction'] = prediction
                 if self.season['collecting']:
-                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint+[self.settings['wind_entity']], 'actual_setpoint':actual_request,
+                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context, 'actual_setpoint':actual_request,
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None,
                                  'price':slots[0].price if slots else None})

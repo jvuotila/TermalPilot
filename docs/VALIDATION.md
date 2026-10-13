@@ -1,6 +1,6 @@
 # Validation status
 
-- 127 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 134 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover six-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -142,3 +142,9 @@ wind fallback and refusal to learn a wind effect without varied observations.
 Message template checks cover information, warning and error levels, distinct prefix icons, accessible level labels and escaped content. Wide Plan layouts use two columns with equal card heights; smaller layouts stack them. Visual rendering still needs user review.
 
 Heating tooltip checks cover duration formatting and grouped observed/planned periods on Plan and History. Room lane spacing is 10 px; template checks verify updated desktop/mobile chart dimensions.
+
+Solar tests cover seasonal daylight, cloud attenuation, window azimuth, night/missing location/cloud inputs, idle-only evidence gating, no assumed initial gain, daylight exclusion from ordinary loss fitting, half-gain forecast cap and opt-out/missing-data behavior.
+
+Adapter solar checks verify Home Assistant location/current weather reach room observations and missing optional weather keeps live planning and collection running.
+
+Solar exposure checks cover forecast attenuation without mutating learned gain, all eight bearings, legacy toggle migration and conditional UI visibility.

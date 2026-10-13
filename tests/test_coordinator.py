@@ -45,6 +45,27 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_optional_solar_uses_location_and_missing_weather_keeps_control(self):
+        moment=datetime(2026,6,21,10,tzinfo=timezone.utc)
+        self.hass.config.latitude=60;self.hass.config.longitude=25
+        self.c.settings['rooms'][0].update(solar_direction='south')
+        self.c.settings.update(weather_entity='weather.home',simulation_enabled=False,live_control_confirmed=True)
+        weather=State('sunny',{'cloud_coverage':0});weather.last_updated=moment
+        self.hass.states['weather.home']=weather
+        forecast=[{'datetime':(moment+timedelta(hours=i)).isoformat(),'temperature':10,'condition':'sunny'} for i in range(24)]
+        self.hass.services.async_call=AsyncMock(return_value={'weather.home':{'forecast':forecast}})
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=moment):
+            data=await self.c._async_update_data()
+            rid=self.c.settings['rooms'][0]['id']
+            self.assertGreater(self.c.previous[rid]['solar'],0)
+            self.assertTrue(data['rooms'][rid]['plan'])
+            self.hass.states['weather.home']=State('unavailable')
+            data=await self.c._async_update_data()
+            self.assertIsNone(self.c.previous[rid]['solar'])
+            self.assertTrue(data['collection']['collecting'])
+            self.assertEqual(data['control']['fallback_rooms'],[])
+            self.assertTrue(data['rooms'][rid]['plan'])
+
     async def test_status_badges_use_usable_sources_and_least_observed_room(self):
         data = await self.c._async_update_data()
         self.assertEqual(data['source_status'], {'prices':True,'outdoor':True,'water':True})

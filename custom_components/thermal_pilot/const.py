@@ -1,6 +1,6 @@
 """ThermalPilot constants; scheduled control is opt-in; simulation is enabled by default."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.1.38'
+VERSION = '0.1.39'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7
@@ -26,5 +26,5 @@ ROOM_DEFAULTS = {
     'activity_entity': '',
     'baseline': 20.0,
     'curve_min_hours': 4.0, 'curve_max_hours': 13.0,
-    'fireplace_reduction': 0.0,
+    'fireplace_reduction': 0.0, 'solar_direction': 'disabled', 'solar_exposure': 'clear',
 }

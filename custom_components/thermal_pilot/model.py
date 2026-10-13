@@ -210,6 +210,73 @@ def learn_wind(model, room, x, y, z, wind, hours):
         model['wind_updates']=model.get('wind_updates',0)+1
 
 
+def solar_signal(moment, latitude, longitude, weather, direction=None):
+    """Approximate daylight/cloud proxy, not measured irradiance; None means unknown."""
+    lat,lon=number(latitude),number(longitude)
+    if lat is None or lon is None or not -90<=lat<=90 or not -180<=lon<=180:return None
+    moment=moment.astimezone(timezone.utc)
+    day=moment.timetuple().tm_yday
+    hour=moment.hour+moment.minute/60+moment.second/3600
+    angle=2*math.pi/365*(day-1+(hour-12)/24)
+    equation=229.18*(.000075+.001868*math.cos(angle)-.032077*math.sin(angle)-.014615*math.cos(2*angle)-.040849*math.sin(2*angle))
+    declination=.006918-.399912*math.cos(angle)+.070257*math.sin(angle)-.006758*math.cos(2*angle)+.000907*math.sin(2*angle)-.002697*math.cos(3*angle)+.00148*math.sin(3*angle)
+    hour_angle=math.radians((hour*60+equation+4*lon)/4-180)
+    sin_elevation=math.sin(math.radians(lat))*math.sin(declination)+math.cos(math.radians(lat))*math.cos(declination)*math.cos(hour_angle)
+    if sin_elevation<=0:return 0.0
+    if not isinstance(weather,dict):return None
+    cloud=number(weather.get('cloud_coverage'))
+    if cloud is not None and 0<=cloud<=100:transmission=1-.85*cloud/100
+    else:
+        transmission={'sunny':1.0,'clear-night':0.0,'partlycloudy':.5,'cloudy':.15,'rainy':.1,'pouring':.05,'snowy':.1,'snowy-rainy':.1,'fog':.1,'lightning':.1,'lightning-rainy':.1}.get(weather.get('condition'))
+        if transmission is None:return None
+    facing=solar_facing(moment,latitude,longitude,direction) if direction else 1.0
+    return max(0,min(1,sin_elevation*transmission*facing))
+
+
+def solar_facing(moment,latitude,longitude,direction):
+    """Azimuth incidence for the dominant window direction; no behind-window credit."""
+    bearings={'north':0,'northeast':45,'northwest':315,'east':90,'southeast':135,'south':180,'southwest':225,'west':270}
+    if direction not in bearings:return 0.0
+    lat,lon=number(latitude),number(longitude)
+    if lat is None or lon is None:return 0.0
+    moment=moment.astimezone(timezone.utc)
+    hour=moment.hour+moment.minute/60+moment.second/3600
+    angle=2*math.pi/365*(moment.timetuple().tm_yday-1+(hour-12)/24)
+    equation=229.18*(.000075+.001868*math.cos(angle)-.032077*math.sin(angle)-.014615*math.cos(2*angle)-.040849*math.sin(2*angle))
+    declination=.006918-.399912*math.cos(angle)+.070257*math.sin(angle)-.006758*math.cos(2*angle)+.000907*math.sin(2*angle)-.002697*math.cos(3*angle)+.00148*math.sin(3*angle)
+    ha=math.radians((hour*60+equation+4*lon)/4-180)
+    azimuth=(180+math.degrees(math.atan2(math.sin(ha),math.cos(ha)*math.sin(math.radians(lat))-math.tan(declination)*math.cos(math.radians(lat)))))%360
+    return max(0,math.cos(math.radians(azimuth-bearings[direction])))
+
+
+def solar_enabled(room):
+    return room.get('solar_direction','disabled')!='disabled'
+
+
+def solar_exposure_factor(room):
+    return {'clear':1.0,'partly_shaded':.65,'mostly_shaded':.3}.get(room.get('solar_exposure','clear'),0.0)
+
+
+def solar_gain(model, signal, enabled=True):
+    value=number(signal)
+    coefficient=number(model.get('solar_gain'),0)
+    return min(.5,max(0,coefficient))*max(0,min(1,value)) if enabled and value is not None else 0.0
+
+
+def learn_solar(model, previous, current, dt, residual):
+    """Fit unexplained sunshine warming only with no heating or residual slab response."""
+    signal=number(previous.get('solar'))
+    if signal is None or signal<.1 or current.get('solar') is None or previous['activity']!=0 or model['response']>.05:return
+    stat=model.setdefault('solar_statistics',{'xx':0.0,'xz':0.0,'hours':0.0})
+    stat['xx']=.999*stat['xx']+signal*signal*dt
+    stat['xz']=.999*stat['xz']+signal*residual*dt
+    stat['hours']+=dt
+    if stat['hours']<12 or model.get('idle_hours',0)<12 or model.get('heated_hours',0)<12:return
+    fit=max(0,min(.5,stat['xz']/(stat['xx']+12)))
+    model['solar_gain']=.98*model.get('solar_gain',0)+.02*fit
+    model['solar_updates']=model.get('solar_updates',0)+1
+
+
 def heat_retention(model):
     """Comparable modeled cooling with identical reference conditions, not energy efficiency.
 
@@ -265,7 +332,7 @@ multi-day counterfactual cost savings are asserted from these observations.
     response, average = response_step(model['response'], previous['activity'], dt, room['lag_hours'])
     x = previous['outdoor']-previous['temperature']
     y = average * previous.get('water_factor', 1.0)
-    prediction = previous['temperature'] + dt*(effective_loss(model,previous.get('wind'))*x+model['gain']*y+model.get('base_gain',0))
+    prediction = previous['temperature'] + dt*(effective_loss(model,previous.get('wind'))*x+model['gain']*y+model.get('base_gain',0)+solar_gain(model,previous.get('solar'),solar_enabled(room)))
     model['response'] = response
     error = abs(prediction-current['temperature'])
     model['mae'] = error if model['mae'] is None else .95*model['mae']+.05*error
@@ -276,9 +343,6 @@ multi-day counterfactual cost savings are asserted from these observations.
         return prediction
     raw_z=z
     z-=(effective_loss(model,previous.get('wind'))-model['loss'])*x
-    decay = .999
-    for key, value in (('xx', x*x), ('xy', x*y), ('yy', y*y), ('xz', x*z), ('yz', y*z)):
-        model[key] = decay*model[key]+value*dt
     model['samples'] += 1
     model['heated_hours'] += dt*previous['activity']
     model['idle_hours'] += dt*(1-previous['activity'])
@@ -290,6 +354,15 @@ multi-day counterfactual cost savings are asserted from these observations.
         row={'time':bucket,'heat':0.0,'idle':0.0};rates.append(row)
     row['heat']+=dt*previous['activity'];row['idle']+=dt*(1-previous['activity'])
     model['learning_rates']=rates
+    if solar_enabled(room):
+        residual=raw_z-effective_loss(model,previous.get('wind'))*x-model['gain']*y
+        learn_solar(model,previous,current,dt,residual)
+        # Unknown daytime sunshine and lit intervals cannot teach ordinary loss.
+        if previous.get('solar') is None or current.get('solar') is None or previous.get('solar',0)>0 or current.get('solar',0)>0:
+            return prediction
+    decay=.999
+    for key,value in (('xx',x*x),('xy',x*y),('yy',y*y),('xz',x*z),('yz',y*z)):
+        model[key]=decay*model[key]+value*dt
     # Ridge regularization toward design estimates, plus evidence from both states.
     prior = initial_model(room)
     xx, yy, xy = model['xx']+200, model['yy']+20, model['xy']
@@ -408,6 +481,8 @@ ending the known-price horizon with insufficient estimated thermal reserve.
         candidates = []
         wind=number(room.get('wind_speed'))
         if wind is not None:wind=3+(wind-3)*math.exp(-(slot.start-now).total_seconds()/10800)
+        solar_values=room.get('solar_forecast',[])
+        slot_solar=.5*solar_exposure_factor(room)*solar_gain(model,solar_values[i] if i<len(solar_values) else None,solar_enabled(room))
         slot_loss=effective_loss(model,wind)
         if fireplace:slot_loss*=1+room['fireplace_reduction']/100
         for violation, shortfall, cost, temp, response, last, run, credit, path in beam:
@@ -427,7 +502,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                 request = min(room['maximum'],baseline+room['boost']) if on else max(room['minimum'],baseline+room['setback']) if mode==1 else baseline
                 heating = 1.0 if temp < request else 0.0
                 r, average = response_step(response, heating, hours, room['lag_hours'])
-                predicted = temp+hours*(slot_loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0))
+                predicted = temp+hours*(slot_loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0)+slot_solar)
                 if mode==1 and predicted<baseline:
                     continue  # Stored warmth must carry the room toward its comfort target.
                 below, above = max(0, room['minimum']-predicted), max(0, predicted-room['maximum'])
@@ -436,7 +511,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                 c = cost+slot.price*heating*hours + .3*abs(on-(last==2)) + .02*(mode!=last) + .15*hours*(predicted-baseline)**2 - (.03*hours if mode==1 else 0)
                 row = {'start': max(slot.start, now).isoformat(), 'end': slot.end.isoformat(),
                        'price': round(slot.price, 3), 'outdoor': round(outdoor[i], 2),
-                       'heat': bool(on), 'mode':('normal','reduced','boost')[mode],
+                       'solar_gain':round(slot_solar,4), 'heat': bool(on), 'mode':('normal','reduced','boost')[mode],
                        'reduction_available':bool(on or (credit and predicted>=baseline and r>.05)), 'predicted_demand': bool(heating),
                        'temperature': round(predicted, 3), 'setpoint': round(request, 2)}
                 candidates.append((v, deficit, c, predicted, r, mode, min(minimum_run,(run if last==2 else 0)+hours) if on else 0.0, row['reduction_available'], path+[row]))

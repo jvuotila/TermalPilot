@@ -39,6 +39,8 @@ ROOM_FIELDS = [
  ('activity_entity','Thermostat relay (optional)','switch',{'kind':'relay'}),
  ('baseline','Target temperature (°C)','number',5,30,0.1),
  ('fireplace_reduction','Fireplace heating compensation','number',-100,0,1),
+ ('solar_direction','Window direction','select:disabled,north,northeast,east,southeast,south,southwest,west,northwest'),
+ ('solar_exposure','Sun exposure','select:clear,partly_shaded,mostly_shaded'),
 ]
 
 
@@ -100,6 +102,9 @@ def stored_settings(data, options):
     if setback is not None and setback > 0:
         settings['setback'] = -setback
     for room in settings['rooms']:
+        room['solar_direction']=room.get('solar_direction','south' if room.get('solar_heating',False) else 'disabled') if room.get('solar_heating',True) else 'disabled'
+        room.setdefault('solar_exposure','clear')
+        room.pop('solar_heating',None)
         value = number(room.get('fireplace_reduction'))
         if value is not None and value > 0:
             room['fireplace_reduction'] = -min(100, value)
@@ -155,6 +160,8 @@ def validate(payload, hass=None):
         if not isinstance(raw, dict):
             raise ValueError('Invalid room settings.')
         room = deepcopy(ROOM_DEFAULTS)
+        if 'solar_heating' in raw:
+            raw={**raw,'solar_direction':raw.get('solar_direction','south') if raw['solar_heating'] else 'disabled'}
         room.update({k:v for k,v in raw.items() if k in ROOM_DEFAULTS and k not in ('curve_min_hours','curve_max_hours')})
         room['id'] = raw.get('id') or str(uuid4())
         try:

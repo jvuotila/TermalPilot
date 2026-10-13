@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.38 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.39 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -573,3 +573,29 @@ ordinary temperature-based planning and room learning continue. Stable calm
 readings can also be ignored conservatively. Wind is optional and never becomes
 an essential input for live control. Near-term forecasts use fresh wind data;
 the correction gradually returns to typical conditions further ahead.
+
+### Sunlight through room windows
+
+Select a **Window direction** for rooms warmed by sunshine through windows, especially
+large south-facing windows. No additional physical solar heating equipment is
+required. **Window direction** selects the dominant exposure; Disabled is the default and replaces the separate toggle. All eight compass directions are available. **Sun exposure** appears when a direction is selected: Clear, Partly shaded or Mostly shaded.
+Home Assistant’s latitude/longitude determine seasonal sun elevation and azimuth;
+nighttime and sunshine behind the selected windows receive no solar credit.
+Cloud cover or weather conditions come from the existing weather source.
+
+The correction starts at zero. It learns unexplained warming from sunny idle
+periods without substantial residual slab response, after at least 12 solar,
+12 heating and 12 idle observation hours. Forecasts use half the learned
+correction, capped at 0.25°C/hour. Missing location/cloud conditions assume no
+solar heat in planning. No fixed March–September rule or heating reduction applies.
+Solar-lit/unknown intervals are excluded from ordinary heat-loss fitting for
+enabled rooms. Changes to exposure reset only solar fitting and observation
+continuity. Room limits and essential-data fallback remain in force.
+
+This is a weather/daylight estimate rather than measured irradiation. Window
+size and shading affect the learned response; appliances and other unmeasured
+heat can still confound it. Review saved forecasts before relying on live control.
+
+Shading further limits the conservative forecast allowance: Clear 100%, Partly shaded 65%, Mostly shaded 30%. Learning uses unscaled observed daylight so this extra caution is not undone by fitting a larger coefficient. Disabled receives no solar correction.
+
+The Plan electricity/heating chart shows observed thermostat demand in amber before Now and current suggested windows in teal after Now, on each room’s shared lane. History retains separate suggested/relay lanes. Observation gaps stay empty; tooltips retain observed timing and total duration.

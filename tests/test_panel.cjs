@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.38 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.39 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -466,3 +466,24 @@ detailsPanel.info.data.rooms.detail={plan:{commands:[{time:new Date(periodNow-30
 assert.match(detailsPanel.priceChart(false),/Duration: 1 h 5 min/);
 assert.match(detailsPanel.priceChart(true),/Suggested heating On[^"]*Duration:/);
 console.log('Heating duration checks passed: grouped observed periods and planned windows on both charts, hours/minutes and short intervals.');
+
+const solarField=panel.field(['solar_direction','Window direction','select:disabled,north,northeast,east,southeast,south,southwest,west,northwest'],{solar_direction:'south'},'room0');
+assert.doesNotMatch(solarField,/setting-toggle/);assert.match(solarField,/value="south"/);
+assert.match(solarField,/No additional physical solar heating system is needed/);
+assert.match(solarField,/south-facing windows/);
+const exposureField=['solar_exposure','Sun exposure','select:clear,partly_shaded,mostly_shaded'];
+assert.match(panel.field(exposureField,{solar_direction:'disabled',solar_exposure:'clear'},'room0'),/data-solar-exposure hidden/);
+assert.doesNotMatch(panel.field(exposureField,{solar_direction:'south',solar_exposure:'clear'},'room0'),/data-solar-exposure hidden/);
+assert.match(panel.field(exposureField,{solar_direction:'south'},'room0'),/Partly shaded/);
+console.log('Solar settings checks passed: Disabled and eight directions, conditional exposure, readable options and ordinary-sunlight tooltip.');
+
+detailsPanel.statusHistory=detailsPanel.history;
+const planWithActual=detailsPanel.priceChart(false);
+assert.match(planWithActual,/data-chart-detail="Study · Actual relay On/);
+assert.match(planWithActual,/Observed duration: 10 min/);
+assert.match(planWithActual,/fill="#e49025"/);
+assert.match(planWithActual,/Actual thermostat relay/);
+assert.match(planWithActual,/Suggested heating On/);
+detailsPanel.statusHistory=[{room_id:'detail',time:periodNow/1000+3600,activity:1}];
+assert.doesNotMatch(detailsPanel.priceChart(false),/data-chart-detail="Study · Actual relay On/);
+console.log('Plan relay history checks passed: observed amber periods, duration tooltips, future teal suggestions and no future relay history.');

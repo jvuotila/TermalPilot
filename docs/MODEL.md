@@ -150,3 +150,35 @@ continuity, preserving accumulated heating/idle data and the baseline model.
 Forecast wind gradually returns to 3 m/s with a three-hour exponential time
 constant; local gusts are not projected unchanged through the entire horizon.
 Archived forecast comparisons distinguish changes in the configured wind source.
+
+## Solar window warming
+
+Optional per-room Window direction is a daylight/weather proxy, not a collector or
+irradiance sensor. Fractional-year solar declination and the equation of time,
+UTC time and HA latitude/longitude give elevation and azimuth. Below-horizon
+positions contribute zero; positive incidence against the selected window
+bearing scales the sunlight proxy. Cloud coverage attenuates it; known weather
+conditions provide a coarse substitute. Unknown location/daytime conditions
+provide no forecast solar credit. Current conditions expire after two hours;
+forecast rows must cover their hourly/twice-daily interval or the matching daily
+date. No fixed month range is used, and exact sunrise/sunset times are not shown.
+
+Solar gain starts at zero. Sunny observations with relay off and residual model
+response below 0.05 fit an empirical excess-temperature-change coefficient,
+regularized toward zero. At least 12 sunny idle hours plus 12 accepted heating
+and 12 idle hours precede updates. Gain is blended slowly and capped at 0.5°C/h
+for unit sunlight proxy. Forecasts take half of it (maximum 0.25°C/h). Nighttime
+reference loss comparisons exclude solar gains. For enabled rooms, sunlight
+and unknown daylight intervals cannot update ordinary loss/wind statistics,
+but still count accepted observations. Existing prior loss statistics are not
+retroactively reinterpreted when the toggle is enabled.
+
+Room direction/exposure, weather source or location changes reset solar fitting
+and previous observation continuity, preserving the ordinary model. Archived
+forecast context includes these settings. Missing solar data never enters the
+essential-input control guards. The ordinary comfort ranking and temperature
+limits remain unchanged. Clouds, blinds, window area, appliance gains and
+changing shading are not directly measured; empirical fit cannot distinguish
+all coincident gains. Live suitability still requires forecast validation.
+
+Shading further limits the conservative forecast allowance: Clear 100%, Partly shaded 65%, Mostly shaded 30%. Learning uses unscaled observed daylight so this extra caution is not undone by fitting a larger coefficient. Disabled receives no solar correction.

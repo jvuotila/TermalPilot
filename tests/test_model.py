@@ -376,3 +376,70 @@ class WindModelTests(unittest.TestCase):
         self.assertGreater(model.get('wind_updates',0),0)
         self.assertGreater(model['wind_loss'],0)
         self.assertLessEqual(model['wind_loss'],model['loss']/6)
+
+class SolarTests(unittest.TestCase):
+    def test_seasonal_daylight_clouds_and_window_direction(self):
+        from thermal_pilot.model import solar_signal
+        summer=datetime(2026,6,21,10,tzinfo=UTC)
+        winter=datetime(2026,12,21,10,tzinfo=UTC)
+        clear=solar_signal(summer,60,25,{'condition':'sunny'},'south')
+        self.assertGreater(clear,solar_signal(winter,60,25,{'condition':'sunny'},'south'))
+        self.assertGreater(clear,solar_signal(summer,60,25,{'cloud_coverage':100},'south'))
+        self.assertEqual(solar_signal(summer,60,25,{'condition':'sunny'},'north'),0)
+        self.assertEqual(solar_signal(datetime(2026,3,21,22,tzinfo=UTC),60,25,None),0)
+        self.assertIsNone(solar_signal(summer,60,25,None))
+        self.assertIsNone(solar_signal(summer,None,25,{'condition':'sunny'}))
+    def test_learning_requires_idle_sunshine_and_starts_at_zero(self):
+        from thermal_pilot.model import learn_solar, solar_gain
+        model=initial_model({**DEFAULTS,**ROOM_DEFAULTS});model.update(heated_hours=12,idle_hours=12,response=0)
+        previous={'solar':.8,'activity':1};current={'solar':.8}
+        learn_solar(model,previous,current,.25,.3)
+        self.assertNotIn('solar_statistics',model)
+        previous['activity']=0
+        for _ in range(40):learn_solar(model,previous,current,.25,.3)
+        self.assertEqual(solar_gain(model,.8),0)
+        for _ in range(160):learn_solar(model,previous,current,.25,.3)
+        self.assertGreater(solar_gain(model,.8),0)
+        self.assertLessEqual(solar_gain(model,10),.5)
+        self.assertEqual(solar_gain(model,None),0)
+        self.assertEqual(solar_gain(model,.8,False),0)
+    def test_daytime_solar_learning_does_not_bias_ordinary_loss(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'solar_direction':'south'}
+        model=initial_model(room);old_xx=model['xx']
+        previous={'time':NOW.timestamp(),'temperature':20,'outdoor':0,'activity':0,'solar':.8}
+        current={**previous,'time':NOW.timestamp()+900,'temperature':20.01}
+        learn(model,room,previous,current)
+        self.assertEqual(model['xx'],old_xx)
+        self.assertIn('solar_statistics',model)
+        previous['solar']=current['solar']=0
+        learn(model,room,previous,current)
+        self.assertGreater(model['xx'],old_xx)
+    def test_forecast_uses_half_learned_gain_only_when_enabled_and_known(self):
+        room={**DEFAULTS,**ROOM_DEFAULTS,'solar_direction':'south','solar_forecast':[1]*8,'minimum_run_minutes':15}
+        model=initial_model(room);model['solar_gain']=.5
+        slots=[Slot(NOW+timedelta(minutes=15*i),NOW+timedelta(minutes=15*(i+1)),10) for i in range(8)]
+        result=plan(room,model,22,[10]*8,slots,NOW,20)
+        self.assertTrue(all(row['solar_gain']==.25 for row in result['slots']))
+        off=plan({**room,'solar_direction':'disabled'},model,22,[10]*8,slots,NOW,20)
+        missing=plan({**room,'solar_forecast':[None]*8},model,22,[10]*8,slots,NOW,20)
+        self.assertTrue(all(row['solar_gain']==0 for row in off['slots']+missing['slots']))
+        self.assertTrue(all(room['minimum']<=row['setpoint']<=room['maximum'] for row in result['slots']))
+
+class SolarExposureTests(unittest.TestCase):
+    def test_shading_reduces_forecast_without_changing_learned_gain(self):
+        from thermal_pilot.model import solar_facing
+        room={**DEFAULTS,**ROOM_DEFAULTS,'solar_direction':'south','solar_forecast':[1]*8,'minimum_run_minutes':15}
+        model=initial_model(room);model['solar_gain']=.5
+        slots=[Slot(NOW+timedelta(minutes=15*i),NOW+timedelta(minutes=15*(i+1)),10) for i in range(8)]
+        for exposure,expected in [('clear',.25),('partly_shaded',.1625),('mostly_shaded',.075)]:
+            result=plan({**room,'solar_exposure':exposure},model,22,[10]*8,slots,NOW,20)
+            self.assertTrue(all(row['solar_gain']==expected for row in result['slots']))
+        self.assertEqual(model['solar_gain'],.5)
+        for direction in ['north','northeast','east','southeast','south','southwest','west','northwest']:
+            self.assertTrue(0<=solar_facing(NOW,60,25,direction)<=1)
+    def test_legacy_solar_settings_migrate_to_disabled_or_direction(self):
+        for legacy,expected in [({},'disabled'),({'solar_heating':False,'solar_direction':'south'},'disabled'),({'solar_heating':True},'south'),({'solar_direction':'northwest'},'northwest')]:
+            result=stored_settings({'rooms':[legacy]}, {})['rooms'][0]
+            self.assertEqual(result['solar_direction'],expected)
+            self.assertEqual(result['solar_exposure'],'clear')
+            self.assertNotIn('solar_heating',result)
