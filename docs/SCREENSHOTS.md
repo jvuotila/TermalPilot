@@ -15,7 +15,7 @@ Replace files in `docs/screenshots/` using these stable names:
 | integration-settings.png | ThermalPilot settings |
 | house-heating-settings.png | House heating settings |
 | shared-room-settings.png | Shared room settings |
-| rooms-settings.png | Rooms container |
+| rooms-settings.png | Rooms container with one room expanded |
 
 Use a configured Home Assistant installation or the local preview with clearly
 identified example data. Manually supplied captures are supported when automated

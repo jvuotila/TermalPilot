@@ -50,7 +50,7 @@ shown here are examples, not preset defaults.
 
 ### Rooms
 
-![Room settings with the architectural floor-plan background](docs/screenshots/rooms-settings.png)
+![Room settings with an expanded room and the architectural floor-plan background](docs/screenshots/rooms-settings.png)
 
 </details>
 
