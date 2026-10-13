@@ -443,3 +443,16 @@ class SolarExposureTests(unittest.TestCase):
             self.assertEqual(result['solar_direction'],expected)
             self.assertEqual(result['solar_exposure'],'clear')
             self.assertNotIn('solar_heating',result)
+
+class HouseSettingsTests(unittest.TestCase):
+    def test_legacy_defaults_and_conditional_water_validation(self):
+        legacy=stored_settings({}, {})
+        self.assertEqual(legacy['house_distribution'],'water_floor')
+        self.assertEqual(legacy['house_heat_source'],'air_to_water')
+        self.assertEqual(legacy['lag_hours'],3)
+        payload={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':''}
+        for distribution in ['electric_floor','electric_ceiling','electric_panels','warm_air']:
+            self.assertEqual(validate({**payload,'house_distribution':distribution})['house_distribution'],distribution)
+        for distribution in ['water_floor','water_radiators','mixed','other']:
+            self.assertEqual(validate({**payload,'house_distribution':distribution})['water_entity'],'')
+        with self.assertRaises(ValueError):validate({**payload,'house_distribution':'unsupported'})

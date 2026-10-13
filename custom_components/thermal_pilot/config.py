@@ -6,6 +6,10 @@ from .model import number
 
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
+ ('house_heat_source','Heat source','select:air_to_water,ground_source,air_to_air,electric_resistance,oil_boiler,gas_boiler,wood_boiler,pellet_boiler,district_heating,other'),
+ ('house_distribution','Heat distribution','select:water_floor,water_radiators,electric_floor,electric_ceiling,electric_panels,warm_air,mixed,other'),
+ ('house_heated_floor','Heated floor','select:concrete_slab,thin_screed,lightweight,not_applicable,unknown'),
+ ('house_foundation','Foundation','select:slab_on_ground,crawl_space,basement,other,unknown'),
  ('price_entity','Price sensor with additional costs','sensor',{'kind':'price'}),
  ('price_forecast_entity','Price forecast (optional)','sensor',{'kind':'price_forecast'}),
  ('price_unit','Source price unit','select:c/kWh,€/kWh'),
@@ -14,7 +18,7 @@ SOURCE_FIELDS = [
  ('weather_entity','Weather forecast source','weather'),
  ('outdoor_entity','Outdoor temperature','sensor',{'kind':'temperature'}),
  ('wind_entity','Wind speed (optional)','sensor',{'kind':'wind'}),
- ('water_entity','Supply water temperature source','sensor,climate',{'kind':'water'}),
+ ('water_entity','Heating water (optional)','sensor,climate',{'kind':'water'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('simulation_enabled','Enable simulation','bool'),
@@ -94,6 +98,10 @@ def setup_selector_config(hass, key):
         if not entity_matches(state, rule)]}
 
 
+def water_distribution(settings):
+    return settings.get('house_distribution','water_floor') not in ('electric_floor','electric_ceiling','electric_panels','warm_air')
+
+
 def stored_settings(data, options):
     """Convert legacy positive reductions when loading stored entries."""
     merged = {**DEFAULTS, **data, **options}
@@ -140,7 +148,8 @@ def validate(payload, hass=None):
                         raise ValueError(f'{label}: incorrect entity domain.')
                     if hass is not None and hass.states.get(value) is None:
                         raise ValueError(f'{label}: entity {value} was not found.')
-    check(result, SOURCE_FIELDS)
+    fields=[(field[0],field[1],'text') if field[0]=='water_entity' and not water_distribution(result) else field for field in SOURCE_FIELDS]
+    check(result,fields)
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
     for key in ('minimum_run_minutes','start_offset_minutes','stop_offset_minutes','sensor_warning_hours'):
@@ -151,8 +160,8 @@ def validate(payload, hass=None):
         raise ValueError('Cold curve temperature must be below warm curve temperature.')
     if result['minimum_run_minutes'] % 15:
         raise ValueError('Minimum heating run must be a multiple of 15 minutes.')
-    if not result['price_entity'] or not result['outdoor_entity'] or not result['water_entity']:
-        raise ValueError('Select price, outdoor temperature and supply water temperature sources.')
+    if not result['price_entity'] or not result['outdoor_entity']:
+        raise ValueError('Select price and outdoor temperature sources.')
     if not isinstance(result['rooms'], list) or len(result['rooms']) > 30:
         raise ValueError('A maximum of 30 rooms is supported.')
     rooms, ids, thermostats = [], set(), set()

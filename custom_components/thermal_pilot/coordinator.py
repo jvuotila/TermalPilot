@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
 from .control import ThermostatControl
-from .config import stored_settings
+from .config import stored_settings, water_distribution
 from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention, solar_signal, solar_facing, solar_enabled
 
 _LOGGER = logging.getLogger(__name__)
@@ -273,7 +273,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         previous_plan = ((getattr(self,'data',None) or {}).get('rooms',{}).get(rid,{}) or {}).get('plan') or {}
         for session in previous_plan.get('sessions',[]):
             start, end = stamp(session['start']), stamp(session['end'])
-            opening = start-timedelta(minutes=self.settings['start_offset_minutes'])
+            opening = start-timedelta(minutes=self.settings['start_offset_minutes'] if water_distribution(self.settings) else 0)
             if opening <= now < end:
                 return deepcopy(session)
         return None
@@ -385,8 +385,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                     points.append((date, temp))
             earlier = [p for p in points if p[0] <= slot.start]
             outdoors.append(max(earlier, key=lambda p:p[0])[1] if earlier else outdoor)
-        water_state = self.hass.states.get(self.settings['water_entity']) if self.settings['water_entity'] else None
+        uses_water=water_distribution(self.settings)
+        water_state = self.hass.states.get(self.settings['water_entity']) if uses_water and self.settings['water_entity'] else None
         water = number(water_state.attributes.get('current_temperature') if self.settings['water_entity'].startswith('climate.') else water_state.state) if water_state else None
+        if uses_water and water is None:
+            warnings.append('Heating water temperature is not available; planning and learning use observed thermostat demand without water-temperature adjustment.')
         fireplace_state = self.hass.states.get(self.settings['fireplace_entity']) if self.settings['fireplace_entity'] else None
         fireplace = bool(fireplace_state and fireplace_state.state == self.settings['fireplace_active_state'])
         readings, room_data = [], {}
@@ -399,7 +402,8 @@ class PilotCoordinator(DataUpdateCoordinator):
                 room['baseline'] = baseline
             model = self.models.setdefault(rid, initial_model(room))
             # Reset only affected model when heat source / room / activity / lag mapping changes.
-            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity']]
+            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity'] if uses_water else '']
+            if self.settings['house_distribution']!='water_floor':fingerprint+=[self.settings['house_distribution']]
             if rid in self.config_fingerprint and fingerprint != self.config_fingerprint[rid]:
                 model = self.models[rid] = initial_model(room)
                 self.previous.pop(rid, None)
@@ -420,14 +424,14 @@ class PilotCoordinator(DataUpdateCoordinator):
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
                       'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context}
-            if temperature is None or outdoor is None or baseline is None or water is None:
-                result['error'] = 'Room temperature, outdoor temperature, supply water temperature or target temperature is unavailable.'
+            if temperature is None or outdoor is None or baseline is None :
+                result['error'] = 'Room temperature, outdoor temperature or target temperature is unavailable.'
                 self.previous.pop(rid, None)
             elif not room['minimum'] <= baseline <= room['maximum']:
                 result['error'] = 'Target temperature is outside the allowed temperature range.'
                 self.previous.pop(rid, None)
             else:
-                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature)))
+                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature))) if uses_water and water is not None else 1.0
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
                            'activity':activity, 'water':water, 'water_factor':water_factor, 'wind':wind_status['speed'], 'solar':(current_solar*solar_facing(now,latitude,longitude,room.get('solar_direction','south')) if current_solar is not None else None) if solar_enabled(room) else None, 'excluded':fireplace}
                 prediction = None
@@ -441,7 +445,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
                         'wind_speed':wind_status['speed'], 'solar_forecast':[value*solar_facing(slot.start+(slot.end-slot.start)/2,latitude,longitude,room.get('solar_direction','south')) if value is not None else None for value,slot in zip(solar_forecast,slots)],
-                        'start_offset_minutes':self.settings['start_offset_minutes'], 'stop_offset_minutes':self.settings['stop_offset_minutes'],
+                        'start_offset_minutes':self.settings['start_offset_minutes'] if uses_water else 0, 'stop_offset_minutes':self.settings['stop_offset_minutes'] if uses_water else 0,
                         'boost':self.settings['boost'], 'setback':self.settings['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
                         'committed_session':self.committed_session(rid,now),
@@ -487,7 +491,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
                 'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,'wind':wind_status,
                 'collection_evidence':self.collection_evidence(),
-                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None},
+                'source_status':{'prices':bool(slots),'outdoor':outdoor is not None,'water':water is not None or not uses_water,'water_required':False},
                 'fallback_season':self.fallback_summary()}
         self._plan_settings = plan_settings
         data['control'] = await self.apply_live_targets(data,now)
@@ -531,14 +535,15 @@ class PilotCoordinator(DataUpdateCoordinator):
             return {'mode':'waiting','errors':[],'fallback_rooms':[]}
         targets, fallback = {}, []
         sources_ok = self.value(snapshot['outdoor_entity']) is not None
-        water_state = self.hass.states.get(snapshot['water_entity'])
+        uses_water=water_distribution(snapshot)
+        water_state = self.hass.states.get(snapshot['water_entity']) if uses_water else None
         water = number(water_state.attributes.get('current_temperature') if snapshot['water_entity'].startswith('climate.') else water_state.state) if water_state else None
         price_state = self.hass.states.get(snapshot['price_entity'])
         try:
             prices = price_slots(price_state.attributes,snapshot,now,ZoneInfo(self.hass.config.time_zone)) if price_state and price_state.state not in ('unknown','unavailable') else []
         except ValueError:
             prices = []
-        sources_ok = sources_ok and water is not None and bool(prices)
+        sources_ok = sources_ok and bool(prices)
         for room in snapshot['rooms']:
             planned = data.get('rooms',{}).get(room['id'],{}).get('plan')
             rows = (planned or {}).get('slots',[])

@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.39 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.40 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -17,15 +17,9 @@ Simulation status is split into labeled blocks. Empty timing tables show a clear
 message and are separated from each other. Smaller screens retain a single-column
 room-card layout.
 
-ThermalPilot is developed for my own home, using a **Panasonic Aquarea T-CAP heat pump**
-with hydronic underfloor heating and a concrete slab. I am sharing it for anyone
-interested, but I cannot promise that it will be useful or suitable for other users
-or heating systems.
+ThermalPilot is an experimental **general-purpose heating integration for Home Assistant**. It learns room thermal response and plans thermostat targets using weather, comfort limits and electricity prices. Development and validation began with a Panasonic Aquarea T-CAP air-to-water heat pump and water floor heating in a concrete slab; that configuration remains the backward-compatible default.
 
-ThermalPilot proposes room-by-room heating schedules using electricity prices,
-weather forecasts and observed thermal response. It is designed initially for
-slow hydronic underfloor heating with a concrete slab. It is not yet a production
-controller for arbitrary heating systems.
+Distribution-aware inputs support water floor/radiator systems and electric floor, ceiling/panels or warm-air systems controlled through room thermostat targets. Electric and air distribution use observed demand with a unit heating factor rather than requiring water temperature. This is a common empirical response model, not a complete equipment-specific simulation. Heat-source details list gas, oil, wood/pellet boilers and district heat, but their fuel costs and equipment-specific controls are not implemented. Mixed systems currently retain water controls; per-room distribution overrides are not yet supported. Heat-pump COP, defrost and manufacturer-specific operating limits are not modeled.
 
 ThermalPilot is installed through HACS as a custom integration. Its Home Assistant
 manifest uses `integration_type: service`, representing one heating-planning
@@ -61,8 +55,9 @@ service per configuration entry. This classification follows the
 Rooms are displayed alphabetically by name in Settings, Plan and History.
 Unnamed new rooms appear last; sorting preserves each room's identity and data.
 
-A supply-water source is required. If its reading is missing, planning and room
-learning pause until it recovers. The source accepts temperature sensors or climate entities with a
+For water-based distribution, a heating-water source is optional. Valid readings
+adjust estimated heating output. Without a sensor or while it is unavailable,
+planning and learning continue using observed thermostat demand with no water-temperature adjustment. The source accepts temperature sensors or climate entities with a
 `current_temperature` attribute, including `climate.panasonic_heat_pump_main_z1_temp`.
 This reads measured water temperature, not the climate target. A fixed internal
 32 °C reference calibrates the model and never commands the heat pump. Starting heating-hour
@@ -96,7 +91,7 @@ Forecasts refresh hourly; changing the source refreshes immediately.
 ## Room sensor checks
 
 While Active, ThermalPilot checks whether each room's temperature reading has
-changed. After the configured unchanged temperature interval (default six hours) of unchanged or unavailable readings, one persistent
+changed. After the configured unchanged temperature interval (default eight hours) of unchanged or unavailable readings, one persistent
 Home Assistant notification lists the suspect rooms. Stable room temperatures
 can produce this warning too; it identifies a possible issue rather than a
 confirmed sensor failure. A changed reading resets the timer.
@@ -483,7 +478,7 @@ or tap. Heating observations are grouped into continuous On periods. Times refle
 recorded observations; when the start or stop is unknown, the tooltip says
 First observed On or Observed until instead. Tap again or press Escape to dismiss.
 
-Under **ThermalPilot settings → Miscellaneous**, **Sensor warning delay (hours)** sets the warning delay from 1 to 72 whole hours. The default is 6 hours;
+Under **ThermalPilot settings → Miscellaneous**, **Sensor warning delay (hours)** sets the warning delay from 1 to 72 whole hours. The default is 8 hours;
 the once-per-day notification limit remains unchanged.
 
 ### Forecast accuracy
@@ -599,3 +594,11 @@ heat can still confound it. Review saved forecasts before relying on live contro
 Shading further limits the conservative forecast allowance: Clear 100%, Partly shaded 65%, Mostly shaded 30%. Learning uses unscaled observed daylight so this extra caution is not undone by fitting a larger coefficient. Disabled receives no solar correction.
 
 The Plan electricity/heating chart shows observed thermostat demand in amber before Now and current suggested windows in teal after Now, on each room’s shared lane. History retains separate suggested/relay lanes. Observation gaps stay empty; tooltips retain observed timing and total duration.
+
+### House settings and compatibility
+
+On wide screens, ThermalPilot settings and House heating settings occupy the first row; Shared room settings and Rooms occupy the second. Optional water input and valve offsets are in Water heating, with Heating response beneath the house details. Electric and warm-air distribution hide water controls, ignore stored valve offsets and use zero advance/closing offsets. No distribution requires water readings for source readiness or live control. Stored water settings are retained for switching back. Response lag remains an explicit shared setting; choosing a distribution does not replace it with an assumed value.
+
+Existing installations default to air-to-water, water floor heating and concrete heated slab; foundation defaults to Unknown. These metadata defaults preserve existing model fingerprints, learned parameters and observations. Changing the actual distribution resets affected live room coefficients because heating input interpretation changes, while recorded history remains stored. Source, foundation and floor descriptions alone do not reset learned parameters.
+
+The water sensor is optional even for hydronic systems. Valve offsets remain water-specific, whereas response lag applies to every distribution. New/missing Sensor warning delay defaults to 8 hours; explicitly saved values remain unchanged.

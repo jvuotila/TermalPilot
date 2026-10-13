@@ -45,6 +45,35 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_nonwater_distributions_plan_learn_and_control_without_water(self):
+        rid=self.c.settings['rooms'][0]['id']
+        self.hass.states.pop('sensor.water')
+        self.c.settings.update(water_entity='',simulation_enabled=False,live_control_confirmed=True)
+        for distribution in ['electric_floor','electric_ceiling','electric_panels','warm_air']:
+            self.c.settings['house_distribution']=distribution
+            data=await self.c._async_update_data()
+            self.assertFalse(data['source_status']['water_required'])
+            self.assertTrue(data['rooms'][rid]['plan'])
+            self.assertEqual(data['control']['fallback_rooms'],[])
+            self.assertEqual(self.c.previous[rid]['water_factor'],1)
+            for session,window in zip(data['rooms'][rid]['plan']['sessions'],data['rooms'][rid]['plan']['thermostat_windows']):
+                self.assertEqual(session,window)
+        self.c.settings['house_distribution']='water_floor'
+        data=await self.c._async_update_data()
+        self.assertTrue(data['rooms'][rid]['plan'])
+        self.assertEqual(data['control']['fallback_rooms'],[])
+    async def test_house_metadata_preserves_existing_water_model_and_history(self):
+        data=await self.c._async_update_data();rid=self.c.settings['rooms'][0]['id']
+        model=self.c.models[rid];model['loss']=.012;model['heated_hours']=40;model['idle_hours']=60
+        fingerprint=deepcopy(self.c.config_fingerprint[rid])
+        count=data['history_info']['rows']
+        self.c.settings.update(house_heat_source='air_to_water',house_distribution='water_floor',house_heated_floor='concrete_slab',house_foundation='slab_on_ground')
+        data=await self.c._async_update_data()
+        self.assertIs(self.c.models[rid],model)
+        self.assertEqual(self.c.models[rid]['loss'],.012)
+        self.assertEqual(self.c.config_fingerprint[rid],fingerprint)
+        self.assertGreaterEqual(data['history_info']['rows'],count)
+
     async def test_optional_solar_uses_location_and_missing_weather_keeps_control(self):
         moment=datetime(2026,6,21,10,tzinfo=timezone.utc)
         self.hass.config.latitude=60;self.hass.config.longitude=25
@@ -68,11 +97,11 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_badges_use_usable_sources_and_least_observed_room(self):
         data = await self.c._async_update_data()
-        self.assertEqual(data['source_status'], {'prices':True,'outdoor':True,'water':True})
+        self.assertEqual(data['source_status'], {'prices':True,'outdoor':True,'water':True,'water_required':False})
         self.c.models[self.c.settings['rooms'][0]['id']].update(heated_hours=150,idle_hours=160)
         self.c.settings['rooms'].append({**self.c.settings['rooms'][0],'id':'new-room'})
         self.assertEqual(self.c.collection_evidence()['heating_hours'],0)
-        self.c.models['new-room']={'heated_hours':4,'idle_hours':8}
+        self.c.models['new-room']=deepcopy(self.c.models[self.c.settings['rooms'][0]['id']]);self.c.models['new-room'].update(heated_hours=4,idle_hours=8)
         self.assertEqual(self.c.collection_evidence(),{'rooms':2,'heating_hours':4,'idle_hours':8})
         self.hass.states.pop('sensor.water')
         data = await self.c._async_update_data()
@@ -130,14 +159,14 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(data['price_chart']),96)
         self.assertEqual(self.c.history_db.read(0)[0]['price'],10)
 
-    async def test_sensor_warning_after_six_hours_aggregates_and_limits_daily(self):
+    async def test_sensor_warning_after_eight_hours_aggregates_and_limits_daily(self):
         second={**self.c.settings['rooms'][0],'id':'second','name':'Bedroom','temperature_entity':'sensor.second'}
         self.c.settings['rooms'].append(second)
         self.hass.states['sensor.second']=State('unknown')
-        for step in range(12):
+        for step in range(16):
             await self.c.check_temperature_sensors(now+timedelta(minutes=30*step),True)
         self.hass.services.async_call.assert_not_awaited()
-        await self.c.check_temperature_sensors(now+timedelta(hours=6),True)
+        await self.c.check_temperature_sensors(now+timedelta(hours=8),True)
         self.hass.services.async_call.assert_awaited_once()
         notification=self.hass.services.async_call.await_args.args[2]
         self.assertIn('Study',notification['message']);self.assertIn('Bedroom',notification['message'])
@@ -145,7 +174,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.c.store.saved['sensor_health']['last_notification_day'],'2026-01-02')
         # Loading saved state does not permit a repeated notification on the same day.
         self.c.sensor_health=deepcopy(self.c.store.saved['sensor_health'])
-        for step in range(13,48):
+        for step in range(17,48):
             await self.c.check_temperature_sensors(now+timedelta(minutes=30*step),True)
         self.assertEqual(self.hass.services.async_call.await_count,1)
         await self.c.check_temperature_sensors(now+timedelta(days=1),True)
@@ -166,7 +195,8 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
     async def test_sensor_warning_interval_validation_and_legacy_default(self):
         from thermal_pilot.config import validate
         legacy=deepcopy(self.c.settings);legacy.pop('sensor_warning_hours')
-        self.assertEqual(validate(legacy)['sensor_warning_hours'],6)
+        self.assertEqual(validate(legacy)['sensor_warning_hours'],8)
+        self.assertEqual(validate({**legacy,'sensor_warning_hours':6})['sensor_warning_hours'],6)
         self.assertEqual(validate({**legacy,'sensor_warning_hours':12})['sensor_warning_hours'],12)
         for value in [0,73,1.5,'invalid']:
             with self.subTest(value=value),self.assertRaises(ValueError):
@@ -604,13 +634,15 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.hass.states.pop('sensor.room')
         result=await self.c._async_update_data()
         self.assertIsNone(next(iter(result['rooms'].values()))['plan'])
-    async def test_missing_water_suppresses_plan_and_learning(self):
+    async def test_missing_optional_water_preserves_plan_and_learning(self):
         await self.c._async_update_data()
         self.hass.states.pop('sensor.water')
-        result=await self.c._async_update_data()
-        self.assertTrue(all(room['plan'] is None for room in result['rooms'].values()))
-        self.assertFalse(self.c.previous)
-        self.assertEqual(self.c.history_db.size()['rows'],1)
+        with patch('thermal_pilot.coordinator.dt_util.utcnow',return_value=now+timedelta(minutes=5)):
+            result=await self.c._async_update_data()
+        self.assertTrue(all(room['plan'] is not None for room in result['rooms'].values()))
+        self.assertTrue(self.c.previous)
+        self.assertTrue(all(row['water_factor']==1 for row in self.c.previous.values()))
+        self.assertEqual(self.c.history_db.size()['rows'],2)
         self.hass.services.async_call.assert_not_awaited()
     async def test_passive_transition_compacts(self):
         self.c.settings['season_archive_enabled']=False  # Removed legacy preference is ignored.

@@ -220,11 +220,11 @@ groupedPanel.settings={boost:1.5,setback:1,lag_hours:3,water_reference:32,price_
 groupedPanel.info={source_fields:[['price_entity','Price','sensor',{kind:'price'}],['boost','Boost','number',0,5],['setback','Reduction','number',0,5],['lag_hours','Lag','number',.25,12]],room_fields:[]};
 const groupedHTML=groupedPanel.settingsView();
 const sharedSection=groupedHTML.match(/<section class="settings-shared"><h2>Shared room settings<\/h2>[\s\S]*?<\/section>/)[0];
-for(const key of ['boost','setback','lag_hours']){
+for(const key of ['boost','setback']){
  assert.match(sharedSection,new RegExp(`data-field="source.${key}"`));
  assert.equal(groupedHTML.split(`data-field="source.${key}"`).length-1,1);
 }
-assert.ok(!sharedSection.includes('source.price_entity'));
+assert.ok(!sharedSection.includes('source.price_entity'));assert.ok(!sharedSection.includes('source.lag_hours'));assert.match(groupedHTML.match(/<section class="settings-house">[\s\S]*?<\/section>/)[0],/source.lag_hours/);
 console.log('Shared-room section tests passed (global controls grouped once, source fields separate).');
 
 const preview=fs.readFileSync(path.join(__dirname,'../PREVIEW.html'),'utf8');
@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.39 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.40 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -487,3 +487,15 @@ assert.match(planWithActual,/Suggested heating On/);
 detailsPanel.statusHistory=[{room_id:'detail',time:periodNow/1000+3600,activity:1}];
 assert.doesNotMatch(detailsPanel.priceChart(false),/data-chart-detail="Study · Actual relay On/);
 console.log('Plan relay history checks passed: observed amber periods, duration tooltips, future teal suggestions and no future relay history.');
+
+const isWater=vm.runInContext('waterDistribution',context);
+for(const distribution of ['electric_floor','electric_ceiling','electric_panels','warm_air'])assert.equal(isWater({house_distribution:distribution}),false);
+for(const distribution of ['water_floor','water_radiators','mixed','other'])assert.equal(isWater({house_distribution:distribution}),true);
+const houseSettings=previewPanel.settingsView();
+assert.ok(houseSettings.indexOf('settings-sources')<houseSettings.indexOf('settings-house'));
+assert.ok(houseSettings.indexOf('settings-house')<houseSettings.indexOf('settings-shared'));
+previewPanel.settings.house_distribution='electric_floor';
+assert.match(previewPanel.settingsView(),/data-water-group hidden/);
+previewPanel.settings.house_distribution='water_floor';
+assert.doesNotMatch(previewPanel.settingsView(),/data-water-group hidden/);
+console.log('House settings checks passed: card order, moved controls, conditional water groups and distribution classification.');

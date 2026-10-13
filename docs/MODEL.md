@@ -182,3 +182,21 @@ changing shading are not directly measured; empirical fit cannot distinguish
 all coincident gains. Live suitability still requires forecast validation.
 
 Shading further limits the conservative forecast allowance: Clear 100%, Partly shaded 65%, Mostly shaded 30%. Learning uses unscaled observed daylight so this extra caution is not undone by fitting a larger coefficient. Disabled receives no solar correction.
+
+## Distribution-aware heating input
+
+Water floor/radiator, Mixed and Other retain the measured water-factor path and
+optional water adjustment. Electric floor, ceiling, panels and warm-air
+distribution use a unit factor for observed thermostat demand and planned
+demand, with zero valve offsets. The configurable response lag remains in use.
+Heat-source/foundation/floor metadata do not imply COP, combustion efficiency
+or different fuel prices. The cost objective continues to use electricity.
+
+The legacy water-floor fingerprint is unchanged; no model reset occurs merely
+from adding default house metadata. Other distributions include a distribution
+marker and omit irrelevant water entities from their fingerprint. Switching
+distribution resets affected live model parameters with a save confirmation,
+while stored observations remain. This is an empirical common response model;
+manufacturer-specific equipment control is outside the current implementation.
+
+Without usable water readings, hydronic systems also use a unit heating factor. Missing water does not force live comfort fallback or pause collection. A measured water reading retains the original bounded water-factor calculation. This removes information about changing flow temperature, so predictions require validation.
