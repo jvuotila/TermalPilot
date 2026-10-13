@@ -257,6 +257,26 @@ class ThermalPilotPanel extends HTMLElement {
     const selected=this.shadowRoot.querySelector('[data-field="source.fireplace_entity"]')?.value??this.settings?.fireplace_entity;
     hint.textContent=`${this.t('Current state:')} ${this.t(fireplaceCurrentState(this._hass?.states?.[selected]))}`;
   }
+  mountAccordionScrolling(){
+    this.shadowRoot.querySelectorAll('details').forEach(details=>{
+      const summary=details.querySelector(':scope > summary');if(!summary)return;
+      summary.addEventListener('click',event=>{
+        if(event.defaultPrevented)return;
+        // Wait for the native details action and layout; restored open states do not scroll.
+        const afterLayout=()=>{
+          if(!details.open||!details.isConnected)return;
+          const height=globalThis.innerHeight||globalThis.document?.documentElement?.clientHeight;
+          if(!height)return;
+          const bounds=details.getBoundingClientRect();
+          if(bounds.bottom<=height-16)return;
+          const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+          details.scrollIntoView({behavior:reduced?'instant':'smooth',block:bounds.height>height-32?'start':'nearest',inline:'nearest'});
+        };
+        if(typeof requestAnimationFrame==='function')requestAnimationFrame(afterLayout);
+        else setTimeout(afterLayout,0);
+      });
+    });
+  }
   mountLanguagePicker(){
     const picker=this.shadowRoot.querySelector('.language-picker');if(!picker)return;
     const trigger=picker.querySelector('.language-trigger'),list=picker.querySelector('.language-options'),field=picker.querySelector('[data-field]');
@@ -320,7 +340,7 @@ class ThermalPilotPanel extends HTMLElement {
     }
     else if(key==='language'){
       const language=Object.hasOwn(languageNames,value)?value:'en';
-      input=`<span class="language-picker"><input type="hidden" data-field="${name}" value="${language}"><button type="button" class="language-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="language-options"><span>${languageFlag(language)}<span data-user-text>${languageNames[language]}</span></span><span aria-hidden="true">▾</span></button><span class="language-options" id="language-options" role="listbox" aria-label="Language" hidden>${Object.keys(languageNames).map(code=>`<button type="button" role="option" aria-selected="${code===language}" data-language="${code}" tabindex="-1">${languageFlag(code)}<span data-user-text>${languageNames[code]}</span></button>`).join('')}</span></span>`;
+      input=`<span class="language-picker"><input type="hidden" data-field="${name}" value="${language}"><button type="button" class="language-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="language-options"><span>${languageFlag(language)}<span data-user-text>${languageNames[language]}</span></span><span aria-hidden="true">▾</span></button><span class="language-options" id="language-options" role="listbox" aria-label="Language" hidden>${Object.keys(languageNames).sort((a,b)=>languageNames[a].localeCompare(languageNames[b],'en',{sensitivity:'base'})).map(code=>`<button type="button" role="option" aria-selected="${code===language}" data-language="${code}" tabindex="-1">${languageFlag(code)}<span data-user-text>${languageNames[code]}</span></button>`).join('')}</span></span>`;
     }
     else if(type.startsWith('select:'))input=`<select data-field="${name}">${type.slice(7).split(',').map(v=>`<option ${v===value?'selected':''} value="${escapeHTML(v)}">${escapeHTML(key==='language'?({'en':'🇬🇧 English','fi':'🇫🇮 Finnish'}[v]||v):key==='pricing_mode'?schedulingLabels[v]||v:key.startsWith('house_')?houseOptionLabels[v]||v:key==='solar_direction'&&v==='disabled'?'Solar heating off':['solar_direction','solar_exposure'].includes(key)?v.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase()):v)}</option>`).join('')}</select>`;
     else if(type==='number')input=`<input type="number" step="${step}" min="${min}" max="${max}" data-field="${name}" value="${escapeHTML(value)}">`;
@@ -836,6 +856,7 @@ section{margin-bottom:30px}
 #settings .room-cards{gap:24px;margin:24px 0}
 
 .observation-accordion{border:0;padding:0}
+details{scroll-margin-block:16px}
 .observation-accordion>summary{display:flex;align-items:center;gap:10px;list-style:none;margin:0}
 .observation-accordion>summary::-webkit-details-marker{display:none}
 .observation-accordion>summary::before{content:"▸";font-size:18px;transform:rotate(0);flex:none}
@@ -1024,6 +1045,7 @@ section{margin-bottom:30px}
     const disclosureTab=this.tab;
     this.shadowRoot.querySelectorAll('[data-room-accordion]').forEach(details=>details.addEventListener('toggle',()=>{this.roomDisclosureState.set(`${disclosureTab}:${details.dataset.roomAccordion}`,details.open);}));
     this.shadowRoot.querySelectorAll('[data-forecast-hours]').forEach(select=>select.addEventListener('change',event=>{this.forecastHours=Number(event.target.value);this.render();}));
+    this.mountAccordionScrolling();
     this.mountLanguagePicker();
     this.mountPriceChartSizing();
     if(this.tab==='history')this.mountHistoryGraphs();
