@@ -10,7 +10,7 @@ For gas, oil, wood/pellet or district heating, the current integration offers
 limited value: temperature history and thermal-response learning, without heating
 schedules, thermostat control or a required electricity-price sensor.
 
-Version **0.9.1 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.2 — experimental simulation-first Home Assistant custom integration**.
 
 **Start in simulation and allow time for learning and validation.** Initial data
 collection reaches 100% after at least 12 observed heating hours and 12 idle
