@@ -474,3 +474,12 @@ class NonElectricSettingsTests(unittest.TestCase):
             result=confirm_control_settings(config,{},True)
             self.assertEqual(result['price_entity'],'')
             self.assertTrue(result['simulation_enabled']);self.assertFalse(result['live_control_confirmed'])
+
+class FireplaceStateSettingsTests(unittest.TestCase):
+    def test_binary_contact_state_validation_rejects_display_names(self):
+        state=types.SimpleNamespace(state='on',attributes={'device_class':'opening'})
+        hass=types.SimpleNamespace(states=types.SimpleNamespace(get=lambda entity:state))
+        payload={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','fireplace_entity':'binary_sensor.damper'}
+        for value in ['on','off']:
+            self.assertEqual(validate({**payload,'fireplace_active_state':value},hass)['fireplace_active_state'],value)
+        with self.assertRaises(ValueError):validate({**payload,'fireplace_active_state':'Open'},hass)

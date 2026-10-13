@@ -1,6 +1,6 @@
 # Validation status
 
-- 140 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 141 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover eight-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -162,3 +162,7 @@ SVG language-picker checks cover Finland/UK artwork, hidden canonical language f
 Finnish room regressions cover dynamic ETA sentences, less-than-one-day estimates, comparison counts, forecast error labels, asynchronously added history links, localized native-card entity labels and isolated locale/state translation.
 
 Completed collection badge checks cover seven-day 3-hour forecast error, missing evidence, no-change/similar-heating context, Finnish numeric format and suppression in non-electric observation mode. The badge makes no live-readiness assertion.
+
+Forecast-rating tests cover five practical deviation bands, a 20-comparison minimum, no-change benchmark restriction on green ratings, invalid/missing data and Finnish labels. Numerical thresholds are display guidance, not validated safety limits.
+
+Fireplace-state checks cover contact Open/Closed labels mapped to on/off, enum options, selector-only entry and backend rejection of display labels as binary states.

@@ -20,7 +20,7 @@ SOURCE_FIELDS = [
  ('wind_entity','Wind speed (optional)','sensor',{'kind':'wind'}),
  ('water_entity','Heating water (optional)','sensor,climate',{'kind':'water'}),
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
- ('fireplace_active_state','Fireplace active value','text'),
+ ('fireplace_active_state','Fireplace active when','text'),
  ('simulation_enabled','Enable simulation','bool'),
  ('language','Language','select:en,fi'),
  ('summer_minimum_temperature','Summer temperature (°C)','number',-20,25,0.1),
@@ -155,6 +155,13 @@ def validate(payload, hass=None):
                         raise ValueError(f'{label}: entity {value} was not found.')
     fields=[(field[0],field[1],'text') if (field[0]=='water_entity' and not water_distribution(result)) or (field[0] in ('price_entity','price_forecast_entity') and not electric_heating(result)) else field for field in SOURCE_FIELDS]
     check(result,fields)
+    if hass is not None and result['fireplace_entity']:
+        state=hass.states.get(result['fireplace_entity'])
+        if state is not None:
+            options=state.attributes.get('options')
+            allowed=['on','off'] if result['fireplace_entity'].startswith('binary_sensor.') else options if isinstance(options,list) else None
+            if allowed and result['fireplace_active_state'] not in allowed:
+                raise ValueError('Fireplace active when: choose a valid state of the selected sensor.')
     if result['minimum'] > result['maximum']:
         raise ValueError('Minimum allowed temperature must not exceed maximum allowed temperature.')
     for key in ('minimum_run_minutes','start_offset_minutes','stop_offset_minutes','sensor_warning_hours'):

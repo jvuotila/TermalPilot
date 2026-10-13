@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.44 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.45 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -563,12 +563,34 @@ assert.match(initialBadgePanel.learningBadge({learning_progress:{percent:100}}),
 console.log('Initial collection badge checks passed: progress shown before completion and removed at 100 percent.');
 
 const forecastBadgeRoom={learning_progress:{percent:100},forecast_accuracy:{'3':{count:30,mae:.1,persistence_mae:.03,similar_heating_mae:.12,similar_heating_count:20}}};
-assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/3 h error: 0.10 °C/);
+assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/Forecast: Okay · 0.10 °C/);
 assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/30 comparisons/);
 assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/No-change benchmark: 0.03 °C/);
 assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/not a live-control readiness guarantee/);
 assert.doesNotMatch(initialBadgePanel.learningBadge(forecastBadgeRoom),/100% initial data/);
 initialBadgePanel.settings={language:'fi'};
-assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/3 h virhe: 0,10 °C/);
+assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/Ennuste: Kohtalainen · 0,10 °C/);
 initialBadgePanel.settings.house_heat_source='gas_boiler';assert.equal(initialBadgePanel.learningBadge(forecastBadgeRoom),'');
 console.log('Completed collection forecast badges passed: measured MAE, evidence context, benchmark, Finnish and no readiness claim.');
+
+const rateForecast=vm.runInContext('forecastRating',context);
+for(const [mae,level] of [[.19,4],[.3,3],[.5,2],[.8,1],[1.2,0]])assert.equal(rateForecast({mae,count:30,persistence_mae:2}).level,level);
+assert.equal(rateForecast({mae:.19,count:10,persistence_mae:1}).level,null);
+assert.equal(rateForecast({mae:.19,count:30,persistence_mae:.03}).level,2);
+assert.equal(rateForecast({mae:.19,count:30}).level,2);
+assert.equal(rateForecast({mae:-1,count:30}).level,null);
+initialBadgePanel.settings={language:'en'};
+assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/quality-2/);
+assert.match(initialBadgePanel.learningBadge(forecastBadgeRoom),/not an integration fault/);
+console.log('Forecast rating checks passed: five deviation levels, evidence minimum, benchmark guard and honest missing data.');
+
+const fireplaceOptions=vm.runInContext('fireplaceStateOptions',context);
+const damper={entity_id:'binary_sensor.damper',state:'on',attributes:{device_class:'opening'}};
+assert.equal(JSON.stringify(fireplaceOptions(damper,'on')),JSON.stringify([{value:'on',label:'Open'},{value:'off',label:'Closed'}]));
+const enumStates=fireplaceOptions({entity_id:'sensor.fire',state:'burning',attributes:{options:['idle','burning']}},'burning');
+assert.equal(JSON.stringify(enumStates.map(option=>option.value)),JSON.stringify(['idle','burning']));
+const damperPanel=new Component();damperPanel._hass={states:{'binary_sensor.damper':damper}};
+const stateField=damperPanel.field(['fireplace_active_state','Fireplace active when','text'],{fireplace_entity:'binary_sensor.damper',fireplace_active_state:'on'},'source');
+assert.match(stateField,/<select data-field="source.fireplace_active_state">/);assert.match(stateField,/value="on" selected>Open/);assert.match(stateField,/value="off" >Closed/);
+assert.doesNotMatch(stateField,/<input data-field="source.fireplace_active_state"/);
+console.log('Fireplace state selector checks passed: Open/Closed map to on/off, enum sensor options and no free-text entry.');

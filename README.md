@@ -8,7 +8,7 @@ For gas, oil, wood/pellet or district heating, the current integration offers
 limited value: temperature history and thermal-response learning, without heating
 schedules, thermostat control or a required electricity-price sensor.
 
-Version **0.1.44 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.45 — experimental simulation-first Home Assistant custom integration**.
 
 **Start in simulation and allow time for learning and validation.** Initial data
 collection reaches 100% after at least 12 observed heating hours and 12 idle
@@ -24,22 +24,6 @@ Also inspect heating schedules across heating/idle cycles, cold weather and
 changes in sun or wind. A small error during stable temperatures alone does not
 validate heating capacity, timing or live control.
 
-
-The panel uses a compact responsive layout: shared settings sit side by side on
-wide screens, with Rooms matching the width of either shared-settings container.
-Plan and History show two room cards per row. Wrapped setting
-labels share aligned input rows, and dropdown arrows are inset from the border.
-Shared settings use four equal columns and wrap additional fields onto the next
-row; narrower screens use fewer columns. Plan and History have tinted headings,
-chart surfaces and shaded tables, with subtle shadows and stronger borders.
-Room rows alternate teal and blue backgrounds. Failed forecast requests show their
-underlying errors and retry after five minutes; successful forecasts are cached
-for an hour.
-Room accordions start closed and remember their state during the panel session.
-Simulation status is split into labeled blocks. Empty timing tables show a clear
-message and are separated from each other. Smaller screens retain a single-column
-room-card layout.
-
 ThermalPilot is an experimental **general-purpose heating integration for Home Assistant**. It learns room thermal response and plans thermostat targets using weather, comfort limits and electricity prices. Development and validation began with a Panasonic Aquarea T-CAP air-to-water heat pump and water floor heating in a concrete slab; that configuration remains the backward-compatible default.
 
 Distribution-aware inputs support water floor/radiator systems and electric floor, ceiling/panels or warm-air systems controlled through room thermostat targets. Electric and air distribution use observed demand with a unit heating factor rather than requiring water temperature. This is a common empirical response model, not a complete equipment-specific simulation. Heat-source details list gas, oil, wood/pellet boilers and district heat, but their fuel costs and equipment-specific controls are not implemented. Mixed systems currently retain water controls; per-room distribution overrides are not yet supported. Heat-pump COP, defrost and manufacturer-specific operating limits are not modeled.
@@ -52,7 +36,8 @@ service per configuration entry. This classification follows the
 ## What this version includes
 
 - A dedicated **ThermalPilot** sidebar panel with **Plan**, **History**
-  and **Settings** pages, in English.
+  and **Settings** pages, available in **English and Finnish**. English is the default;
+  the language can be changed in Settings.
 - Room names, thermostats, temperature sensors and actual heating-activity sources.
 - Automatic detection of source price intervals: timestamped rows are preferred;
   plain lists use 24 hourly or 96 quarter-hour prices per regular day.
@@ -75,13 +60,11 @@ service per configuration entry. This classification follows the
 - A **shared summer setpoint**, default 10 C, and optional actual season setpoint
   application. Scheduled heating decisions always remain simulated in version 0.1.
 
-Rooms are displayed alphabetically by name in Settings, Plan and History.
-Unnamed new rooms appear last; sorting preserves each room's identity and data.
-
 For water-based distribution, a heating-water source is optional. Valid readings
 adjust estimated heating output. Without a sensor or while it is unavailable,
-planning and learning continue using observed thermostat demand with no water-temperature adjustment. The source accepts temperature sensors or climate entities with a
-`current_temperature` attribute, including `climate.panasonic_heat_pump_main_z1_temp`.
+planning and learning continue using observed thermostat demand with no water-temperature adjustment. Select the source under **Settings → House heating settings → Water heating →
+Heating water (optional)**. It accepts temperature sensors or climate entities
+with a `current_temperature` attribute from your own Home Assistant installation.
 This reads measured water temperature, not the climate target. A fixed internal
 32 °C reference calibrates the model and never commands the heat pump. Starting heating-hour
 estimates are internal model seeds. Each room has a target temperature; minimum
@@ -90,18 +73,10 @@ valid observations automatically while active collection is enabled.
 
 A shared **Enable simulation** toggle selects simulated or real scheduled control
 for every room. Disabling it and confirming activates thermostat target control.
-Disable your existing heating automation manually first. Observation and learning
-continue in both modes while ThermalPilot is Active. Initial-data percentages
+If another automation controls the same thermostats, disable it before enabling
+ThermalPilot live control. No existing heating automation is required. Observation
+and learning continue in both modes while ThermalPilot is Active. Initial-data percentages
 do not prove model reliability and do not automatically activate control.
-
-Room settings use two columns of collapsible cards, with two columns of fields
-inside each card on wider screens. Boolean settings use keyboard-accessible toggles.
-Trash and learning-reset icons require confirmation. Editing clears the preceding
-save message; successful saves show a fresh timestamp in a bottom notification that disappears
-after five seconds. Settings sections use distinct subtle background colors.
-Fireplace heating compensation uses -100% to 0%; -20% reduces estimated heat
-loss by 20% while the fireplace is active. Existing positive compensation
-values are converted when loading settings to preserve their effect.
 
 Planning automatically covers all continuously available price intervals from
 now until the published prices end. There is no configurable planning horizon,
@@ -202,10 +177,11 @@ that all energy use stops before a higher tariff.
 ## Important operating distinction
 
 **Default: simulation only.** No physical thermostat or heat-pump commands are sent.
-Your existing heating automation continues controlling the building.
+Your thermostats continue operating under their current settings and controls.
 
-**Live control is opt-in.** Turn off Enable simulation, save and confirm after
-manually disabling the old heating automation. Existing installations with a
+**Live control is opt-in.** Turn off Enable simulation, save and confirm. If
+another automation controls the same thermostats, disable it first to avoid
+conflicting commands. Existing installations with a
 legacy simulation-off preference do not silently activate control: explicit
 confirmation is required. Returning to simulation releases controlled thermostats
 at their seasonal fallback temperatures. Physical commands use [Home Assistant’s thermostat target action](https://www.home-assistant.io/actions/climate.set_temperature/); thermostat HVAC modes, relays and the heat pump are not
@@ -460,7 +436,6 @@ the percentage and days remaining when enough rate data is available. It predict
 when those initial thresholds may be reached,
 not when predictions become trustworthy. Live control requires your explicit activation.
 
-
 Plan and History include a shared electricity-price chart above all room timelines.
 Its accordion opens by default; timeline heights remain compact on wide screens.
 Price colors use thresholds at 0, 15, 20, 25, 35, 50 and 60 c/kWh, from green
@@ -488,7 +463,6 @@ It shows recorded suggested heating and observed thermostat activity even
 when no prices are available. Known prices are shown only where available;
 gaps are left empty. Winter fallback badges use cold blue and summer fallback
 badges use warm green.
-
 
 The Plan, History and Settings pages use a tabbed frame. Dates use Finnish numeric
 format (DD.MM.YYYY), with 24-hour times. The Operation card groups Active/Passive,
@@ -669,3 +643,19 @@ forecast error over the latest seven days instead of initial-data progress. The
 tooltip includes comparison counts, the no-change benchmark and similar-heating
 results. Missing results show Forecast data pending. This is an accuracy
 measurement, not a readiness score or an automatic switch to live control.
+
+Forecast difference is the mean absolute difference between a saved three-hour
+forecast and the later room-temperature measurement, over the last seven days.
+For example, 0.19°C means predictions differed by 0.19°C on average, ignoring
+whether they were warmer or cooler. It is not an integration fault or a bound
+on every individual forecast.
+
+The room badge uses practical display bands: Very good ≤0.20°C, Good ≤0.40°C,
+Okay ≤0.60°C, Poor ≤1.00°C and Bad >1.00°C. These are explanatory UI thresholds,
+not calibrated safety standards. Fewer than 20 comparisons remains Learning
+with a neutral color. Green ratings additionally require better results than
+simply predicting no temperature change; a missing or equal/better benchmark
+limits the rating to Okay or worse. Counts and similar-heating results remain
+in the tooltip. These ratings do not establish readiness for live control.
+
+For a fireplace damper contact sensor, **Fireplace active when** offers Open and Closed instead of free text; Open is the usual active state and maps to HA state `on`. Other sensors use their declared options or available state values. The contact measures damper position, not combustion.
