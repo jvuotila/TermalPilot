@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.47 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.0 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -656,3 +656,10 @@ for(const [code,catalog] of Object.entries(catalogs)){
  assert.equal(langPanel.historyCardHass().localize('off'),catalog.Off);assert.equal(langPanel._hass.locale.language,'en');
 }
 console.log('All 25 language options passed: catalog coverage, SVG flags, selection, parameterized room messages and isolated HA history locale.');
+
+const planImage=fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/rooms-floor-plan.png'));
+assert.equal(planImage.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+assert.equal(vm.runInContext('roomFloorPlanAsset',context),'/thermal_pilot/rooms-floor-plan.png');
+const assetDeclaration=fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8').match(/const roomFloorPlanAsset=.*?;/)[0];
+assert.equal(vm.runInNewContext(assetDeclaration+'roomFloorPlanAsset',{location:{pathname:'/preview/PREVIEW.html'}}),'./custom_components/thermal_pilot/frontend/rooms-floor-plan.png');
+console.log('Bundled floor-plan image passed: PNG asset, Home Assistant URL and local-preview URL.');

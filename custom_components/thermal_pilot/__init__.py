@@ -18,7 +18,9 @@ async def async_setup_entry(hass, entry):
     domain = hass.data.setdefault(DOMAIN, {})
     if not domain.get('_registered'):
         await hass.http.async_register_static_paths([StaticPathConfig(
-            '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False)])
+            '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False),
+            StaticPathConfig('/thermal_pilot/rooms-floor-plan.png',
+                str(Path(__file__).parent/'frontend'/'rooms-floor-plan.png'), False)])
         for handler in (ws_get, ws_save, ws_history, ws_reset):
             websocket_api.async_register_command(hass, handler)
         domain['_registered'] = True
