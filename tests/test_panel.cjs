@@ -164,13 +164,13 @@ sortedPanel.info={source_fields:[],room_fields:[['name','Room name','text']],roo
 const settingsHTML=sortedPanel.settingsView();
 assert.doesNotMatch(settingsHTML,/<details[^>]*\bopen\b/);
 assert.equal((settingsHTML.match(/<details>/g)||[]).length,4);
-assert.ok(settingsHTML.indexOf('<summary>Alpha')<settingsHTML.indexOf('<summary>beta'));
-assert.ok(settingsHTML.indexOf('<summary>beta')<settingsHTML.indexOf('<summary>Zulu'));
-assert.ok(settingsHTML.indexOf('<summary>Zulu')<settingsHTML.indexOf('<summary>New room'));
-assert.match(settingsHTML,/<summary>Alpha[\s\S]*?<\/summary>[\s\S]*?data-field="room2.name"/);
+assert.ok(settingsHTML.indexOf('<summary><span data-user-text>Alpha')<settingsHTML.indexOf('<summary><span data-user-text>beta'));
+assert.ok(settingsHTML.indexOf('<summary><span data-user-text>beta')<settingsHTML.indexOf('<summary><span data-user-text>Zulu'));
+assert.ok(settingsHTML.indexOf('<summary><span data-user-text>Zulu')<settingsHTML.indexOf('<summary><span data-user-text>New room'));
+assert.match(settingsHTML,/<summary><span data-user-text>Alpha[\s\S]*?<\/summary>[\s\S]*?data-field="room2.name"/);
 assert.deepEqual(sortedPanel.settings.rooms.map(r=>r.id),['z','b','a','new']);
 const overviewHTML=sortedPanel.overview(),historyHTML=sortedPanel.historyView();
-for(const html of [overviewHTML,historyHTML])assert.ok(html.indexOf('<h2>Alpha')<html.indexOf('<h2>beta')&&html.indexOf('<h2>beta')<html.indexOf('<h2>Zulu'));
+for(const html of [overviewHTML,historyHTML])assert.ok(html.indexOf('<h2><span data-user-text>Alpha')<html.indexOf('<h2><span data-user-text>beta')&&html.indexOf('<h2><span data-user-text>beta')<html.indexOf('<h2><span data-user-text>Zulu'));
 let removalButtons=[];
 sortedPanel.shadowRoot.querySelectorAll=selector=>{
  if(selector==='[data-field]')return [{dataset:{field:'room0.name'},type:'text',value:'Zulu edited'}];
@@ -207,8 +207,8 @@ const namePanel=new Component();namePanel._hass={states:{
  'sensor.humidity':{entity_id:'sensor.humidity',attributes:{device_class:'humidity',friendly_name:'Bedroom humidity'}},
 }};
 const friendlyHTML=namePanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.bedroom_temperature'},'room0');
-assert.match(friendlyHTML,/<option value="sensor.bedroom_temperature" selected>Bedroom temperature<\/option>/);
-assert.match(friendlyHTML,/<option value="sensor.other" >Bedroom temperature<\/option>/);
+assert.match(friendlyHTML,/<option data-user-text value="sensor.bedroom_temperature" selected>Bedroom temperature<\/option>/);
+assert.match(friendlyHTML,/<option data-user-text value="sensor.other" >Bedroom temperature<\/option>/);
 const visibleLabels=[...friendlyHTML.matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map(m=>m[1]);
 assert.ok(visibleLabels.every(label=>!label.includes('sensor.')&&!label.includes(' · ')));
 const retainedName=namePanel.field(['temperature_entity','Temperature','sensor',{kind:'temperature'}],{temperature_entity:'sensor.humidity'},'room0');
@@ -248,7 +248,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.1.40 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.1.41 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -322,8 +322,8 @@ flamePanel._hass.states['switch.relay'].state='on';assert.match(flamePanel.roomH
 flamePanel._hass.states['switch.relay'].state='unavailable';assert.match(flamePanel.roomHeatingBadge({actual_activity:1},'flame'),/room-heating unknown/);
 flamePanel.settings.rooms[0].activity_entity='';flamePanel._hass.states['climate.room']={state:'heat',attributes:{hvac_action:'heating'}};assert.match(flamePanel.roomHeatingBadge({},'flame'),/room-heating actual/);
 flamePanel.info={data:{rooms:{flame:{name:'Room',actual_activity:1}}}};flamePanel.history=[];
-assert.match(flamePanel.overview(),/<summary><h2>Room [^]*?room-heating actual/);
-assert.match(flamePanel.historyView(),/<summary><h2>Room [^]*?room-heating actual/);
+assert.match(flamePanel.overview(),/<summary><h2><span data-user-text>Room<\/span> [^]*?room-heating actual/);
+assert.match(flamePanel.historyView(),/<summary><h2><span data-user-text>Room<\/span> [^]*?room-heating actual/);
 console.log('Room-header flame checks passed: Plan/History, current demand, Off/Unknown, unavailable relay and climate fallback.');
 
 assert.doesNotMatch(flamePanel.roomHeatingBadge({actual_activity:0,plan:{heat:true}},'flame'),/Suggested heating|suggested/);
@@ -499,3 +499,18 @@ assert.match(previewPanel.settingsView(),/data-water-group hidden/);
 previewPanel.settings.house_distribution='water_floor';
 assert.doesNotMatch(previewPanel.settingsView(),/data-water-group hidden/);
 console.log('House settings checks passed: card order, moved controls, conditional water groups and distribution classification.');
+
+const translate=vm.runInContext('translateText',context);
+assert.equal(translate('Settings','fi'),'Asetukset');assert.equal(translate('Settings','en'),'Settings');
+assert.equal(translate('Price forecast available · No extra heat storage needed.','fi'),'Hintaennuste saatavilla · Lisälämmön varastointia ei tarvita.');
+assert.equal(translate('Remove room "South"? Save settings to apply this change.','fi'),'Poistetaanko huone "South"? Muutos tulee voimaan tallentamalla asetukset.');
+const fiPanel=new Component();fiPanel.settings={language:'fi'};
+assert.ok(fiPanel.tDetails('South · Actual relay On\nObserved duration: 2 h').startsWith('South · Todellinen reletila Päällä'));
+const languageHTML=fiPanel.field(['language','Language','select:en,fi'],{language:'en'},'source');
+assert.match(languageHTML,/🇬🇧 English/);assert.match(languageHTML,/🇫🇮 Finnish/);assert.match(languageHTML,/selected.*value="en"/);
+const savedDocument=context.document;
+const nodes=[{nodeValue:'Save settings',parentElement:{closest:()=>null}},{nodeValue:'South',parentElement:{closest:()=>true}},{nodeValue:'body{}',parentElement:{closest:()=>true}}];let nodeIndex=0;
+context.document={createTreeWalker:()=>({nextNode:()=>nodes[nodeIndex++]||null})};
+fiPanel.translateRoot({querySelectorAll:()=>[]});context.document=savedDocument;
+assert.equal(nodes[0].nodeValue,'Tallenna asetukset');assert.equal(nodes[1].nodeValue,'South');assert.equal(nodes[2].nodeValue,'body{}');
+console.log('Finnish language checks passed: default labels/flags, translation, preserved user names, CSS exclusion and unchanged English.');

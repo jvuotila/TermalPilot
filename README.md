@@ -1,6 +1,6 @@
 # ThermalPilot
 
-Version **0.1.40 — experimental simulation-first Home Assistant custom integration**.
+Version **0.1.41 — experimental simulation-first Home Assistant custom integration**.
 
 The panel uses a compact responsive layout: shared settings sit side by side on
 wide screens, with Rooms matching the width of either shared-settings container.
@@ -410,7 +410,15 @@ Background references:
 - [HACS integration packaging](https://www.hacs.dev/docs/publish/integration/)
 - [HeishaMon topics](https://github.com/heishamon/HeishaMon/blob/main/MQTT-Topics.md)
 
-MIT licensed.
+New releases after v0.1.40 use the **PolyForm Noncommercial License 1.0.0**.
+Noncommercial use, modification and sharing are permitted under its terms.
+Commercial use is not licensed. See [LICENSE](LICENSE) for the full terms.
+This is source-available software with a noncommercial restriction, rather than
+an unrestricted open-source license.
+
+Versions already published through v0.1.40 were released under MIT and retain
+those permissions. The license change does not revoke rights to those versions.
+Their original notice is retained in [the legacy MIT license](docs/LEGACY-MIT-LICENSE.txt).
 
 Initial data collection progress is shown per room on Plan and History. The bar measures collection
 of 12 accepted heating hours and 12 accepted idle hours. After at least 24 hours
@@ -602,3 +610,12 @@ On wide screens, ThermalPilot settings and House heating settings occupy the fir
 Existing installations default to air-to-water, water floor heating and concrete heated slab; foundation defaults to Unknown. These metadata defaults preserve existing model fingerprints, learned parameters and observations. Changing the actual distribution resets affected live room coefficients because heating input interpretation changes, while recorded history remains stored. Source, foundation and floor descriptions alone do not reset learned parameters.
 
 The water sensor is optional even for hydronic systems. Valve offsets remain water-specific, whereas response lag applies to every distribution. New/missing Sensor warning delay defaults to 8 hours; explicitly saved values remain unchanged.
+
+### Interface language
+
+Under ThermalPilot settings → Integration settings, choose 🇬🇧 English or
+🇫🇮 Finnish beside Enable simulation. English is the default. The interface
+updates immediately; Save settings persists the selection. Room/entity names
+and heating parameters are unchanged. Embedded Home Assistant history cards
+retain Home Assistant’s own language preference. Finnish translations are an
+initial version and can be corrected as users review them.

@@ -1,6 +1,6 @@
 # Validation status
 
-- 137 Python unit/adapter tests pass in the bundled Python 3.12 environment.
+- 138 Python unit/adapter tests pass in the bundled Python 3.12 environment.
 - Sensor-health tests cover eight-hour unchanged/unavailable readings, resets after
   changes, passive operation and monitoring gaps, and persisted daily notification
   limits using Home Assistant local dates.
@@ -152,3 +152,5 @@ Solar exposure checks cover forecast attenuation without mutating learned gain, 
 House-profile tests cover legacy defaults, conditional validation, electric/air planning and live control without water, water-based operation with optional missing water, preserved existing water-model identity/fingerprints and retained history rows. Frontend checks cover grouping, card ordering and conditional water controls.
 
 Optional water tests cover empty sensor selection, continued planning/collection when a selected sensor is missing, neutral heating factor and water-based live control without water readings. Sensor-warning tests verify the new 8-hour default and preservation of explicit 6-hour settings.
+
+Language checks cover English default, Finnish persistence/validation, flag labels, translated messages, protected user names, ignored styles and language-neutral heating data. Native HA cards retain HA’s language settings.

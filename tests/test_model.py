@@ -456,3 +456,12 @@ class HouseSettingsTests(unittest.TestCase):
         for distribution in ['water_floor','water_radiators','mixed','other']:
             self.assertEqual(validate({**payload,'house_distribution':distribution})['water_entity'],'')
         with self.assertRaises(ValueError):validate({**payload,'house_distribution':'unsupported'})
+
+class LanguageSettingsTests(unittest.TestCase):
+    def test_language_default_validation_and_saved_preference(self):
+        self.assertEqual(stored_settings({}, {})['language'],'en')
+        payload={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out'}
+        for language in ['en','fi']:
+            self.assertEqual(validate({**payload,'language':language})['language'],language)
+        self.assertEqual(stored_settings({}, {'language':'fi'})['language'],'fi')
+        with self.assertRaises(ValueError):validate({**payload,'language':'invalid'})

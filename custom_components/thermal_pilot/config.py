@@ -22,6 +22,7 @@ SOURCE_FIELDS = [
  ('fireplace_entity','Fireplace activity sensor (optional)','sensor,binary_sensor',{'kind':'activity'}),
  ('fireplace_active_state','Fireplace active value','text'),
  ('simulation_enabled','Enable simulation','bool'),
+ ('language','Language','select:en,fi'),
  ('summer_minimum_temperature','Summer temperature (°C)','number',-20,25,0.1),
  ('summer_setpoint','Shared summer thermostat setpoint (°C)','number',5,25),
  ('minimum','Minimum allowed temperature (°C)','number',5,30,0.1),
