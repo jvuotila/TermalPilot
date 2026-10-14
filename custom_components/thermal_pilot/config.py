@@ -1,7 +1,7 @@
 """Shared settings metadata and server-side validation."""
 from copy import deepcopy
 from uuid import uuid4
-from .const import DEFAULTS, ROOM_DEFAULTS, ZONE_DEFAULTS, AIR_INITIAL_LAG_HOURS
+from .const import DEFAULTS, ROOM_DEFAULTS, ZONE_DEFAULTS, AIR_INITIAL_LAG_HOURS, WATER_REFERENCE
 from .model import number
 
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
@@ -190,6 +190,26 @@ def room_settings(room,settings):
     if room.get('is_garage'):
         effective.update(minimum=room['garage_minimum'],maximum=room['garage_maximum'],baseline=room['garage_minimum'],boost=room['garage_maximum']-room['garage_minimum'],setback=0)
     return effective
+
+
+
+def learning_fingerprint(room,settings):
+    effective=room_settings(room,settings)
+    effective['water_reference']=WATER_REFERENCE
+    room_water=water_distribution(settings) and not effective.get('air_control')
+    fingerprint=[effective[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[settings['outdoor_entity'],settings['water_entity'] if room_water else '']
+    if effective.get('air_control'):fingerprint+=['air_to_air',room.get('heating_zone_id','')]
+    elif settings['house_distribution']!='water_floor':fingerprint+=[settings['house_distribution']]
+    return fingerprint
+
+
+def learning_reset_scope(room,old,new):
+    if old is None or old==new:return None
+    # Migration from the former air-response seed changes no learned parameters.
+    if len(new)>12 and new[12]=='air_to_air' and old[:3]+old[4:]==new[:3]+new[4:]:return None
+    stable_indices=(1,4,5,6,7,8,9,10)
+    if room.get('zone_climate_mode')=='cool' and all(len(old)>i and old[i]==new[i] for i in stable_indices):return 'heating_response'
+    return 'full'
 
 
 def water_distribution(settings):

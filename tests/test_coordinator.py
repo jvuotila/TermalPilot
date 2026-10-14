@@ -771,3 +771,42 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
             self.hass.states['climate.garage'].state='cool'
             await self.c._async_update_data()
             self.assertTrue(self.c.previous[main['id']]['excluded'])
+
+    async def test_cooling_zone_keeps_learned_loss_but_not_old_heating_fit(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        from thermal_pilot.model import heat_retention
+        self.c.settings.update(rooms=[self.floor])
+        await self.c._async_update_data()
+        rid=self.floor['id'];model=self.c.models[rid]
+        model.update(loss=.008,heated_hours=30,idle_hours=40,parameter_updates=12,xx=100,xy=20,gain=2)
+        before=heat_retention(model)
+        self.floor['heating_zone_id']='cool-zone'
+        self.c.settings['heating_zones']=[{**ZONE_DEFAULTS,'id':'cool-zone','name':'Summer','thermostat':'climate.garage','main_room_id':rid,'climate_mode':'cool'}]
+        await self.c._async_update_data()
+        after=heat_retention(self.c.models[rid])
+        self.assertEqual(after['drop_6h'],before['drop_6h'])
+        self.assertEqual(after['hours_per_degree'],before['hours_per_degree'])
+        self.assertTrue(after['updated'])
+        self.assertEqual(self.c.models[rid]['xx'],0)
+        self.assertEqual(self.c.models[rid]['heated_hours'],0)
+        # A different room temperature sensor still requires a fresh model.
+        self.hass.states['sensor.new_room']=State('20')
+        self.floor['temperature_entity']='sensor.new_room'
+        await self.c._async_update_data()
+        self.assertEqual(self.c.models[rid]['loss'],.007)
+        self.assertFalse(heat_retention(self.c.models[rid])['updated'])
+
+    async def test_reset_warning_uses_actual_learning_fingerprints_without_mutation(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        self.c.settings.update(rooms=[self.floor])
+        await self.c._async_update_data()
+        rid=self.floor['id'];self.c.models[rid].update(loss=.008,samples=100,parameter_updates=3)
+        original=deepcopy(self.c.models)
+        proposed=deepcopy(self.c.settings);proposed['rooms'][0]['name']='Renamed'
+        self.assertEqual(self.c.learning_changes(proposed),[])
+        proposed['rooms'][0]['heating_zone_id']='summer'
+        proposed['heating_zones']=[{**ZONE_DEFAULTS,'id':'summer','name':'Summer','thermostat':'climate.garage','main_room_id':rid,'climate_mode':'cool'}]
+        self.assertEqual(self.c.learning_changes(proposed),[{'room_id':rid,'name':'Renamed','scope':'heating_response'}])
+        proposed['rooms'][0]['temperature_entity']='sensor.changed'
+        self.assertEqual(self.c.learning_changes(proposed)[0]['scope'],'full')
+        self.assertEqual(self.c.models,original)

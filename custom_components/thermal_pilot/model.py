@@ -353,7 +353,7 @@ or background gains. Effective loss includes both heat leakage and thermal mass.
     return {'drop_6h':round(drop,3),'hours_per_degree':round(hours,2),
             'indoor':20,'outdoor':-10,'heating_hours':round(model.get('heated_hours',0),1),
             'idle_hours':round(model.get('idle_hours',0),1),
-            'updated':model.get('parameter_updates',0)>0 or ('parameter_updates' not in model and abs(loss-.007)>1e-9 and model.get('heated_hours',0)>=12 and model.get('idle_hours',0)>=12)}
+            'updated':bool(model.get('retention_learned')) or model.get('parameter_updates',0)>0 or ('parameter_updates' not in model and abs(loss-.007)>1e-9 and model.get('heated_hours',0)>=12 and model.get('idle_hours',0)>=12)}
 
 
 def learning_progress(model, now):

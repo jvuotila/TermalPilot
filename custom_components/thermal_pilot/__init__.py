@@ -83,7 +83,7 @@ def ws_get(hass, connection, msg):
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS, 'zone_defaults':ZONE_DEFAULTS, 'zone_fields':ZONE_FIELDS})
 
 
-@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool})
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool, vol.Optional('confirm_learning_reset',default=False):bool})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_save(hass, connection, msg):
@@ -94,6 +94,10 @@ async def ws_save(hass, connection, msg):
         settings = confirm_control_settings(settings,c.settings,msg.get('enable_live_control',False))
     except ValueError as error:
         connection.send_error(msg['id'], 'invalid_settings', str(error))
+        return
+    changes=c.learning_changes(settings)
+    if changes and not msg.get('confirm_learning_reset',False):
+        connection.send_result(msg['id'],{'saved':False,'requires_learning_confirmation':True,'learning_changes':changes})
         return
     hass.config_entries.async_update_entry(c.entry, options=settings)
     connection.send_result(msg['id'], {'saved':True})

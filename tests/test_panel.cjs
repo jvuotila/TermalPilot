@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.7 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.8 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -812,3 +812,19 @@ assert.ok(splitHTML.indexOf('id="tab-rooms"')<splitHTML.indexOf('id="tab-setting
 context.confirm=()=>false;splitPanel.switchTab('history');assert.equal(splitPanel.tab,'rooms');
 context.confirm=()=>true;
 console.log('Rooms and zones tab passed: ordered navigation, split sections, save controls, draft preservation and unsaved exit protection.');
+(async()=>{
+ let WarningPanel,allow=false;const prompts=[],calls=[];
+ const warningContext={...context,confirm:text=>{prompts.push(text);return allow;},setTimeout:()=>1,clearTimeout:()=>{},customElements:{get:()=>undefined,define:(_,value)=>WarningPanel=value}};
+ vm.createContext(warningContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),warningContext);
+ const warningPanel=new WarningPanel();warningPanel.tab='rooms';warningPanel._hass={states:{}};warningPanel.settings={rooms:[],heating_zones:[],simulation_enabled:true};
+ warningPanel.info={settings:structuredClone(warningPanel.settings),source_fields:[],room_fields:[],zone_fields:[]};
+ const handlers={},form={addEventListener:(key,handler)=>handlers[key]=handler,querySelector:()=>null,querySelectorAll:()=>[]};
+ warningPanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:null;
+ warningPanel.call=async(type,args)=>{calls.push(args);return args.confirm_learning_reset?{saved:true}:{saved:false,requires_learning_confirmation:true,learning_changes:[{name:'Sadun huone',scope:'heating_response'},{name:'Study',scope:'full'}]};};
+ warningPanel.render();await handlers.submit({preventDefault(){}});
+ assert.equal(calls.length,1);assert.equal(warningPanel.saveConfirmation,false);assert.equal(warningPanel.saving,false);
+ assert.match(prompts[0],/Sadun huone: heating response will restart; learned heat retention will be kept/);assert.match(prompts[0],/Study: all learned room parameters will reset/);
+ allow=true;await handlers.submit({preventDefault(){}});
+ assert.equal(calls.length,3);assert.equal(calls[2].confirm_learning_reset,true);assert.equal(warningPanel.saveConfirmation,true);
+ console.log('Learning reset warning passed: named full/partial resets, cancellation without saving and explicit confirmed retry.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
