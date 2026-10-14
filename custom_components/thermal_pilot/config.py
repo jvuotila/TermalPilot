@@ -72,12 +72,12 @@ ROOM_FIELDS = [
 
 ZONE_FIELDS = [
  ('name', 'Zone name', 'text'),
- ('main_room_id', 'Main room', 'text'),
  ('source_type', 'Zone heat source', 'select:air_to_air,fireplace'),
  ('thermostat', 'Zone heat pump', 'climate'),
  ('temperature_policy', 'Heating zone temperature', 'select:main,average,coldest'),
  ('fireplace_entity', 'Zone fireplace sensor (optional)', 'sensor,binary_sensor', {'kind': 'activity'}),
  ('fireplace_active_state', 'Fireplace active when', 'text'),
+ ('main_room_id', 'Main room', 'text'),
 ]
 
 
