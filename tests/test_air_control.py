@@ -195,3 +195,36 @@ class AirTests(unittest.IsolatedAsyncioTestCase):
         self.pump.attributes['swing_mode']='both'
         await self.control.apply([self.room],{self.room['id']:intent},20,lambda:True)
         self.assertTrue(self.control.results[self.room['id']]['confirmed'])
+
+    def test_save_ignores_fan_only_temperature_range_but_checks_heat_range(self):
+        self.pump.attributes.update(min_temp=0,max_temp=1)
+        self.assertEqual(validate(self.settings,self.hass)['rooms'][0]['garage_heat_target'],16)
+        self.pump.state='heat';self.pump.attributes.update(min_temp=17,max_temp=30)
+        with self.assertRaisesRegex(ValueError,'16 °C.*17–30 °C'):
+            validate(self.settings,self.hass)
+        self.room['garage_heat_target']=18
+        self.assertEqual(validate(self.settings,self.hass)['rooms'][0]['garage_heat_target'],18)
+
+    async def test_mode_specific_bounds_wait_for_heat_and_reject_safely(self):
+        self.pump.attributes.update(min_temp=0,max_temp=1)
+        self.hass.states['sensor.garage'].state='4';intent=self.intent()
+        await self.control.apply([self.room],{self.room['id']:intent},0,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[1],'set_hvac_mode')
+        self.pump.state='heat'
+        await self.control.apply([self.room],{self.room['id']:intent},5,lambda:True)
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+        self.pump.attributes.update(min_temp=16,max_temp=30)
+        await self.control.apply([self.room],{self.room['id']:intent},10,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[1],'set_temperature')
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],16)
+        intent['target']=15
+        errors=await self.control.apply([self.room],{self.room['id']:intent},20,lambda:True)
+        self.assertTrue(errors)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'fan_only')
+        self.pump.state='fan_only';self.pump.attributes.update(min_temp=0,max_temp=1)
+        count=self.hass.services.async_call.await_count
+        await self.control.apply([self.room],{self.room['id']:intent},30,lambda:True)
+        self.assertEqual(self.hass.services.async_call.await_count,count)
+        intent['target']=18
+        await self.control.apply([self.room],{self.room['id']:intent},40,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'heat')

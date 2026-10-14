@@ -60,9 +60,9 @@ ROOM_FIELDS = [
  ('garage_fan_idle', 'Standby fan speed', 'text'),
  ('garage_swing_idle', 'Standby swing mode', 'text'),
  ('garage_fan_presence', 'Fan mode when occupied', 'text'),
+ ('garage_door_delay', 'Pause heating after door opens (seconds)', 'number', 0, 600, 1),
  ('garage_door_entities', 'Door sensors (optional)', 'entities:binary_sensor'),
  ('garage_presence_entities', 'Presence sensors (optional)', 'entities:binary_sensor'),
- ('garage_door_delay', 'Pause heating after door opens (seconds)', 'number', 0, 600, 1),
  ('fireplace_reduction', 'Fireplace heating compensation', 'number', -100, 0, 1),
  ('solar_direction', 'Window direction', 'select:disabled,north,northeast,east,southeast,south,southwest,west,northwest'),
  ('solar_exposure', 'Sun exposure', 'select:clear,partly_shaded,mostly_shaded'),
@@ -323,8 +323,9 @@ def validate(payload, hass=None):
             if not {'heat','fan_only'}.issubset(attrs.get('hvac_modes',[])) or (room['is_garage'] and 'off' not in attrs.get('hvac_modes',[])):
                 raise ValueError(f"{room['name']}: select a heat pump supporting heat and fan-only (and off for a garage).")
             target=room['garage_heat_target'] if room['is_garage'] else result['air_heat_target']
-            if not attrs.get('min_temp',5)<=target<=attrs.get('max_temp',35):
-                raise ValueError(f"{room['name']}: heat pump heating setpoint is outside device limits.")
+            # Climate limits can describe the current mode (fan-only may report 0–1).
+            if state.state=='heat' and not attrs.get('min_temp',5)<=target<=attrs.get('max_temp',35):
+                raise ValueError(f"{room['name']}: heat pump heating setpoint {target:g} °C is outside device limits ({attrs.get('min_temp',5):g}–{attrs.get('max_temp',35):g} °C).")
             prefix='garage_' if room['is_garage'] else 'air_'
             values=room if room['is_garage'] else result
             for suffix,attribute in [('fan_heat','fan_modes'),('fan_idle','fan_modes'),('fan_presence','fan_modes'),('swing','swing_modes'),('swing_idle','swing_modes')]:
@@ -342,7 +343,7 @@ def validate(payload, hass=None):
         if hass is not None:
             state=hass.states.get(zone['thermostat']);attrs=state.attributes
             if not {'heat','fan_only'}.issubset(attrs.get('hvac_modes',[])):raise ValueError('A zone heat pump must support heat and fan-only.')
-            if not attrs.get('min_temp',5)<=result['air_heat_target']<=attrs.get('max_temp',35):raise ValueError('Zone heating setpoint is outside heat pump limits.')
+            if state.state=='heat' and not attrs.get('min_temp',5)<=result['air_heat_target']<=attrs.get('max_temp',35):raise ValueError(f"{zone['name']}: heat pump heating setpoint {result['air_heat_target']:g} °C is outside device limits ({attrs.get('min_temp',5):g}–{attrs.get('max_temp',35):g} °C).")
             for key,attribute in [('air_fan_heat','fan_modes'),('air_fan_idle','fan_modes'),('air_swing','swing_modes'),('air_swing_idle','swing_modes')]:
                 if result[key] and result[key] not in attrs.get(attribute,[]):raise ValueError('Shared air-to-air mode is not supported by every selected heat pump.')
     for room in rooms:

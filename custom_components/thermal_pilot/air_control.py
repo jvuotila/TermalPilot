@@ -31,6 +31,7 @@ class AirHeatPumpControl:
         self.doors={}
         self.pending={}
         self.ready={}
+        self.rejected_targets={}
         self.results={}
         self.reconciled=set()
         self.lock=asyncio.Lock()
@@ -138,18 +139,34 @@ of physical compressor operation, especially with optimistic integrations.
                     commands.append(('turn_on','power',True,state.state!='off'))
                 elif mode=='off':self.pending.pop((entity,'power'),None)
                 commands.append(('set_hvac_mode','hvac_mode',mode,state.state))
-                if mode=='heat':
-                    target=number(intent['target']);low=number(attrs.get('min_temp'),5);high=number(attrs.get('max_temp'),35)
+                target=number(intent['target']) if mode=='heat' else None
+                rejected=self.rejected_targets.get(entity)
+                if rejected and rejected['target']!=target:
+                    self.rejected_targets.pop(entity,None);rejected=None
+                # Bounds are mode-specific. Wait for Heat and its settling period
+                # before reading them; never send a temperature in fan-only mode.
+                checking_heat=mode=='heat' and state.state=='heat' and now>=self.ready.get(entity,now)
+                if checking_heat:
+                    low=number(attrs.get('min_temp'),5);high=number(attrs.get('max_temp'),35)
                     step=number(attrs.get('target_temp_step'),.5)
                     if target is None or not low<=target<=high or step<=0:
-                        errors.append(f"{room['name']}: heating setpoint outside device limits.");continue
-                    target=round(max(low,min(high,low+round((target-low)/step)*step)),6)
-                    commands.append(('set_temperature','temperature',target,number(attrs.get('temperature'))))
-                if intent['fan']:
+                        rejected={'target':target,'low':low,'high':high}
+                        self.rejected_targets[entity]=rejected
+                    else:
+                        rejected=None;self.rejected_targets.pop(entity,None)
+                        target=round(max(low,min(high,low+round((target-low)/step)*step)),6)
+                        commands.append(('set_temperature','temperature',target,number(attrs.get('temperature'))))
+                if rejected:
+                    errors.append(f"{room['name']}: heating setpoint outside device limits ({rejected['low']:g}–{rejected['high']:g} °C); using fan-only standby.")
+                    # Keep the rejection while in standby, avoiding repeated starts
+                    # with an invalid setpoint. A changed target permits a new check.
+                    mode='fan_only'
+                    commands=[('set_hvac_mode','hvac_mode',mode,state.state)]
+                if intent['fan'] and not rejected:
                     if intent['fan'] not in attrs.get('fan_modes',[]):
                         errors.append(f"{room['name']}: selected fan mode is unsupported.");continue
                     commands.append(('set_fan_mode','fan_mode',intent['fan'],attrs.get('fan_mode')))
-                if intent['swing']:
+                if intent['swing'] and not rejected:
                     if intent['swing'] not in attrs.get('swing_modes',[]):
                         errors.append(f"{room['name']}: selected swing mode is unsupported.");continue
                     commands.append(('set_swing_mode','swing_mode',intent['swing'],attrs.get('swing_mode')))
@@ -187,5 +204,9 @@ of physical compressor operation, especially with optimistic integrations.
                     self.deadlines.append(now+10)
                     break  # Wait for reported acknowledgement before the next stage.
                 else:
-                    self.results[rid].update(confirmed=True,stage='confirmed')
+                    if intent['mode']=='heat' and not checking_heat and not rejected:
+                        self.results[rid]['stage']='temperature'
+                        self.deadlines.append(max(now+10,self.ready.get(entity,now)))
+                    elif not rejected:
+                        self.results[rid].update(confirmed=True,stage='confirmed')
         return errors

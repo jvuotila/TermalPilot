@@ -1,7 +1,7 @@
 {
   "domain": "thermal_pilot",
   "name": "ThermalPilot",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "config_flow": true,
   "documentation": "https://github.com/jvuotila/ThermalPilot",
   "issue_tracker": "https://github.com/jvuotila/ThermalPilot/issues",

@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.3 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.4 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -749,3 +749,35 @@ context.confirm=()=>true;removeMemberButton.onclick();assert.equal(removeMemberP
 console.log('Zone room membership passed: configured-room choices, occupied-zone exclusion, linking/removing rooms, main-room updates, and cancel/confirm deletion warning with membership cleanup.');
 
 const garageRetention=previewPanel.heatRetentionView();assert.match(garageRetention,/<tr class="garage-retention-row"><td><span data-user-text>Garage \(example\)/);console.log('Preview includes an example garage with a distinct retention row.');
+// Save failures stay visible near the save controls until dismissed or edited.
+const errorPanel=new Component();errorPanel._hass={states:{}};errorPanel.settings={rooms:[],language:'fi'};
+errorPanel.info={source_fields:[],room_fields:[]};errorPanel.tab='settings';errorPanel.messageLevel='error';
+errorPanel.message='Settings were not saved: Autotalli: heat pump heating setpoint 16 °C is outside device limits (17–30 °C).';
+let dismissError,focusedError=false,removedError=false;
+errorPanel.shadowRoot.querySelector=selector=>selector==='#dismiss-save-error'?{addEventListener:(_,fn)=>dismissError=fn}:selector==='.save-error'?{focus:options=>{assert.equal(options.preventScroll,true);focusedError=true;},remove:()=>removedError=true}:null;
+errorPanel.render();
+assert.match(errorPanel.shadowRoot.innerHTML,/save-toast notice-error save-error/);
+assert.match(errorPanel.shadowRoot.innerHTML,/role="alert" aria-live="assertive"/);
+assert.match(errorPanel.shadowRoot.innerHTML,/Asetuksia ei tallennettu: Autotalli: Pumpun lämmityksen asetuslämpötila 16 °C/);
+assert.doesNotMatch(errorPanel.shadowRoot.innerHTML,/heat pump heating setpoint/);
+assert.equal(errorPanel.saveMessageTimer,undefined);assert.equal(focusedError,true);
+dismissError();assert.equal(errorPanel.message,'');assert.equal(removedError,true);
+const translatedError=vm.runInContext('translateText',context);
+assert.match(translatedError('Settings were not saved: Autotalli: heat pump heating setpoint is outside device limits.','fi'),/Pumpun lämmityksen asetuslämpötila/);
+console.log('Save errors passed: persistent fixed alert, Finnish device limits, focus without scrolling and explicit dismissal.');
+const emptyAirPanel=new Component();emptyAirPanel._hass={states:{}};
+emptyAirPanel.settings={house_heat_source:'air_to_water',rooms:[{id:'garage',is_garage:true,thermostat:'climate.garage'}],heating_zones:[],air_fan_heat:''};
+emptyAirPanel.info={source_fields:[['air_fan_heat','Heating fan speed','text']],room_fields:[],zone_fields:[],data:{rooms:{}}};
+assert.match(emptyAirPanel.settingsView(),/data-air-group hidden/);
+assert.doesNotMatch(emptyAirPanel.settingsView(),/Heating response is learned automatically/);
+let emptyFan=emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source');
+assert.match(emptyFan,/data-field="source.air_fan_heat" disabled/);assert.match(emptyFan,/Select a heat pump in a room or heating zone first/);
+emptyAirPanel.settings.rooms.push({id:'house',is_garage:false,heat_control:'air_to_air',thermostat:'climate.house'});
+assert.doesNotMatch(emptyAirPanel.settingsView(),/data-air-group hidden/);
+emptyFan=emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source');assert.match(emptyFan,/does not report options/);
+emptyAirPanel._hass.states['climate.house']={attributes:{fan_modes:['quiet','high']}};
+emptyFan=emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source');assert.match(emptyFan,/value="quiet"/);assert.doesNotMatch(emptyFan,/disabled|does not report options/);
+emptyAirPanel.settings.rooms.push({id:'second',heat_control:'air_to_air',thermostat:'climate.second'});
+emptyAirPanel._hass.states['climate.second']={attributes:{fan_modes:['auto']}};
+assert.match(emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source'),/no common options/);
+console.log('Shared air settings passed: garage-only section hidden, automatic-learning text removed, empty capability explanations and reported options.');
