@@ -122,7 +122,7 @@ for(const mode of ['native','http','missing']){
   else delete context.crypto;
   const testPanel=new Component();let click;
   testPanel._hass={states:{}};
-  testPanel.tab='settings';
+  testPanel.tab='rooms';
   testPanel.settings={rooms:[],price_entity:'sensor.original'};
   testPanel.info={source_fields:[],room_fields:[],room_defaults:{name:'',baseline:20}};
   testPanel.shadowRoot.querySelector=selector=>selector==='#add'?{addEventListener:(event,handler)=>{assert.equal(event,'click');click=handler;}}:null;
@@ -164,7 +164,7 @@ const missing=filterPanel.field(['temperature_entity','Temperature','sensor',{ki
 assert.equal(matches({entity_id:'sensor.room',state:'20',attributes:{device_class:'temperature',valve:'open'}},{kind:'activity'},{activity_attribute:'valve'}),true);
 console.log('Typed selector tests passed (temperature, power, prices, targets, activity, retained selections).');
 
-const sortedPanel=new Component();sortedPanel._hass={states:{}};sortedPanel.tab='settings';sortedPanel.history=[];
+const sortedPanel=new Component();sortedPanel._hass={states:{}};sortedPanel.tab='rooms';sortedPanel.history=[];
 sortedPanel.settings={rooms:[{id:'z',name:'Zulu'},{id:'b',name:'beta'},{id:'a',name:'Alpha'},{id:'new',name:''}]};
 sortedPanel.info={source_fields:[],room_fields:[['name','Room name','text']],room_defaults:{},data:{rooms:{z:{name:'Zulu'},b:{name:'beta'},a:{name:'Alpha'}}}};
 const settingsHTML=sortedPanel.settingsView();
@@ -194,7 +194,7 @@ console.log('Alphabetical room tests passed (Settings, Plan, History, stable IDs
 (async()=>{
  const resetPanel=new Component();resetPanel._hass={states:{}};
  resetPanel.settings={rooms:[{id:'reset-room',name:'Study'}]};
- resetPanel.info={source_fields:[],room_fields:[]};resetPanel.tab='settings';
+ resetPanel.info={source_fields:[],room_fields:[]};resetPanel.tab='rooms';
  let resetButton,calls=0;
  resetPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-reset]'?[resetButton={dataset:{reset:'reset-room'}}]:[];
  resetPanel.call=async(type,args)=>{assert.equal(type,'reset');assert.equal(args.room_id,'reset-room');calls++;};
@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.6 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.7 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -726,12 +726,12 @@ assert.match(zonePanel.overview(),/Waiting for pump confirmation: <span>Fan spee
 zonePanel.info.data.rooms.g.pump_control.confirmed=true;assert.doesNotMatch(zonePanel.overview(),/Waiting for pump confirmation:/);
 console.log('Pump stage feedback passed: unconfirmed fan stage shown and cleared after confirmation.');
 const newZonePanel=new Component();let addZoneClick;const newZoneDetails={open:false};
-newZonePanel.tab='settings';newZonePanel.settings={rooms:[],heating_zones:[]};newZonePanel.info={source_fields:[],room_fields:[],zone_fields:[],zone_defaults:{name:'',thermostat:''}};newZonePanel._hass={states:{}};
+newZonePanel.tab='rooms';newZonePanel.settings={rooms:[],heating_zones:[]};newZonePanel.info={source_fields:[],room_fields:[],zone_fields:[],zone_defaults:{name:'',thermostat:''}};newZonePanel._hass={states:{}};
 newZonePanel.shadowRoot.querySelector=selector=>selector==='#add-zone'?{addEventListener:(_,fn)=>addZoneClick=fn}:selector.startsWith('[data-settings-disclosure=')?newZoneDetails:null;
 newZonePanel.render();addZoneClick();assert.equal(newZonePanel.settings.heating_zones.length,1);assert.equal(newZoneDetails.open,true);
 console.log('Adding a heating zone opens the new accordion immediately.');
 
-const memberPanel=new Component();memberPanel.tab='settings';memberPanel._hass={states:{}};
+const memberPanel=new Component();memberPanel.tab='rooms';memberPanel._hass={states:{}};
 memberPanel.settings={rooms:[{id:'a',name:'Living room',temperature_entity:'sensor.a',heating_zone_id:''},{id:'b',name:'Study',temperature_entity:'sensor.b',heating_zone_id:'other'},{id:'g',name:'Garage',temperature_entity:'sensor.g',is_garage:true}],heating_zones:[{id:'z',name:'Main zone',main_room_id:''},{id:'other',name:'Other zone',main_room_id:'b'}]};
 memberPanel.info={source_fields:[],room_fields:[],zone_fields:[],settings:structuredClone(memberPanel.settings)};
 memberPanel.zoneRoomDrafts={z:['']};const memberHTML=memberPanel.field(['zone_rooms','Rooms','rooms'],memberPanel.settings.heating_zones[0],'zone0');
@@ -741,7 +741,7 @@ memberPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-entity-list]
 memberPanel.capture();assert.equal(memberPanel.settings.rooms[0].heating_zone_id,'z');assert.equal(memberPanel.settings.heating_zones[0].main_room_id,'a');assert.equal(memberPanel.settings.rooms[1].heating_zone_id,'other');
 chosenRoom='';memberPanel.capture();assert.equal(memberPanel.settings.rooms[0].heating_zone_id,'');assert.equal(memberPanel.settings.heating_zones[0].main_room_id,'');
 
-const removeMemberPanel=new Component();removeMemberPanel.tab='settings';removeMemberPanel._hass={states:{}};
+const removeMemberPanel=new Component();removeMemberPanel.tab='rooms';removeMemberPanel._hass={states:{}};
 removeMemberPanel.settings={rooms:[{id:'a',name:'Living room',temperature_entity:'sensor.a',heating_zone_id:'z'},{id:'b',name:'Study',temperature_entity:'sensor.b',heating_zone_id:'z'}],heating_zones:[{id:'z',name:'House pump',main_room_id:'a'}]};removeMemberPanel.zoneRoomDrafts={z:['a','b']};removeMemberPanel.info={source_fields:[],room_fields:[],zone_fields:[]};
 const removeMemberButton={dataset:{remove:'0'}};removeMemberPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-remove]'?[removeMemberButton]:[];
 const previousConfirm=context.confirm;let removalPrompt;context.confirm=prompt=>{removalPrompt=prompt;return false;};removeMemberPanel.render();removeMemberButton.onclick();assert.equal(removeMemberPanel.settings.rooms.length,2);assert.match(removalPrompt,/also removes its zone membership/);assert.match(removalPrompt,/House pump/);
@@ -796,3 +796,19 @@ const coolingZoneHTML=zonePanel.settingsView();
 assert.match(coolingZoneHTML,/value="cool">Cooling only/);assert.match(coolingZoneHTML,/data-field="zone0.cooling_target" value="24"/);
 zonePanel.settings.heating_zones[0].climate_mode='heat';assert.doesNotMatch(zonePanel.settingsView(),/data-field="zone0.cooling_target"/);
 console.log('Zone heating/cooling selection and conditional cooling target passed.');
+const settingsPage=previewPanel.settingsView('settings'),roomsPage=previewPanel.settingsView('rooms');
+assert.match(settingsPage,/<section class="settings-sources">/);assert.doesNotMatch(settingsPage,/<section class="settings-(?:house|shared|rooms|zones)">/);
+assert.doesNotMatch(roomsPage,/<section class="settings-sources">/);
+for(const section of ['house','shared','rooms','zones'])assert.match(roomsPage,new RegExp('<section class="settings-'+section+'">'));
+for(const html of [settingsPage,roomsPage])assert.match(html,/type="submit">Save settings/);
+const splitPanel=new Component();splitPanel._hass={states:{}};splitPanel.info={settings:{rooms:[],heating_zones:[]},source_fields:[],room_fields:[]};
+splitPanel.settings={rooms:[{id:'unsaved',name:'New room',baseline:20}],heating_zones:[]};splitPanel.tab='rooms';let splitLoads=0;
+splitPanel.load=()=>splitLoads++;context.confirm=()=>{throw new Error('Editing-tab navigation must preserve changes without asking to discard');};
+splitPanel.switchTab('settings');assert.equal(splitPanel.settings.rooms[0].name,'New room');assert.equal(splitLoads,0);
+splitPanel.switchTab('rooms');assert.equal(splitLoads,0);
+const splitHTML=splitPanel.shadowRoot.innerHTML;
+assert.ok(splitHTML.indexOf('id="tab-history"')<splitHTML.indexOf('id="tab-rooms"'));
+assert.ok(splitHTML.indexOf('id="tab-rooms"')<splitHTML.indexOf('id="tab-settings"'));
+context.confirm=()=>false;splitPanel.switchTab('history');assert.equal(splitPanel.tab,'rooms');
+context.confirm=()=>true;
+console.log('Rooms and zones tab passed: ordered navigation, split sections, save controls, draft preservation and unsaved exit protection.');

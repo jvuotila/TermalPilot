@@ -82,7 +82,7 @@ ZONE_FIELDS = [
  ('main_room_id', 'Main room', 'text'),
  ('heating_enabled', 'Control zone heat pump', 'bool'),
  ('climate_mode', 'Heat pump use', 'select:heat,cool,both'),
- ('cooling_target', 'Cooling target temperature (°C)', 'number', 16, 30, 0.5),
+ ('cooling_target', 'Cooling target temperature (°C)', 'number', 16, 30, 0.1),
 ]
 
 

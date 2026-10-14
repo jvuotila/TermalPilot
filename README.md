@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.6 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.7 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -82,7 +82,7 @@ service per configuration entry. This classification follows the
 ## What this version includes
 
 - A dedicated **ThermalPilot** sidebar panel with **Plan**, **History**
-  and **Settings** pages, available in **25 languages**. English is the default;
+  **Rooms and zones**, and **Settings** pages, available in **25 languages**. English is the default;
   the language can be changed in Settings.
 - Room names, thermostats, temperature sensors and actual heating-activity sources.
 - Automatic detection of source price intervals: timestamped rows are preferred;
@@ -108,7 +108,7 @@ service per configuration entry. This classification follows the
 
 For water-based distribution, a heating-water source is optional. Valid readings
 adjust estimated heating output. Without a sensor or while it is unavailable,
-planning and learning continue using observed thermostat demand with no water-temperature adjustment. Select the source under **Settings → House heating settings → Water heating →
+planning and learning continue using observed thermostat demand with no water-temperature adjustment. Select the source under **Rooms and zones → House heating settings → Water heating →
 Heating water (optional)**. It accepts temperature sensors or climate entities
 with a `current_temperature` attribute from your own Home Assistant installation.
 This reads measured water temperature, not the climate target. A fixed internal
@@ -516,7 +516,7 @@ when no prices are available. Known prices are shown only where available;
 gaps are left empty. Winter fallback badges use cold blue and summer fallback
 badges use warm green.
 
-The Plan, History and Settings pages use a tabbed frame. Dates use Finnish numeric
+The panel has Plan, History, Rooms and zones, and Settings tabs. Dates use Finnish numeric
 format (DD.MM.YYYY), with 24-hour times. The Operation card groups Active/Passive,
 simulation/season-setpoint mode and required-source readiness. These mode badges
 distinguish simulation, confirmed live control and optional season-only control.
@@ -606,7 +606,7 @@ overrides reduction, and minimum/maximum guards still apply. After a restart,
 prior reduction eligibility is not assumed: a fresh plan starts from Normal unless
 it schedules a new boost. All modes retain thermostat local temperature regulation.
 
-Settings shows an Unsaved changes notice beside Save settings when edits differ
+Rooms and zones and Settings show an Unsaved changes notice beside Save settings when edits differ
 from saved values. Reverting edits clears it. Switching tabs asks before discarding
 unsaved edits; a successful save establishes the new saved baseline.
 
