@@ -6,6 +6,8 @@ from .model import number
 
 # key, label, input type, bounds/domain; used by the dedicated settings panel.
 SOURCE_FIELDS = [
+ ('air_fan_cool','Cooling fan speed','text'),
+ ('air_swing_cool','Cooling swing mode','text'),
  ('air_heat_target','Heat pump heating setpoint (°C)','number',5,35,.5),
  ('air_fan_heat','Heating fan speed','text'),
  ('air_fan_idle','Standby fan speed','text'),
@@ -78,6 +80,9 @@ ZONE_FIELDS = [
  ('fireplace_entity', 'Zone fireplace sensor (optional)', 'sensor,binary_sensor', {'kind': 'activity'}),
  ('fireplace_active_state', 'Fireplace active when', 'text'),
  ('main_room_id', 'Main room', 'text'),
+ ('heating_enabled', 'Control zone heat pump', 'bool'),
+ ('climate_mode', 'Heat pump use', 'select:heat,cool,both'),
+ ('cooling_target', 'Cooling target temperature (°C)', 'number', 16, 30, 0.5),
 ]
 
 
@@ -140,7 +145,7 @@ def room_electric(room,settings):
 
 
 def price_required(settings):
-    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
+    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and r.get('zone_climate_mode')!='cool' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
 
 
 def garage_sensor_lists(room):
@@ -168,7 +173,7 @@ def resolved_rooms(settings):
         zone=zones.get(room.get('heating_zone_id'))
         if zone:
             room.update(zone_fireplace_entity=zone['fireplace_entity'],zone_fireplace_active_state=zone['fireplace_active_state'])
-            if zone.get('source_type','air_to_air')=='air_to_air':room.update(thermostat=zone['thermostat'],heat_control='air_to_air' if zone['main_room_id']==room['id'] else 'zone_member',zone_policy=zone['temperature_policy'])
+            if zone.get('source_type','air_to_air')=='air_to_air':room.update(thermostat=zone['thermostat'],heat_control='air_to_air' if zone['main_room_id']==room['id'] else 'zone_member',zone_policy=zone['temperature_policy'],zone_control_enabled=zone.get('heating_enabled',True),zone_climate_mode=zone.get('climate_mode','heat'),zone_cooling_target=zone.get('cooling_target',24.0))
         rooms.append(room)
     return rooms
 
@@ -209,6 +214,10 @@ def stored_settings(data, options):
         value = number(room.get('fireplace_reduction'))
         if value is not None and value > 0:
             room['fireplace_reduction'] = -min(100, value)
+    # Preserve the control behavior of zones created before the opt-in switch.
+    for zone in settings.get('heating_zones',[]):
+        for key,value in ZONE_DEFAULTS.items():
+            zone.setdefault(key,True if key=='heating_enabled' else deepcopy(value))
     return settings
 
 
@@ -340,11 +349,12 @@ def validate(payload, hass=None):
             raise ValueError('Each zone needs linked rooms and a main room selected from them.')
         if zone['thermostat'] in thermostats:raise ValueError('A heat pump can have only one controller or heating zone.')
         thermostats.add(zone['thermostat'])
-        if hass is not None:
+        if hass is not None and zone['heating_enabled']:
             state=hass.states.get(zone['thermostat']);attrs=state.attributes
-            if not {'heat','fan_only'}.issubset(attrs.get('hvac_modes',[])):raise ValueError('A zone heat pump must support heat and fan-only.')
-            if state.state=='heat' and not attrs.get('min_temp',5)<=result['air_heat_target']<=attrs.get('max_temp',35):raise ValueError(f"{zone['name']}: heat pump heating setpoint {result['air_heat_target']:g} °C is outside device limits ({attrs.get('min_temp',5):g}–{attrs.get('max_temp',35):g} °C).")
-            for key,attribute in [('air_fan_heat','fan_modes'),('air_fan_idle','fan_modes'),('air_swing','swing_modes'),('air_swing_idle','swing_modes')]:
+            required={'fan_only'}|({'heat'} if zone['climate_mode']=='heat' else {'cool'} if zone['climate_mode']=='cool' else {'heat','cool'})
+            if not required.issubset(attrs.get('hvac_modes',[])):raise ValueError('The zone heat pump must support the selected heating/cooling modes and fan-only.')
+            if zone['climate_mode'] in ('heat','both') and state.state=='heat' and not attrs.get('min_temp',5)<=result['air_heat_target']<=attrs.get('max_temp',35):raise ValueError(f"{zone['name']}: heat pump heating setpoint {result['air_heat_target']:g} °C is outside device limits ({attrs.get('min_temp',5):g}–{attrs.get('max_temp',35):g} °C).")
+            for key,attribute in [('air_fan_heat','fan_modes'),('air_fan_idle','fan_modes'),('air_swing','swing_modes'),('air_swing_idle','swing_modes'),('air_fan_cool','fan_modes'),('air_swing_cool','swing_modes')]:
                 if result[key] and result[key] not in attrs.get(attribute,[]):raise ValueError('Shared air-to-air mode is not supported by every selected heat pump.')
     for room in rooms:
         if room['heating_zone_id'] and room['heating_zone_id'] not in zone_ids:raise ValueError('Selected heating zone was not found.')

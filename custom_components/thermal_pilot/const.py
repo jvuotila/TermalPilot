@@ -1,6 +1,6 @@
 """ThermalPilot constants; scheduled control is opt-in; simulation is enabled by default."""
 DOMAIN = 'thermal_pilot'
-VERSION = '0.9.5'
+VERSION = '0.9.6'
 PLATFORMS = ['sensor', 'binary_sensor', 'switch']
 RESERVE_HOURS = 6.0
 ARCHIVE_KEEP_DAYS = 7
@@ -22,7 +22,7 @@ DEFAULTS = {
     'lag_hours': 3.0, 'curve_warm_temp': 0.0, 'curve_cold_temp': -18.0,
     'house_heat_source': 'air_to_water', 'house_distribution': 'water_floor',
     'house_heated_floor': 'concrete_slab', 'house_foundation': 'unknown',
-    'air_heat_target': 24.0,
+    'air_fan_cool':'', 'air_swing_cool':'', 'air_heat_target': 24.0,
     'air_fan_heat': '', 'air_fan_idle': '', 'air_swing': '', 'air_swing_idle': '',
     'heating_zones': [], 'rooms': [],
 }
@@ -40,4 +40,4 @@ ROOM_DEFAULTS = {
     'fireplace_reduction': 0.0, 'solar_direction': 'disabled', 'solar_exposure': 'clear',
 }
 
-ZONE_DEFAULTS = {'source_type':'air_to_air', 'name':'', 'thermostat':'', 'main_room_id':'', 'temperature_policy':'main', 'fireplace_entity':'', 'fireplace_active_state':'on'}
+ZONE_DEFAULTS = {'heating_enabled':False, 'climate_mode':'heat', 'cooling_target':24.0, 'source_type':'air_to_air', 'name':'', 'thermostat':'', 'main_room_id':'', 'temperature_policy':'main', 'fireplace_entity':'', 'fireplace_active_state':'on'}

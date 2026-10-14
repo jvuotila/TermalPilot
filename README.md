@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.5 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.6 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -772,6 +772,12 @@ Returning from live control to simulation first releases the pump to standby.
 
 For a pump heating several ordinary rooms, create a **Heating zone**, select its
 pump, and use **Add room** inside the zone to select configured rooms.
+New zones start with **Control zone heat pump** switched off: the pump is
+observed without being controlled. Switch it on and enable global live control
+to allow commands. Switching it off releases a previously controlled pump to
+fan-only standby first. Zones created before this switch retain their enabled
+behavior on upgrade. Choose **Heating only**, **Cooling only**, or **Heating in winter / cooling in summer**. Each zone has a separate cooling target, initially 24°C. Cooling starts 0.5°C above it and stops when any linked room reaches the target. Summer follows the existing automatic season rule; a changed season must persist for 24 hours. Heating and cooling never run in the same season. A reversal requires confirmed fan-only standby for ten minutes; the pump’s automatic Heat/Cool mode is never selected. Cooling uses temperature limits, without tariff optimization or a cooling forecast model. Cooling observations are excluded from heating-model learning. Air-to-air controls under **Shared room and zone settings**
+apply to ordinary air-to-air rooms and zones; garages use their own settings.
 Choose one linked room as **Main room**. Only that controller room sends commands. Rooms assigned elsewhere must first
 be removed from their existing zone. Removing a linked room shows a warning and
 also removes its zone membership; if it was the main room, another linked room

@@ -228,3 +228,61 @@ class AirTests(unittest.IsolatedAsyncioTestCase):
         intent['target']=18
         await self.control.apply([self.room],{self.room['id']:intent},40,lambda:True)
         self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'heat')
+
+    def cooling_zone(self,mode='cool'):
+        self.room.update(is_garage=False,heat_control='air_to_air',heating_zone_id='zone',zone_climate_mode=mode,zone_cooling_target=24,zone_policy='main')
+        self.pump.attributes['hvac_modes']=['heat','cool','fan_only','off']
+        self.hass.states['sensor.garage'].state='25'
+        return self.room
+
+    def test_cooling_only_never_heats_and_both_has_exclusive_seasons(self):
+        self.cooling_zone()
+        self.assertEqual(self.control.intent(self.room,self.settings,0,summer=False)['mode'],'fan_only')
+        # A new stable season is adopted after a full day, not each forecast update.
+        self.assertEqual(self.control.intent(self.room,self.settings,1,summer=True)['mode'],'fan_only')
+        self.assertEqual(self.control.intent(self.room,self.settings,86401,summer=True)['mode'],'cool')
+        self.room['zone_climate_mode']='heat'
+        self.assertEqual(self.control.intent(self.room,self.settings,86402,summer=True)['mode'],'fan_only')
+        self.room['zone_climate_mode']='both'
+        self.assertEqual(self.control.intent(self.room,self.settings,86403,summer=True)['mode'],'cool')
+        self.assertEqual(self.control.intent(self.room,self.settings,86404,summer=False)['mode'],'cool')
+        self.hass.states['sensor.garage'].state='18'
+        self.assertEqual(self.control.intent(self.room,self.settings,172804,summer=False)['mode'],'heat')
+
+    def test_cooling_hysteresis_and_missing_reading_stop(self):
+        self.cooling_zone()
+        for value,expected in [('24.4','fan_only'),('24.5','cool'),('24.2','cool'),('24','fan_only'),('24.4','fan_only'),('unknown','fan_only')]:
+            self.hass.states['sensor.garage'].state=value
+            self.assertEqual(self.control.intent(self.room,self.settings,0,summer=True)['mode'],expected)
+        self.assertEqual(self.control.intent(self.room,self.settings,0,summer=True,enabled=False)['mode'],'fan_only')
+
+    async def test_cooling_stages_and_ten_minute_reversal_pause(self):
+        self.cooling_zone();self.pump.state='heat'
+        intent=self.control.intent(self.room,self.settings,0,summer=True)
+        await self.control.apply([self.room],{self.room['id']:intent},0,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'fan_only')
+        self.pump.state='fan_only';self.pump.attributes.update(min_temp=0,max_temp=1)
+        await self.control.apply([self.room],{self.room['id']:intent},10,lambda:True)
+        await self.control.apply([self.room],{self.room['id']:intent},609,lambda:True)
+        self.assertEqual(self.hass.services.async_call.await_count,1)
+        await self.control.apply([self.room],{self.room['id']:intent},610,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'cool')
+        self.pump.state='cool';self.pump.attributes.update(min_temp=16,max_temp=30)
+        await self.control.apply([self.room],{self.room['id']:intent},620,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['temperature'],24)
+        self.assertNotIn('heat_cool',[c.args[2].get('hvac_mode') for c in self.hass.services.async_call.call_args_list])
+        self.hass.services.async_call.reset_mock()
+        await self.control.apply([self.room],{self.room['id']:intent},630,lambda:False)
+        self.hass.services.async_call.assert_not_awaited()
+
+    async def test_reversal_pause_survives_an_intermediate_standby_request(self):
+        self.cooling_zone();self.pump.state='heat'
+        standby={'mode':'fan_only','target':None,'fan':'','swing':'','errors':[]}
+        await self.control.apply([self.room],{self.room['id']:standby},0,lambda:True)
+        self.pump.state='fan_only';self.hass.services.async_call.reset_mock()
+        cooling={'mode':'cool','target':24,'fan':'','swing':'','errors':[]}
+        await self.control.apply([self.room],{self.room['id']:cooling},10,lambda:True)
+        self.hass.services.async_call.assert_not_awaited()
+        self.assertIn('climate.garage',self.control.reversals)
+        await self.control.apply([self.room],{self.room['id']:cooling},610,lambda:True)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'cool')

@@ -32,14 +32,22 @@ class AirHeatPumpControl:
         self.pending={}
         self.ready={}
         self.rejected_targets={}
+        self.zone_seasons={}
+        self.reversals={}
+        self.thermal_modes={}
         self.results={}
         self.reconciled=set()
         self.lock=asyncio.Lock()
         self.deadlines=[]
 
-    def intent(self,room,settings,now,planned=None,enabled=True,release=False):
+    def intent(self,room,settings,now,planned=None,enabled=True,release=False,summer=False):
         """Hysteresis uses the external sensor; device target is a separate value."""
         room=garage_sensor_lists(room)
+        if room.get('heating_zone_id') and not room.get('is_garage'):
+            season=self.zone_season(room['heating_zone_id'],summer,now)
+            use=room.get('zone_climate_mode','heat')
+            if season or use=='cool':
+                return self.cooling_intent(room,settings,now,enabled and not release and season and use in ('cool','both'))
         rid=room['id'];garage=room.get('is_garage',False)
         state=self.hass.states.get(room['thermostat'])
         temperature,too_warm=zone_temperature(self.hass,room,settings)
@@ -111,6 +119,34 @@ class AirHeatPumpControl:
         return {'mode':mode,'target':target if heating else None,'fan':fan if mode!='off' else '',
                 'swing':values.get(prefix+('swing' if heating else 'swing_idle'),'') if mode!='off' else '', 'reason':reason,'errors':errors}
 
+    def zone_season(self,zone,summer,now):
+        """A changed automatic season must persist for 24 hours before adoption."""
+        status=self.zone_seasons.setdefault(zone,{'summer':bool(summer),'candidate':bool(summer),'since':now})
+        if status['candidate']!=bool(summer):status.update(candidate=bool(summer),since=now)
+        if status['summer']!=status['candidate'] and now-status['since']>=86400:
+            status['summer']=status['candidate']
+        return status['summer']
+
+    def cooling_intent(self,room,settings,now,enabled):
+        temperature,_=zone_temperature(self.hass,room,settings)
+        state=self.hass.states.get(room['thermostat'])
+        target=room.get('zone_cooling_target',24.0)
+        signature=('cool',room['thermostat'],target,room.get('zone_policy','main'))
+        old=self.cycles.get(room['id'],{})
+        cooling=old.get('cooling',False) if old.get('signature')==signature else bool(state and state.state=='cool')
+        members=[room]+[r for r in resolved_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
+        valid=temperature is not None
+        # Protect the coldest linked room even when an average guides the zone.
+        too_cold=valid and any(number(self.hass.states.get(r['temperature_entity']).state)<=target for r in members)
+        if not enabled or not valid or too_cold:cooling=False
+        elif temperature>=target+.5:cooling=True
+        self.cycles[room['id']]={'signature':signature,'cooling':cooling,'heating':False}
+        return {'mode':'cool' if cooling else 'fan_only','target':target if cooling else None,
+                'fan':settings.get('air_fan_cool' if cooling else 'air_fan_idle',''),
+                'swing':settings.get('air_swing_cool' if cooling else 'air_swing_idle',''),
+                'reason':'Zone cooling' if cooling else 'Cooling standby' if enabled else 'Seasonal standby',
+                'errors':[] if valid else [f"{room['name']}: zone temperature unavailable; using fan-only standby."]}
+
     async def apply(self,rooms,intents,now,permitted):
         """One command per pump per pass; later stages require reported acknowledgement.
 
@@ -131,6 +167,27 @@ of physical compressor operation, especially with optimistic integrations.
                     errors.append(f"{room['name']}: heat pump does not support {mode}.");continue
                 if attrs.get('temperature_unit','°C') not in ('°C','C'):
                     errors.append(f"{room['name']}: heat pump must use Celsius.");continue
+                # Never reverse directly. Confirm fan-only, then wait ten minutes.
+                desired_mode=mode
+                if state.state in ('heat','cool'):self.thermal_modes[entity]={'mode':state.state,'time':now}
+                last_thermal=self.thermal_modes.get(entity,{})
+                pending_mode=self.pending.get((entity,'hvac_mode'),{}).get('value')
+                reversal=self.reversals.get(entity)
+                if desired_mode in ('heat','cool'):
+                    opposite='cool' if desired_mode=='heat' else 'heat'
+                    if state.state==opposite or pending_mode==opposite or (last_thermal.get('mode')==opposite and now-last_thermal.get('time',now)<600):
+                        if not reversal or reversal['mode']!=desired_mode:
+                            reversal={'mode':desired_mode,'since':None};self.reversals[entity]=reversal
+                        elif state.state==opposite:reversal['since']=None
+                    if reversal:
+                        if reversal['mode']!=desired_mode:
+                            reversal={'mode':desired_mode,'since':None};self.reversals[entity]=reversal
+                        if state.state=='fan_only' and reversal['since'] is None:reversal['since']=now
+                        if reversal['since'] is None or now-reversal['since']<600:
+                            mode='fan_only'
+                            self.deadlines.append(now+10 if reversal['since'] is None else reversal['since']+600)
+                        else:self.reversals.pop(entity,None)
+                else:self.reversals.pop(entity,None)
                 commands=[]
                 cancel_start=mode=='off' and (entity,'power') in self.pending
                 # Home Assistant ClimateEntityFeature.TURN_ON is 256. For devices
@@ -139,42 +196,42 @@ of physical compressor operation, especially with optimistic integrations.
                     commands.append(('turn_on','power',True,state.state!='off'))
                 elif mode=='off':self.pending.pop((entity,'power'),None)
                 commands.append(('set_hvac_mode','hvac_mode',mode,state.state))
-                target=number(intent['target']) if mode=='heat' else None
+                target=number(intent['target']) if mode in ('heat','cool') else None
                 rejected=self.rejected_targets.get(entity)
-                if rejected and rejected['target']!=target:
+                if rejected and (rejected['target']!=target or rejected.get('mode')!=mode):
                     self.rejected_targets.pop(entity,None);rejected=None
                 # Bounds are mode-specific. Wait for Heat and its settling period
                 # before reading them; never send a temperature in fan-only mode.
-                checking_heat=mode=='heat' and state.state=='heat' and now>=self.ready.get(entity,now)
+                checking_heat=mode in ('heat','cool') and state.state==mode and now>=self.ready.get(entity,now)
                 if checking_heat:
                     low=number(attrs.get('min_temp'),5);high=number(attrs.get('max_temp'),35)
                     step=number(attrs.get('target_temp_step'),.5)
                     if target is None or not low<=target<=high or step<=0:
-                        rejected={'target':target,'low':low,'high':high}
+                        rejected={'target':target,'low':low,'high':high,'mode':mode}
                         self.rejected_targets[entity]=rejected
                     else:
                         rejected=None;self.rejected_targets.pop(entity,None)
                         target=round(max(low,min(high,low+round((target-low)/step)*step)),6)
                         commands.append(('set_temperature','temperature',target,number(attrs.get('temperature'))))
                 if rejected:
-                    errors.append(f"{room['name']}: heating setpoint outside device limits ({rejected['low']:g}–{rejected['high']:g} °C); using fan-only standby.")
+                    errors.append(f"{room['name']}: temperature setpoint outside device limits ({rejected['low']:g}–{rejected['high']:g} °C); using fan-only standby.")
                     # Keep the rejection while in standby, avoiding repeated starts
                     # with an invalid setpoint. A changed target permits a new check.
                     mode='fan_only'
                     commands=[('set_hvac_mode','hvac_mode',mode,state.state)]
-                if intent['fan'] and not rejected:
+                if intent['fan'] and not rejected and mode==desired_mode:
                     if intent['fan'] not in attrs.get('fan_modes',[]):
                         errors.append(f"{room['name']}: selected fan mode is unsupported.");continue
                     commands.append(('set_fan_mode','fan_mode',intent['fan'],attrs.get('fan_mode')))
-                if intent['swing'] and not rejected:
+                if intent['swing'] and not rejected and mode==desired_mode:
                     if intent['swing'] not in attrs.get('swing_modes',[]):
                         errors.append(f"{room['name']}: selected swing mode is unsupported.");continue
                     commands.append(('set_swing_mode','swing_mode',intent['swing'],attrs.get('swing_mode')))
-                if mode!='heat':self.ready.pop(entity,None)
+                if mode not in ('heat','cool'):self.ready.pop(entity,None)
                 self.results[rid]={**intent,'confirmed':False,'stage':'checking'}
                 for service,key,value,reported in commands:
                     if not permitted():break
-                    if key not in ('power','hvac_mode') and mode=='heat' and now<self.ready.get(entity,now):
+                    if key not in ('power','hvac_mode') and mode in ('heat','cool') and now<self.ready.get(entity,now):
                         self.results[rid]['stage']=key
                         self.deadlines.append(self.ready[entity]);break
                     pending=self.pending.get((entity,key))
@@ -197,14 +254,14 @@ of physical compressor operation, especially with optimistic integrations.
                     if key!='power':payload[key]=value
                     try:
                         await asyncio.wait_for(self.hass.services.async_call('climate',service,payload,blocking=True),15)
-                        if key=='hvac_mode' and value=='heat':self.ready[entity]=now+10
+                        if key=='hvac_mode' and value in ('heat','cool'):self.ready[entity]=now+10
                     except Exception:
                         self.pending[(entity,key)]['failed']=True
                         errors.append(f"{room['name']}: {service} failed; will retry.")
                     self.deadlines.append(now+10)
                     break  # Wait for reported acknowledgement before the next stage.
                 else:
-                    if intent['mode']=='heat' and not checking_heat and not rejected:
+                    if intent['mode'] in ('heat','cool') and not checking_heat and not rejected:
                         self.results[rid]['stage']='temperature'
                         self.deadlines.append(max(now+10,self.ready.get(entity,now)))
                     elif not rejected:

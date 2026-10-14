@@ -717,7 +717,7 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         from thermal_pilot.const import ZONE_DEFAULTS
         main={**self.garage,'is_garage':False,'baseline':20,'thermostat':'','heating_zone_id':'zone'}
         member={**self.floor,'thermostat':'','heating_zone_id':'zone'}
-        zone={**ZONE_DEFAULTS,'id':'zone','name':'House pump','thermostat':'climate.garage','main_room_id':main['id'],'temperature_policy':'coldest'}
+        zone={**ZONE_DEFAULTS,'id':'zone','name':'House pump','thermostat':'climate.garage','main_room_id':main['id'],'temperature_policy':'coldest','heating_enabled':True}
         self.hass.states['sensor.garage'].state='18'
         self.c.settings.update(rooms=[main,member],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
         data=await self.c._async_update_data()
@@ -739,3 +739,35 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.hass.states['climate.garage'].state='fan_only'
         await self.c.update_command_state(now+timedelta(seconds=70))
         self.assertNotIn('climate.garage',self.c.managed_rooms)
+
+    async def test_zone_control_opt_in_and_release(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        main={**self.garage,'is_garage':False,'baseline':20,'thermostat':'','heating_zone_id':'zone'}
+        zone={**ZONE_DEFAULTS,'id':'zone','name':'House pump','thermostat':'climate.garage','main_room_id':main['id']}
+        self.hass.states['sensor.garage'].state='18'
+        self.c.settings.update(rooms=[main],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
+        await self.c._async_update_data();self.hass.services.async_call.assert_not_awaited()
+        zone['heating_enabled']=True
+        await self.c._async_update_data();self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'heat')
+        self.hass.states['climate.garage'].state='heat';zone['heating_enabled']=False
+        self.hass.services.async_call.reset_mock();await self.c._async_update_data()
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'fan_only')
+        self.hass.states['climate.garage'].state='fan_only'
+        self.hass.services.async_call.reset_mock();await self.c._async_update_data()
+        self.hass.services.async_call.assert_not_awaited()
+
+    async def test_cooling_zone_has_no_heating_plan_and_excludes_cooling_learning(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        from unittest.mock import patch
+        main={**self.garage,'is_garage':False,'baseline':20,'thermostat':'','heating_zone_id':'zone'}
+        zone={**ZONE_DEFAULTS,'id':'zone','name':'Summer pump','thermostat':'climate.garage','main_room_id':main['id'],'climate_mode':'cool','heating_enabled':True}
+        self.hass.states['climate.garage'].attributes['hvac_modes']=['heat','cool','fan_only','off']
+        self.hass.states['sensor.garage'].state='26'
+        self.c.settings.update(rooms=[main],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
+        with patch('thermal_pilot.coordinator.fallback_season',return_value={'summer':True,'days':{}}):
+            data=await self.c._async_update_data()
+            self.assertIsNone(data['rooms'][main['id']]['plan'])
+            self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'cool')
+            self.hass.states['climate.garage'].state='cool'
+            await self.c._async_update_data()
+            self.assertTrue(self.c.previous[main['id']]['excluded'])
