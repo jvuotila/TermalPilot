@@ -671,3 +671,71 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.hass.services.async_call.side_effect=None
         await self.c._async_update_data()
         self.assertEqual(self.hass.services.async_call.await_count,2)
+
+class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.hass=Hass(self.temp.name)
+        self.floor={**ROOM_DEFAULTS,'id':'11111111-1111-4111-8111-111111111111','name':'Floor room','thermostat':'climate.room','temperature_entity':'sensor.room'}
+        self.garage={**ROOM_DEFAULTS,'id':'22222222-2222-4222-8222-222222222222','name':'Garage','thermostat':'climate.garage','temperature_entity':'sensor.garage','is_garage':True}
+        self.hass.states.update({'sensor.garage':State('4'),'climate.garage':State('fan_only',{'hvac_modes':['heat','fan_only','off'],'fan_modes':['low','high'],'swing_modes':['off','both'],'temperature':20,'min_temp':16,'max_temp':30,'hvac_action':'fan'})})
+        entry=types.SimpleNamespace(entry_id='garage',data={**DEFAULTS,'price_entity':'sensor.price','outdoor_entity':'sensor.out','water_entity':'sensor.water','rooms':[self.floor]},options={})
+        self.c=PilotCoordinator(self.hass,entry);await self.c.load()
+    async def asyncTearDown(self):self.temp.cleanup()
+    async def test_adding_garage_preserves_floor_model_and_uses_no_water_offsets(self):
+        await self.c._async_update_data();fingerprint=deepcopy(self.c.config_fingerprint[self.floor['id']]);model=self.c.models[self.floor['id']];model['samples']=123
+        self.c.settings['rooms'].append(self.garage)
+        self.c.settings['apply_season_setpoints']=True
+        data=await self.c._async_update_data()
+        self.assertEqual(fingerprint,self.c.config_fingerprint[self.floor['id']]);self.assertIs(model,self.c.models[self.floor['id']]);self.assertEqual(model['samples'],123)
+        garage=data['rooms'][self.garage['id']]
+        self.assertEqual(garage['plan']['comfort_floor'],5);self.assertEqual(garage['pump_suggestion']['target'],16)
+        self.assertEqual(self.c.previous[self.garage['id']]['water_factor'],1);self.assertIsNone(self.c.previous[self.garage['id']]['water'])
+        self.assertFalse(any(call.args[2].get('entity_id')=='climate.garage' for call in self.hass.services.async_call.call_args_list))
+    async def test_live_garage_ignores_missing_prices_and_has_separate_device_target(self):
+        self.c.settings.update(rooms=[self.garage],price_entity='',simulation_enabled=False,live_control_confirmed=True)
+        self.hass.states.pop('sensor.price')
+        data=await self.c._async_update_data()
+        self.assertFalse(data['source_status']['prices_required']);self.assertEqual(data['control']['mode'],'live')
+        self.assertFalse(any('price' in w.lower() for w in data['warnings']))
+        self.assertEqual(self.hass.services.async_call.call_args.args[1:3],('set_hvac_mode',{'entity_id':'climate.garage','hvac_mode':'heat'}))
+        self.hass.states['climate.garage'].state='heat';self.c.data=data
+        await self.c.update_command_state(now+timedelta(seconds=10))
+        writes=[call for call in self.hass.services.async_call.call_args_list if call.args[1]=='set_temperature']
+        self.assertEqual([call.args[2]['temperature'] for call in writes],[16])
+    async def test_simulation_and_relinquish_are_separate_from_floor_targets(self):
+        self.c.settings.update(rooms=[self.garage],price_entity='')
+        await self.c._async_update_data();self.hass.services.async_call.assert_not_awaited()
+        self.c.settings.update(simulation_enabled=False,live_control_confirmed=True)
+        await self.c._async_update_data()
+        self.hass.states['climate.garage'].state='heat';self.hass.services.async_call.reset_mock()
+        self.c.settings['simulation_enabled']=True
+        await self.c._async_update_data()
+        self.assertEqual([call.args[1] for call in self.hass.services.async_call.call_args_list],['set_hvac_mode'])
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'fan_only')
+        self.hass.services.async_call.reset_mock();await self.c._async_update_data();self.hass.services.async_call.assert_not_awaited()
+    async def test_shared_zone_commands_only_one_climate_entity(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        main={**self.garage,'is_garage':False,'baseline':20,'thermostat':'','heating_zone_id':'zone'}
+        member={**self.floor,'thermostat':'','heating_zone_id':'zone'}
+        zone={**ZONE_DEFAULTS,'id':'zone','name':'House pump','thermostat':'climate.garage','main_room_id':main['id'],'temperature_policy':'coldest'}
+        self.hass.states['sensor.garage'].state='18'
+        self.c.settings.update(rooms=[main,member],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
+        data=await self.c._async_update_data()
+        self.assertTrue(data['rooms'][member['id']]['zone_monitor'])
+        writes=[call for call in self.hass.services.async_call.call_args_list if call.args[0]=='climate']
+        self.assertEqual(len(writes),1);self.assertEqual(writes[0].args[2]['entity_id'],'climate.garage')
+    async def test_release_retries_until_fan_only_is_reported(self):
+        self.c.settings.update(rooms=[self.garage],price_entity='',simulation_enabled=False,live_control_confirmed=True)
+        await self.c._async_update_data()
+        self.hass.states['climate.garage'].state='heat';self.c.settings['simulation_enabled']=True
+        self.hass.services.async_call.reset_mock()
+        data=await self.c._async_update_data()
+        self.assertIn('climate.garage',self.c.managed_rooms)
+        self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'fan_only')
+        self.c.data=data
+        await self.c.update_command_state(now+timedelta(seconds=60))
+        self.assertEqual(self.hass.services.async_call.await_count,2)
+        self.assertIn('climate.garage',self.c.managed_rooms)
+        self.hass.states['climate.garage'].state='fan_only'
+        await self.c.update_command_state(now+timedelta(seconds=70))
+        self.assertNotIn('climate.garage',self.c.managed_rooms)

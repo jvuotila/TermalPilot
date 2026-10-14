@@ -183,6 +183,13 @@ class SettingsTests(unittest.TestCase):
             tree=ast.parse(path.read_text())
             for n in ast.walk(tree):
                 if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='async_call':
+                    if path.name=='air_control.py':
+                        self.assertEqual(n.args[0].value,'climate')
+                        self.assertIsInstance(n.args[1],ast.Name)
+                        self.assertEqual(n.args[1].id,'service')
+                        commands={node.elts[0].value for node in ast.walk(tree) if isinstance(node,ast.Tuple) and node.elts and isinstance(node.elts[0],ast.Constant) and str(node.elts[0].value).startswith('set_')}
+                        self.assertEqual(commands,{'set_hvac_mode','set_temperature','set_fan_mode','set_swing_mode'})
+                        continue
                     self.assertIn((n.args[0].value,n.args[1].value),{('weather','get_forecasts'),('climate','set_temperature'),('persistent_notification','create')})
                     if n.args[0].value=='climate':
                         method=next(f for f in ast.walk(tree) if isinstance(f,ast.AsyncFunctionDef) and n in list(ast.walk(f)))

@@ -9,8 +9,8 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
-from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS
-from .config import validate, stored_settings, confirm_control_settings, SOURCE_FIELDS, ROOM_FIELDS
+from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS, ZONE_DEFAULTS
+from .config import validate, stored_settings, confirm_control_settings, SOURCE_FIELDS, ROOM_FIELDS, ZONE_FIELDS
 from .coordinator import PilotCoordinator
 
 
@@ -80,7 +80,7 @@ def ws_get(hass, connection, msg):
             'actual':room['activity_entity'] or registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_activity'),
         } for room in c.settings['rooms']}
         connection.send_result(msg['id'], {'settings':c.settings, 'data':c.data, 'room_entities':room_entities,
-            'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS})
+            'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS, 'zone_defaults':ZONE_DEFAULTS, 'zone_fields':ZONE_FIELDS})
 
 
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool})

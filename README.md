@@ -6,11 +6,13 @@
 with a changing electricity tariff**, such as hourly or quarter-hour spot prices.
 Its main purpose is to shift heating toward cheaper periods while maintaining
 comfort. With a fixed electricity tariff, there is little tariff-shifting benefit.
-For gas, oil, wood/pellet or district heating, the current integration offers
-limited value: temperature history and thermal-response learning, without heating
-schedules, thermostat control or a required electricity-price sensor.
+Rooms using gas, oil, wood/pellet or district heating provide temperature history
+and thermal-response learning without fuel-cost scheduling or thermostat control.
+Independent electric garage rooms and air-to-air zones can still use their own
+controllers alongside those house systems. Garage temperature-only cycling also
+works without an electricity-price sensor.
 
-Version **0.9.2 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.3 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -228,8 +230,12 @@ another automation controls the same thermostats, disable it first to avoid
 conflicting commands. Existing installations with a
 legacy simulation-off preference do not silently activate control: explicit
 confirmation is required. Returning to simulation releases controlled thermostats
-at their seasonal fallback temperatures. Physical commands use [Home Assistant’s thermostat target action](https://www.home-assistant.io/actions/climate.set_temperature/); thermostat HVAC modes, relays and the heat pump are not
-operated directly. Thermostats must already be able to heat in their current mode.
+at their seasonal fallback temperatures. Ordinary thermostat control uses Home Assistant’s `climate.set_temperature` action.
+Explicit air-to-air rooms and heating zones additionally use `set_hvac_mode`,
+`set_fan_mode`, and a selected `set_swing_mode`. Only advertised device modes are
+accepted. Pauses use **fan-only**, rather than switching the pump off. Garage
+warm-weather operation can switch it off as described below. Relays are observed,
+not operated directly.
 
 Missing essential inputs or an expired plan returns affected rooms to seasonal
 fallback temperatures. Turning ThermalPilot active off cancels the scheduled
@@ -707,3 +713,101 @@ limits the rating to Okay or worse. Counts and similar-heating results remain
 in the tooltip. These ratings do not establish readiness for live control.
 
 For a fireplace damper contact sensor, **Fireplace active when** offers Open and Closed instead of free text; Open is the usual active state and maps to HA state `on`. Other sensors use their declared options or available state values. The contact measures damper position, not combustion.
+
+## Garages and heating zones
+
+Enable **Garage** inside its room card to show its own settings. The defaults are
+**5°C lower limit**, **9°C upper limit**, and a **16°C heat-pump device setpoint**.
+These are different temperatures: the external garage sensor starts heating below
+5°C and ends it at 9°C; 16°C is sent to the pump while it heats. Garage control
+ignores house floor-heating limits, heating-water adjustment, summer setpoints
+and valve timing. Air response starts with an internal **10-minute** estimate and learns separately
+for each room; it is not a user-entered setting or a command delay. The estimate
+changes only after enough clean heating and idle observations, several start/stop
+cycles and better predictions from a competing response model. Until then, the
+initial or previously learned estimate is retained. Observations with an open
+garage door or other excluded heat sources do not teach the response time. Existing ordinary rooms retain their settings
+and learned data; changing a room’s controller can restart that room’s response
+learning while recorded history remains.
+
+**Temperature limits only** is the default garage strategy. It follows the
+lower-to-upper cycle and needs no electricity price sensor. **Electricity tariff
+optimization** can consider earlier heating using prices and the learned response,
+within the garage band. The lower limit takes priority; reaching the upper limit
+returns the pump to fan-only. Missing prices fall back to temperature cycling.
+Outdoor temperature at or below the garage lower limit keeps standby in fan-only;
+warmer outdoor temperature switches the pump off. The ThermalPilot master switch
+pauses heating; cold standby still uses fan-only.
+
+Garage fan and swing choices come from the selected pump’s advertised modes.
+On initial garage setup, High/Low/Medium fan defaults are selected only if those
+exact modes are advertised. Otherwise choose the device’s equivalent modes.
+**Leave unchanged** sends no command for that setting. Optional garage controls
+include add/remove lists for any number of door and presence sensors. One shared
+open-door timer starts when the first selected door opens (60 seconds by default),
+and keeps running while any selected door remains open. After the delay, the pump
+uses fan-only. The timer resets when all selected doors are closed. Presence
+reported by any selected sensor uses the quieter occupied fan mode; normal fan
+speed returns when no selected sensor detects presence. Garage rooms do not use
+fireplace compensation. Manual heating and extra availability-sensor settings are
+not provided. Heat-pump and garage-temperature availability are checked directly.
+If an external manual automation controls the same pump, use simulation while it
+runs: ThermalPilot live control can otherwise overwrite its commands.
+Pump control proceeds one stage at a time: power on when the device advertises
+support for `turn_on`, confirm the requested operating mode, then set and confirm
+temperature, fan and any selected swing. Devices without a separate power-on
+action start through their supported Heat/Fan-only mode action. Reported state
+is checked at ten-second intervals; an unconfirmed or failed stage is retried
+after sixty seconds. Later stages are not sent until the current one is confirmed.
+A changed heating request cancels the remaining heating stages and countercommands
+the pump to the newly required mode. Returning to simulation retains ownership
+until standby is reported, so an ignored release command is retried. The panel
+shows the current confirmation stage. Verification trusts Home Assistant’s
+reported state; optimistic integrations may report an applied command before
+hardware has acknowledged it, so this is not proof of physical heat delivery.
+The actions and capability flags follow [Home Assistant’s climate interface](https://www.home-assistant.io/integrations/climate/).
+The device must support Heat and Fan
+only, and garage control also requires Off. Simulation sends no new pump commands.
+Returning from live control to simulation first releases the pump to standby.
+
+For a pump heating several ordinary rooms, create a **Heating zone**, select its
+pump, and use **Add room** inside the zone to select configured rooms.
+Choose one linked room as **Main room**. Only that controller room sends commands. Rooms assigned elsewhere must first
+be removed from their existing zone. Removing a linked room shows a warning and
+also removes its zone membership; if it was the main room, another linked room
+is selected. Zones with no linked rooms remain configured but do not control
+heating. Each zone offers:
+
+- **Main room sensor** — use the main room’s measured temperature.
+- **Average of room sensors** — use the mean of the linked room readings.
+- **Coldest room sensor** — use the lowest linked room reading.
+
+Any linked room reaching the shared upper limit pauses zone heating, even if
+another room is cold. All linked temperature sensors must be available; missing
+readings use fan-only standby. Room comfort targets and the shared temperature
+limits still apply. One pump cannot belong to multiple controllers or zones.
+The shared **Air-to-air heat pump settings** provide its heating device target,
+heating/standby fan speeds and separate heating/standby swing modes.
+Heating swing mode is beside Heating fan speed; standby settings apply in
+fan-only mode. Leaving a swing selection unchanged sends no swing command. Shared mode choices
+must be supported by every configured ordinary air-to-air pump.
+
+Price planning and the saved zone forecast use the main room’s learned model;
+the selected multi-room temperature rule and upper-limit checks govern actual
+commands. Linked rooms retain individual temperature histories and learning,
+but do not have independent heating plans or forecasts of shared-pump operation.
+When a pump does not report heating demand, its observed Heat/Fan-only mode is
+used as a learning proxy and is labeled **Observed heat mode**. This does not
+measure heat output or the compressor’s running time.
+This is not yet a model of heat transfer between rooms. A cold distant room and a
+warm nearby room can make all targets impossible to satisfy with one pump.
+
+A **Fireplace** zone monitors its selected activity sensor and applies each linked
+room’s fireplace compensation. Its rooms keep their own ordinary controllers.
+An air-to-air zone can also monitor a fireplace as an additional heat source.
+ThermalPilot does not ignite, extinguish or otherwise operate a fireplace.
+A damper contact indicates position, not proof of a burning fire.
+
+The new garage and zone controls have automated tests using Home Assistant service
+doubles; physical heat-pump behavior still needs validation in simulation and on
+the selected equipment. Refresh the Settings screenshots when publishing this UI.

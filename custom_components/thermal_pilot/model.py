@@ -6,7 +6,7 @@ slab delay; it is not a physical measurement of the slab's stored energy.
 from dataclasses import dataclass
 from datetime import date as date_type, datetime, timedelta, timezone
 import math
-from .const import DEFAULTS
+from .const import DEFAULTS, AIR_INITIAL_LAG_HOURS
 
 
 def number(value, default=None):
@@ -158,6 +158,68 @@ def response_step(response, heating, hours, lag):
     average = heating + (response-heating)*lag*(1-decay)/hours
     return end, average
 
+
+
+def response_lag(room, model):
+    if room.get('air_control'):
+        return max(5/60,min(1,number(model.get('air_response_lag_hours'),AIR_INITIAL_LAG_HOURS)))
+    return room['lag_hours']
+
+
+def learn_air_response_lag(model, room, previous, current, hours):
+    """Compare causal response profiles, fitting loss/gain as nuisance parameters.
+
+Only uninterrupted, accepted observations are used. Score predictions before
+fitting their outcomes. Require clean heating/idle evidence and several cycles;
+flat or noisy observations leave the initial/previous estimate unchanged.
+"""
+    if not room.get('air_control'):return
+    activity=number(previous.get('activity'))
+    if activity not in (0,1):return
+    bank=model.setdefault('air_lag_learning',{'profiles':{},'heated_hours':0,'idle_hours':0,'starts':0,'stops':0})
+    profiles=bank['profiles']
+    continuous=bank.get('last_time')==previous['time']
+    if not continuous:
+        bank['last_activity']=None;bank['transition_time']=None;bank['resume_time']=previous['time']
+        for profile in profiles.values():profile['response']=0.0
+    if bank.get('last_activity') is not None and activity!=bank['last_activity']:
+        key='starts' if activity else 'stops';bank[key]+=1
+        bank['transition_time']=previous['time']
+    bank['last_activity']=activity;bank['last_time']=current['time']
+    bank['heated_hours']+=hours*activity;bank['idle_hours']+=hours*(1-activity)
+    x=previous['outdoor']-previous['temperature']
+    background=model.get('base_gain',0)+solar_gain(model,previous.get('solar'),solar_enabled(room))
+    wind=(effective_loss(model,previous.get('wind'))-model['loss'])*x
+    z=(current['temperature']-previous['temperature'])/hours-background-wind
+    warm=current['time']-bank['resume_time']>=3*3600
+    near_transition=bank.get('transition_time') is not None and current['time']-bank['transition_time']<=90*60
+    for minutes in (5,10,15,20,30,45,60):
+        profile=profiles.setdefault(str(minutes),{'response':0,'loss':model['loss'],'gain':model['gain'],'xx':0,'xy':0,'yy':0,'xz':0,'yz':0,'error_sum':0,'weight':0,'comparisons':0})
+        response,y=response_step(profile['response'],activity,hours,minutes/60)
+        profile['response']=response
+        prediction=previous['temperature']+hours*(profile['loss']*x+profile['gain']*y+background+wind)
+        if warm and near_transition:
+            profile['error_sum']=.995*profile['error_sum']+abs(prediction-current['temperature'])
+            profile['weight']=.995*profile['weight']+1;profile['comparisons']+=1
+        if not warm:continue
+        for key,value in [('xx',x*x),('xy',x*y),('yy',y*y),('xz',x*z),('yz',y*z)]:profile[key]=.998*profile[key]+value*hours
+        xx=profile['xx']+1;yy=profile['yy']+.01;xy=profile['xy']
+        xz=profile['xz']+model['loss'];yz=profile['yz']+.01*model['gain'];det=xx*yy-xy*xy
+        if det>1e-6:
+            loss=(xz*yy-yz*xy)/det;gain=(yz*xx-xz*xy)/det
+            if .001<=loss<=.05 and .03<=gain<=3:profile.update(loss=loss,gain=gain)
+    if not warm or bank['heated_hours']<12 or bank['idle_hours']<12 or bank['starts']<3 or bank['stops']<3:return
+    if current['time']-bank.get('last_selection_time',0)<3600:return
+    eligible=[(int(key),profile) for key,profile in profiles.items() if profile['comparisons']>=48 and profile['weight']>0]
+    if len(eligible)!=len(profiles):return
+    score=lambda item:item[1]['error_sum']/item[1]['weight']
+    best=min(eligible,key=score)
+    existing=min(eligible,key=lambda item:abs(item[0]/60-response_lag(room,model)))
+    bank['last_selection_time']=current['time']
+    if score(best)<score(existing)*.9 and score(existing)-score(best)>=.002:
+        model['air_response_lag_hours']=best[0]/60
+        model['response']=best[1]['response']
+        model['air_lag_updates']=model.get('air_lag_updates',0)+1
 
 def effective_loss(model, wind=None):
     """Optional learned wind correction around a shared 3 m/s reference.
@@ -329,7 +391,7 @@ multi-day counterfactual cost savings are asserted from these observations.
     dt = (current['time']-previous['time'])/3600
     if not 0.05 <= dt <= 0.5 or previous.get('activity') is None:
         return None
-    response, average = response_step(model['response'], previous['activity'], dt, room['lag_hours'])
+    response, average = response_step(model['response'], previous['activity'], dt, response_lag(room,model))
     x = previous['outdoor']-previous['temperature']
     y = average * previous.get('water_factor', 1.0)
     prediction = previous['temperature'] + dt*(effective_loss(model,previous.get('wind'))*x+model['gain']*y+model.get('base_gain',0)+solar_gain(model,previous.get('solar'),solar_enabled(room)))
@@ -374,6 +436,7 @@ multi-day counterfactual cost savings are asserted from these observations.
             model['loss'] = .98*model['loss']+.02*loss
             model['gain'] = .98*model['gain']+.02*gain
             model['parameter_updates']=model.get('parameter_updates',0)+1
+    learn_air_response_lag(model,room,previous,current,dt)
     learn_wind(model,room,x,y,raw_z,previous.get('wind') if current.get('wind') is not None else None,dt)
     return prediction
 
@@ -500,8 +563,8 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                     continue  # Restore heat at the absolute lower limit, regardless of price.
                 # Demand proxy: real thermostats may call for heat in setback too.
                 request = min(room['maximum'],baseline+room['boost']) if on else max(room['minimum'],baseline+room['setback']) if mode==1 else baseline
-                heating = 1.0 if temp < request else 0.0
-                r, average = response_step(response, heating, hours, room['lag_hours'])
+                heating = 1.0 if (on if room.get('is_garage') else temp < request) and (not room.get('air_control') or temp < room['maximum']) else 0.0
+                r, average = response_step(response, heating, hours, response_lag(room,model))
                 predicted = temp+hours*(slot_loss*(outdoor[i]-temp)+gain*water_factor*average+model.get('base_gain',0)+slot_solar)
                 if mode==1 and predicted<baseline:
                     continue  # Stored warmth must carry the room toward its comfort target.
@@ -511,7 +574,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
                 c = cost+slot.price*heating*hours + .3*abs(on-(last==2)) + .02*(mode!=last) + .15*hours*(predicted-baseline)**2 - (.03*hours if mode==1 else 0)
                 row = {'start': max(slot.start, now).isoformat(), 'end': slot.end.isoformat(),
                        'price': round(slot.price, 3), 'outdoor': round(outdoor[i], 2),
-                       'solar_gain':round(slot_solar,4), 'heat': bool(on), 'mode':('normal','reduced','boost')[mode],
+                       'solar_gain':round(slot_solar,4), 'heat': bool(heating) if room.get('air_control') else bool(on), 'mode':('normal','reduced','boost')[mode],
                        'reduction_available':bool(on or (credit and predicted>=baseline and r>.05)), 'predicted_demand': bool(heating),
                        'temperature': round(predicted, 3), 'setpoint': round(request, 2)}
                 candidates.append((v, deficit, c, predicted, r, mode, min(minimum_run,(run if last==2 else 0)+hours) if on else 0.0, row['reduction_available'], path+[row]))
@@ -525,7 +588,7 @@ ending the known-price horizon with insufficient estimated thermal reserve.
     def terminal(candidate):
         v, deficit, c, temp, response, last, run, credit, path = candidate
         reserve = min(12, room.get('terminal_reserve_hours', 6))
-        _, average = response_step(response, 0, max(.1, reserve), room['lag_hours'])
+        _, average = response_step(response, 0, max(.1, reserve), response_lag(room,model))
         final = temp+reserve*(loss*(outdoor[-1]-temp)+gain*water_factor*average+model.get('base_gain',0))
         return (round(v+max(0, room['minimum']-final)*reserve,6),round(deficit+max(0,baseline-final)*reserve,6),c)
     best = min(beam, key=terminal)
@@ -596,3 +659,19 @@ def fallback_season(previous, forecasts, forecast_type, outdoor, now, zone, thre
     summer = bool(in_dates or (today.get('complete') and today.get('low',-100)>=threshold))
     return {'summer':summer,'date':date,'daily_minimum':today.get('low'),
             'complete':bool(today.get('complete')),'days':days}
+
+
+def garage_cycle_plan(room, model, temperature, outdoors, slots, now, heating=False):
+    """Temperature-only garage shadow forecast; no tariff decisions or valve offsets."""
+    response=model['response'];rows=[]
+    for slot,outdoor in zip(slots,outdoors):
+        start=max(slot.start,now);hours=(slot.end-start).total_seconds()/3600
+        if hours<=0:continue
+        if outdoor>room['minimum'] or temperature>=room['maximum']:heating=False
+        elif temperature<room['minimum']:heating=True
+        response,average=response_step(response,float(heating),hours,response_lag(room,model))
+        temperature+=hours*(effective_loss(model,room.get('wind_speed'))*(outdoor-temperature)+model['gain']*average+model.get('base_gain',0))
+        rows.append({'start':start.isoformat(),'end':slot.end.isoformat(),'price':slot.price,'outdoor':outdoor,'heat':heating,'mode':'boost' if heating else 'normal','predicted_demand':heating,'temperature':round(temperature,3),'setpoint':room['garage_heat_target'] if heating else room['minimum']})
+    if not rows:return None
+    timing=thermostat_timing(rows,{**room,'start_offset_minutes':0,'stop_offset_minutes':0},room['minimum'],now)
+    return {'slots':rows,'scheduled_heat':rows[0]['heat'],'scheduled_mode':rows[0]['mode'],'reduction_available':False,**timing,'forecast_minimum':min(r['temperature'] for r in rows),'forecast_maximum':max(r['temperature'] for r in rows),'comfort_floor':room['minimum'],'comfort_target':room['minimum'],'reason':'Garage temperature cycle: heat below the lower limit; fan-only after the upper limit. Warm weather turns the pump off.','comfort_risk':False,'predicted_demand_hours':sum((stamp(r['end'])-stamp(r['start'])).total_seconds()/3600 for r in rows if r['heat'])}

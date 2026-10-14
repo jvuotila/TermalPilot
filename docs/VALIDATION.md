@@ -166,3 +166,27 @@ Completed collection badge checks cover seven-day 3-hour forecast error, missing
 Forecast-rating tests cover five practical deviation bands, a 20-comparison minimum, no-change benchmark restriction on green ratings, invalid/missing data and Finnish labels. Numerical thresholds are display guidance, not validated safety limits.
 
 Fireplace-state checks cover contact Open/Closed labels mapped to on/off, enum options, selector-only entry and backend rejection of display labels as binary states.
+
+## Garage and air-to-air control validation
+
+Service-double tests cover external 5–9°C hysteresis with a separate 16°C device
+target; tariff preheating and upper-limit priority; cold fan-only standby and warm
+off; dynamic door/presence lists; legacy sensor migration; any-sensor presence fan selection; shared open-door delay and all-closed reset; missing inputs;
+advertised fan/swing capabilities; staged mode transitions and countercommands;
+permission checks between writes; simulation and live-control release; mixed
+floor/air learning inputs; unchanged floor-room fingerprints; and one controller
+per shared heating zone. Zone temperature policies include main, mean and coldest
+readings, with any-room upper-limit guards. These are not hardware tests.
+
+Delayed-acknowledgement service doubles now cover power-on, mode, temperature,
+fan and swing stages independently; ten-second polling; sixty-second retries;
+failed stages blocking later commands; countercommands during an unfinished heat
+sequence; and retaining release ownership until standby is reported. This checks
+Home Assistant state feedback, not physical acknowledgements from a real pump.
+
+Air-response learning tests use synthetic heating/cooling observations to recover
+a slower 45-minute response from the internal 10-minute seed, require heating/idle
+and transition evidence, retain the seed without cycles or with excluded data,
+persist learned response, keep floor lag behavior unchanged, and use learned lag
+in garage forecasts. Standby swing follows the same staged acknowledgement checks.
+Synthetic response identification is not validation on real equipment.

@@ -169,7 +169,7 @@ sortedPanel.settings={rooms:[{id:'z',name:'Zulu'},{id:'b',name:'beta'},{id:'a',n
 sortedPanel.info={source_fields:[],room_fields:[['name','Room name','text']],room_defaults:{},data:{rooms:{z:{name:'Zulu'},b:{name:'beta'},a:{name:'Alpha'}}}};
 const settingsHTML=sortedPanel.settingsView();
 assert.doesNotMatch(settingsHTML,/<details[^>]*\bopen\b/);
-assert.equal((settingsHTML.match(/<details>/g)||[]).length,4);
+assert.equal((settingsHTML.match(/<details(?:\s[^>]*)?>/g)||[]).length,4);
 assert.ok(settingsHTML.indexOf('<summary><span data-user-text>Alpha')<settingsHTML.indexOf('<summary><span data-user-text>beta'));
 assert.ok(settingsHTML.indexOf('<summary><span data-user-text>beta')<settingsHTML.indexOf('<summary><span data-user-text>Zulu'));
 assert.ok(settingsHTML.indexOf('<summary><span data-user-text>Zulu')<settingsHTML.indexOf('<summary><span data-user-text>New room'));
@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.2 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.3 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -524,10 +524,14 @@ console.log('Finnish language checks passed: default labels/flags, translation, 
 const electricityMode=vm.runInContext('electricHeating',context);
 assert.equal(electricityMode({house_heat_source:'gas_boiler'}),false);
 assert.equal(electricityMode({house_heat_source:'air_to_water'}),true);
+const originalPreviewRooms=previewPanel.settings.rooms;
+previewPanel.settings.rooms=originalPreviewRooms.filter(room=>!room.is_garage&&room.heat_control!=='air_to_air');
 previewPanel.settings.house_heat_source='gas_boiler';
 assert.match(previewPanel.settingsView(),/data-electric-group hidden/);
 assert.doesNotMatch(previewPanel.overview(),/class="price-card"/);
 assert.match(previewPanel.controlBadges(),/Comfort planning/);
+previewPanel.settings.rooms=originalPreviewRooms;
+assert.equal(electricityMode(previewPanel.settings),true,'An electric garage remains supported beside a non-electric house');
 previewPanel.settings.house_heat_source='air_to_water';
 console.log('Non-electric UI checks passed: optional hidden prices, comfort-mode label and no scheduling chart.');
 
@@ -686,3 +690,62 @@ scrollDetails.open=false;accordionClick({defaultPrevented:false});frames.shift()
 scrollDetails.open=true;accordionBounds={bottom:800,height:200};context.matchMedia=()=>({matches:true});accordionClick({defaultPrevented:false});frames.shift()();assert.equal(scrollCalls[2].behavior,'instant');
 accordionClick({defaultPrevented:true});assert.equal(frames.length,0);
 console.log('Accordion scrolling passed: opening below viewport, visible content unchanged, closing/restoration unchanged and reduced motion respected.');
+
+const zonePanel=new Component();zonePanel._hass={states:{'climate.pump':{entity_id:'climate.pump',state:'fan_only',attributes:{fan_modes:['low','medium','high'],swing_modes:['off','vertical','both']}},'climate.other':{entity_id:'climate.other',state:'heat',attributes:{fan_modes:['low','high'],swing_modes:['off']}}}};
+zonePanel.settings={rooms:[{id:'g',name:'Garage',thermostat:'climate.pump',is_garage:true,garage_minimum:5,garage_maximum:9,garage_swing:'both'},{id:'room',name:'Room',thermostat:'climate.pump',heat_control:'air_to_air',heating_zone_id:'zone'}],heating_zones:[{id:'zone',name:'House pump',thermostat:'climate.pump',source_type:'air_to_air',main_room_id:'room',temperature_policy:'average'}],air_swing:''};
+zonePanel.info={source_fields:[['air_swing','Heating swing mode','text']],room_fields:[['name','Room name','text'],['is_garage','Garage','bool'],['heating_zone_id','Heating zone (optional)','text'],['thermostat','Thermostat','climate'],['baseline','Target temperature (°C)','number',5,30],['garage_minimum','Garage lower temperature limit (°C)','number',-5,25],['garage_maximum','Garage upper temperature limit (°C)','number',-5,30],['garage_swing','Garage heating swing mode','text']],zone_fields:[['name','Zone name','text'],['thermostat','Zone heat pump','climate'],['main_room_id','Main room','text'],['temperature_policy','Heating zone temperature','select:main,average,coldest']],data:{rooms:{}}};
+const zoneHTML=zonePanel.settingsView();
+assert.match(zoneHTML,/<h2>Heating zones<\/h2>/);assert.match(zoneHTML,/data-field="zone0.main_room_id"/);assert.match(zoneHTML,/data-field="room0.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room0.baseline"/);assert.doesNotMatch(zoneHTML,/data-field="room1.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room1.thermostat"/);
+assert.match(zoneHTML,/5–9 °C/);
+const swingHTML=zonePanel.field(['garage_swing','Garage heating swing mode','text'],zonePanel.settings.rooms[0],'room0');
+assert.match(swingHTML,/<select/);assert.match(swingHTML,/value="vertical"/);assert.match(swingHTML,/value="both" selected/);assert.match(swingHTML,/Leave unchanged/);assert.doesNotMatch(swingHTML,/<input/);
+zonePanel.settings.rooms.push({id:'other',thermostat:'climate.other',heat_control:'air_to_air'});
+const commonSwing=zonePanel.field(['air_swing','Heating swing mode','text'],zonePanel.settings,'source');assert.match(commonSwing,/value="off"/);assert.doesNotMatch(commonSwing,/value="vertical"/);
+const policyHTML=zonePanel.field(['temperature_policy','Heating zone temperature','select:main,average,coldest'],zonePanel.settings.heating_zones[0],'zone0');
+for(const label of ['Main room sensor','Average of room sensors','Coldest room sensor'])assert.ok(policyHTML.includes(label));
+zonePanel.settings.language='fi';assert.equal(zonePanel.t('Heating zones'),'Lämmitysvyöhykkeet');assert.equal(zonePanel.t('Garage heating strategy'),'Autotallin lämmitystapa');assert.equal(zonePanel.t('Fan only'),'Vain puhallus');
+console.log('Garage/zone UI passed: conditional limits, linked room controllers, capability-derived swing selections, shared capability intersection, three temperature policies and Finnish labels.');
+
+zonePanel.settings.rooms[0].garage_door_entities=Array.from({length:5},(_,i)=>`binary_sensor.door_${i}`);
+for(const id of zonePanel.settings.rooms[0].garage_door_entities)zonePanel._hass.states[id]={entity_id:id,state:'off',attributes:{friendly_name:id}};
+const listHTML=zonePanel.field(['garage_door_entities','Garage door sensors (optional)','entities:binary_sensor'],zonePanel.settings.rooms[0],'room0');
+assert.equal((listHTML.match(/data-entity-item/g)||[]).length,5);assert.equal((listHTML.match(/data-remove-sensor=/g)||[]).length,5);assert.match(listHTML,/data-add-sensor/);assert.match(listHTML,/One shared timer/);
+const originalQuery=zonePanel.shadowRoot.querySelectorAll;
+const fakeList={dataset:{entityList:'room0.garage_door_entities'},querySelectorAll:()=>[{value:'binary_sensor.door_0'},{value:''},{value:'binary_sensor.door_4'}]};
+zonePanel.shadowRoot.querySelectorAll=selector=>selector==='[data-entity-list]'?[fakeList]:[];
+zonePanel.capture(true);assert.equal(zonePanel.settings.rooms[0].garage_door_entities.length,3);
+zonePanel.capture();assert.deepEqual([...zonePanel.settings.rooms[0].garage_door_entities],['binary_sensor.door_0','binary_sensor.door_4']);
+zonePanel.shadowRoot.querySelectorAll=originalQuery;
+zonePanel.info.room_fields.push(['fireplace_reduction','Fireplace heating compensation','number',-100,0]);
+assert.doesNotMatch(zonePanel.settingsView(),/data-field="room0.fireplace_reduction"/);
+assert.match(zonePanel.settingsView(),/data-field="room1.fireplace_reduction"/);
+const sharedGroups=vm.runInContext('sharedSettingGroups.map(group=>group[0])',context);assert.equal(sharedGroups[0],'Thermostat settings');assert.equal(sharedGroups[1],'Air-to-air heat pump settings');
+console.log('Dynamic garage sensor lists passed: five choices, add/remove controls, capture, shared-timer tooltip, hidden fireplace compensation and shared settings order.');
+zonePanel.settings.language='en';zonePanel.info.data.rooms={g:{name:'Garage',air_control:true,pump_control:{confirmed:false,stage:'fan_mode'},pump_suggestion:{mode:'heat',target:16,reason:'Garage below lower limit'},model:{}}};
+assert.match(zonePanel.overview(),/Waiting for pump confirmation: <span>Fan speed<\/span>/);
+zonePanel.info.data.rooms.g.pump_control.confirmed=true;assert.doesNotMatch(zonePanel.overview(),/Waiting for pump confirmation:/);
+console.log('Pump stage feedback passed: unconfirmed fan stage shown and cleared after confirmation.');
+const newZonePanel=new Component();let addZoneClick;const newZoneDetails={open:false};
+newZonePanel.tab='settings';newZonePanel.settings={rooms:[],heating_zones:[]};newZonePanel.info={source_fields:[],room_fields:[],zone_fields:[],zone_defaults:{name:'',thermostat:''}};newZonePanel._hass={states:{}};
+newZonePanel.shadowRoot.querySelector=selector=>selector==='#add-zone'?{addEventListener:(_,fn)=>addZoneClick=fn}:selector.startsWith('[data-settings-disclosure=')?newZoneDetails:null;
+newZonePanel.render();addZoneClick();assert.equal(newZonePanel.settings.heating_zones.length,1);assert.equal(newZoneDetails.open,true);
+console.log('Adding a heating zone opens the new accordion immediately.');
+
+const memberPanel=new Component();memberPanel.tab='settings';memberPanel._hass={states:{}};
+memberPanel.settings={rooms:[{id:'a',name:'Living room',temperature_entity:'sensor.a',heating_zone_id:''},{id:'b',name:'Study',temperature_entity:'sensor.b',heating_zone_id:'other'},{id:'g',name:'Garage',temperature_entity:'sensor.g',is_garage:true}],heating_zones:[{id:'z',name:'Main zone',main_room_id:''},{id:'other',name:'Other zone',main_room_id:'b'}]};
+memberPanel.info={source_fields:[],room_fields:[],zone_fields:[],settings:structuredClone(memberPanel.settings)};
+memberPanel.zoneRoomDrafts={z:['']};const memberHTML=memberPanel.field(['zone_rooms','Rooms','rooms'],memberPanel.settings.heating_zones[0],'zone0');
+assert.match(memberHTML,/>Add room<\/button>/);assert.match(memberHTML,/value="a"/);assert.match(memberHTML,/value="b"[^>]*disabled/);assert.doesNotMatch(memberHTML,/value="g"/);
+let chosenRoom='a';const memberList={dataset:{entityList:'zone0.zone_rooms'},querySelectorAll:()=>[{value:chosenRoom}]};
+memberPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-entity-list]'?[memberList]:[];
+memberPanel.capture();assert.equal(memberPanel.settings.rooms[0].heating_zone_id,'z');assert.equal(memberPanel.settings.heating_zones[0].main_room_id,'a');assert.equal(memberPanel.settings.rooms[1].heating_zone_id,'other');
+chosenRoom='';memberPanel.capture();assert.equal(memberPanel.settings.rooms[0].heating_zone_id,'');assert.equal(memberPanel.settings.heating_zones[0].main_room_id,'');
+
+const removeMemberPanel=new Component();removeMemberPanel.tab='settings';removeMemberPanel._hass={states:{}};
+removeMemberPanel.settings={rooms:[{id:'a',name:'Living room',temperature_entity:'sensor.a',heating_zone_id:'z'},{id:'b',name:'Study',temperature_entity:'sensor.b',heating_zone_id:'z'}],heating_zones:[{id:'z',name:'House pump',main_room_id:'a'}]};removeMemberPanel.zoneRoomDrafts={z:['a','b']};removeMemberPanel.info={source_fields:[],room_fields:[],zone_fields:[]};
+const removeMemberButton={dataset:{remove:'0'}};removeMemberPanel.shadowRoot.querySelectorAll=selector=>selector==='[data-remove]'?[removeMemberButton]:[];
+const previousConfirm=context.confirm;let removalPrompt;context.confirm=prompt=>{removalPrompt=prompt;return false;};removeMemberPanel.render();removeMemberButton.onclick();assert.equal(removeMemberPanel.settings.rooms.length,2);assert.match(removalPrompt,/also removes its zone membership/);assert.match(removalPrompt,/House pump/);
+context.confirm=()=>true;removeMemberButton.onclick();assert.equal(removeMemberPanel.settings.rooms.length,1);assert.deepEqual([...removeMemberPanel.zoneRoomDrafts.z],['b']);assert.equal(removeMemberPanel.settings.heating_zones[0].main_room_id,'b');context.confirm=previousConfirm;
+console.log('Zone room membership passed: configured-room choices, occupied-zone exclusion, linking/removing rooms, main-room updates, and cancel/confirm deletion warning with membership cleanup.');
+
+const garageRetention=previewPanel.heatRetentionView();assert.match(garageRetention,/<tr class="garage-retention-row"><td><span data-user-text>Garage \(example\)/);console.log('Preview includes an example garage with a distinct retention row.');

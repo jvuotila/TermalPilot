@@ -11,8 +11,9 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, DEFAULTS, RESERVE_HOURS, ARCHIVE_KEEP_DAYS, WATER_REFERENCE, HISTORY_DAYS
 from .history import HistoryDatabase
 from .control import ThermostatControl
-from .config import stored_settings, water_distribution, electric_heating
-from .model import number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention, solar_signal, solar_facing, solar_enabled
+from .air_control import AirHeatPumpControl, zone_temperature, binary
+from .config import stored_settings, water_distribution, electric_heating, air_room, room_settings, resolved_rooms, room_electric, price_required
+from .model import Slot, garage_cycle_plan, number, stamp, initial_model, learn, learning_progress, price_slots, plan, collection_state, thermostat_state, fallback_season, price_forecast_reserve, heat_retention, solar_signal, solar_facing, solar_enabled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         self._command_timer = None
         # Restored HA attributes may not reflect the device after an outage.
         self.control = ThermostatControl(hass, require_initial_write=True)
+        self.air_control = AirHeatPumpControl(hass)
+        self._air_was_live=False
         self.managed_rooms = {}
         self.fallback_state = {}
         self._plan_settings = None
@@ -60,7 +63,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         if self._source_unsubscribe:
             self._source_unsubscribe()
         entities = {self.settings[key] for key in ('price_entity','price_forecast_entity','outdoor_entity','water_entity','weather_entity','wind_entity','fireplace_entity') if self.settings[key]}
-        entities.update(room[key] for room in self.settings['rooms'] for key in ('temperature_entity','thermostat','activity_entity') if room[key])
+        entities.update(room[key] for room in resolved_rooms(self.settings) for key in ('temperature_entity','thermostat','activity_entity','zone_fireplace_entity') if room.get(key))
+        entities.update(entity for room in resolved_rooms(self.settings) for key in ('garage_door_entities','garage_presence_entities') for entity in room.get(key,[]))
         self._source_unsubscribe = async_track_state_change_event(self.hass,entities,self.source_changed)
 
     @callback
@@ -70,7 +74,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         old, new = event.data.get('old_state'), event.data.get('new_state')
         if entity == self.settings['weather_entity']:
             self.forecast_updated = None
-        thermostats = {room['thermostat'] for room in self.settings['rooms']}
+        thermostats = {room['thermostat'] for room in resolved_rooms(self.settings)}
         if entity in thermostats and old and new and old.state == new.state and old.attributes.get('hvac_action') == new.attributes.get('hvac_action'):
             return  # Own target acknowledgements do not require replanning.
         if self._source_timer:
@@ -94,6 +98,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             rows = (room.get('plan') or {}).get('slots',[])
             if rows and stamp(rows[-1]['end']) > now:
                 future.append(stamp(rows[-1]['end']))
+        future.extend(datetime.fromtimestamp(t,now.tzinfo) for t in self.air_control.deadlines if t>now.timestamp())
         if future:
             self._command_timer = async_track_point_in_utc_time(self.hass,self.update_command_state,min(future))
 
@@ -113,7 +118,10 @@ class PilotCoordinator(DataUpdateCoordinator):
         saved = await self.store.async_load() or {}
         self.models = saved.get('models', {})
         for model in self.models.values():
-            model['response'] = 0.0  # Slab state cannot be trusted across downtime.
+            model['response'] = 0.0  # Thermal response cannot be trusted across downtime.
+            bank=model.get('air_lag_learning',{})
+            bank.pop('last_time',None)
+            for profile in bank.get('profiles',{}).values():profile['response']=0.0
         self.season = saved.get('season', {})
         self.applied_season_targets = saved.get('applied_season_targets', {})
         self.fallback_state = saved.get('fallback_state',{})
@@ -124,7 +132,7 @@ class PilotCoordinator(DataUpdateCoordinator):
 
     def collection_evidence(self):
         """Use the least-observed configured room for house-wide coverage."""
-        models = [self.models.get(room['id'], {}) for room in self.settings['rooms']]
+        models = [self.models.get(room['id'], {}) for room in resolved_rooms(self.settings)]
         return {'rooms':len(models),
                 'heating_hours':min((m.get('heated_hours',0) for m in models),default=0),
                 'idle_hours':min((m.get('idle_hours',0) for m in models),default=0)}
@@ -166,7 +174,10 @@ class PilotCoordinator(DataUpdateCoordinator):
             return None
         if not room['activity_entity']:
             value = state.attributes.get('hvac_action')
-            return 1.0 if value == 'heating' else 0.0 if value in ('idle','off') else None
+            if value=='heating':return 1.0
+            if value in ('idle','off','fan') or ((air_room(room,self.settings) or room.get('heat_control')=='zone_member') and state.state in ('fan_only','off')):return 0.0
+            if value is None and (air_room(room,self.settings) or room.get('heat_control')=='zone_member') and state.state=='heat':return 1.0  # Observed operating mode proxy, not measured heat output.
+            return None
         value = state.state
         if value is None or str(value) in ('unknown','unavailable'):
             return None
@@ -185,12 +196,12 @@ class PilotCoordinator(DataUpdateCoordinator):
             return
         timestamp = now.timestamp()
         warning_hours = self.settings['sensor_warning_hours']
-        configured = {room['id'] for room in self.settings['rooms']}
+        configured = {room['id'] for room in resolved_rooms(self.settings)}
         for rid in list(tracking):
             if rid not in configured:
                 tracking.pop(rid)
         suspect = []
-        for room in self.settings['rooms']:
+        for room in resolved_rooms(self.settings):
             rid, entity = room['id'], room['temperature_entity']
             value = self.value(entity)
             previous = tracking.get(rid,{})
@@ -273,7 +284,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         previous_plan = ((getattr(self,'data',None) or {}).get('rooms',{}).get(rid,{}) or {}).get('plan') or {}
         for session in previous_plan.get('sessions',[]):
             start, end = stamp(session['start']), stamp(session['end'])
-            opening = start-timedelta(minutes=self.settings['start_offset_minutes'] if water_distribution(self.settings) else 0)
+            configured=next((r for r in resolved_rooms(self.settings) if r['id']==rid),{})
+            opening = start-timedelta(minutes=self.settings['start_offset_minutes'] if water_distribution(self.settings) and not air_room(configured,self.settings) and configured.get('heat_control')!='zone_member' else 0)
             if opening <= now < end:
                 return deepcopy(session)
         return None
@@ -322,9 +334,9 @@ class PilotCoordinator(DataUpdateCoordinator):
             data['control'] = await self.apply_live_targets(data,now)
             data['warnings'].extend(f'Thermostat control: {w}' for w in data['control']['errors'])
             return data
-        scheduling=electric_heating(self.settings)
+        scheduling=price_required(self.settings)
         warnings = list(setpoint_errors)
-        if not scheduling:warnings.append('Observation only: this heat source does not use electricity-price scheduling or thermostat control.')
+        if not electric_heating(self.settings):warnings.append('Observation only: this heat source does not use electricity-price scheduling or thermostat control.')
         if scheduling and not self.settings['simulation_enabled'] and not self.settings.get('live_control_confirmed'):
             warnings.append('Live control awaits confirmation. Enable simulation, save, then disable it and confirm to activate thermostat control.')
         if not self.season['collecting']:
@@ -389,7 +401,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                     points.append((date, temp))
             earlier = [p for p in points if p[0] <= slot.start]
             outdoors.append(max(earlier, key=lambda p:p[0])[1] if earlier else outdoor)
-        uses_water=water_distribution(self.settings)
+        uses_water=water_distribution(self.settings) and any(not air_room(r,self.settings) and r.get('heat_control')!='zone_member' for r in resolved_rooms(self.settings))
         water_state = self.hass.states.get(self.settings['water_entity']) if uses_water and self.settings['water_entity'] else None
         water = number(water_state.attributes.get('current_temperature') if self.settings['water_entity'].startswith('climate.') else water_state.state) if water_state else None
         if uses_water and water is None:
@@ -397,8 +409,11 @@ class PilotCoordinator(DataUpdateCoordinator):
         fireplace_state = self.hass.states.get(self.settings['fireplace_entity']) if self.settings['fireplace_entity'] else None
         fireplace = bool(fireplace_state and fireplace_state.state == self.settings['fireplace_active_state'])
         readings, room_data = [], {}
-        for configured_room in self.settings['rooms']:
-            room = {**configured_room, **{key:self.settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','boost','setback','minimum','maximum')}, 'water_reference':WATER_REFERENCE}
+        for configured_room in resolved_rooms(self.settings):
+            room = {**room_settings(configured_room,self.settings), 'water_reference':WATER_REFERENCE}
+            room_water=uses_water and not room.get('air_control')
+            zone_fire=self.hass.states.get(room.get('zone_fireplace_entity','')) if room.get('zone_fireplace_entity') else None
+            room_fireplace=False if room.get('is_garage') else bool(zone_fire and zone_fire.state==room.get('zone_fireplace_active_state','on')) if room.get('zone_fireplace_entity') else fireplace
             rid = room['id']
             temperature = self.value(room['temperature_entity'])
             baseline = room['baseline']
@@ -406,9 +421,15 @@ class PilotCoordinator(DataUpdateCoordinator):
                 room['baseline'] = baseline
             model = self.models.setdefault(rid, initial_model(room))
             # Reset only affected model when heat source / room / activity / lag mapping changes.
-            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity'] if uses_water else '']
-            if self.settings['house_distribution']!='water_floor':fingerprint+=[self.settings['house_distribution']]
-            if rid in self.config_fingerprint and fingerprint != self.config_fingerprint[rid]:
+            fingerprint = [room[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[self.settings['outdoor_entity'], self.settings['water_entity'] if room_water else '']
+            if room.get('air_control'):fingerprint+=['air_to_air',room.get('heating_zone_id','')]
+            elif self.settings['house_distribution']!='water_floor':fingerprint+=[self.settings['house_distribution']]
+            old_fingerprint=self.config_fingerprint.get(rid)
+            # Moving air response from a manual seed to learned per-room state
+            # must not discard the existing loss/gain model or observation history.
+            if room.get('air_control') and old_fingerprint and old_fingerprint[:3]+old_fingerprint[4:]==fingerprint[:3]+fingerprint[4:]:
+                old_fingerprint=fingerprint
+            if old_fingerprint is not None and fingerprint != old_fingerprint:
                 model = self.models[rid] = initial_model(room)
                 self.previous.pop(rid, None)
             self.config_fingerprint[rid] = fingerprint
@@ -435,9 +456,9 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['error'] = 'Target temperature is outside the allowed temperature range.'
                 self.previous.pop(rid, None)
             else:
-                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature))) if uses_water and water is not None else 1.0
+                water_factor = max(.25,min(2,(water-temperature)/max(1,room['water_reference']-temperature))) if room_water and water is not None else 1.0
                 current = {'time':now.timestamp(), 'temperature':temperature, 'outdoor':outdoor,
-                           'activity':activity, 'water':water, 'water_factor':water_factor, 'wind':wind_status['speed'], 'solar':(current_solar*solar_facing(now,latitude,longitude,room.get('solar_direction','south')) if current_solar is not None else None) if solar_enabled(room) else None, 'excluded':fireplace}
+                           'activity':activity, 'water':water if room_water else None, 'water_factor':water_factor, 'wind':wind_status['speed'], 'solar':(current_solar*solar_facing(now,latitude,longitude,room.get('solar_direction','south')) if current_solar is not None else None) if solar_enabled(room) else None, 'excluded':room_fireplace or (room.get('is_garage') and any(binary(self.hass,entity) is not False for entity in room.get('garage_door_entities',[])))}
                 prediction = None
                 if self.season['collecting'] and rid in self.previous:
                     prediction = learn(model, room, self.previous[rid], current)
@@ -445,20 +466,32 @@ class PilotCoordinator(DataUpdateCoordinator):
                     self.previous[rid] = current
                 else:
                     self.previous.pop(rid,None)
-                if slots and all(t is not None for t in outdoors):
+                if room_electric(room,self.settings) and room.get('heat_control')!='zone_member' and slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
                         'wind_speed':wind_status['speed'], 'solar_forecast':[value*solar_facing(slot.start+(slot.end-slot.start)/2,latitude,longitude,room.get('solar_direction','south')) if value is not None else None for value,slot in zip(solar_forecast,slots)],
-                        'start_offset_minutes':self.settings['start_offset_minutes'] if uses_water else 0, 'stop_offset_minutes':self.settings['stop_offset_minutes'] if uses_water else 0,
-                        'boost':self.settings['boost'], 'setback':self.settings['setback'],
+                        'start_offset_minutes':self.settings['start_offset_minutes'] if room_water else 0, 'stop_offset_minutes':self.settings['stop_offset_minutes'] if room_water else 0,
+                        'boost':room['boost'], 'setback':room['setback'],
                         'minimum_run_minutes':self.settings['minimum_run_minutes'] if self.settings['pricing_mode']=='flexible' else 60 if self.settings['pricing_mode']=='hourly' else 15,
                         'committed_session':self.committed_session(rid,now),
                         'previous_suggested_heat':run.get('heat',False),
                         'previous_control_mode':run.get('mode','boost' if run.get('heat') else 'normal'),
                         'reduction_available':run.get('reduction_available',run.get('heat',False)),
                         'previous_run_hours':max(0,(now.timestamp()-run.get('since',now.timestamp()))/3600)}
-                    result['plan'] = await self.hass.async_add_executor_job(plan, settings, deepcopy(model),
-                        temperature, outdoors, slots, now, baseline, water_factor, fireplace)
+                    if room.get('is_garage') and room['garage_strategy']=='temperature':
+                        result['plan']=garage_cycle_plan(settings,model,temperature,outdoors,slots,now,self.air_control.cycles.get(rid,{}).get('heating',bool(thermostat_state and thermostat_state.state=='heat')))
+                    else:
+                        planning_temperature=temperature
+                        if planning_temperature is not None:
+                            result['plan'] = await self.hass.async_add_executor_job(plan, settings, deepcopy(model),
+                                planning_temperature, outdoors, slots, now, baseline, water_factor, room_fireplace)
+                if room.get('is_garage') and room['garage_strategy']=='temperature' and not slots:
+                    cycle_slots=[Slot(now+timedelta(minutes=15*i),now+timedelta(minutes=15*(i+1)),0) for i in range(96)]
+                    result['plan']=garage_cycle_plan(room,model,temperature,[outdoor]*96,cycle_slots,now,self.air_control.cycles.get(rid,{}).get('heating',bool(thermostat_state and thermostat_state.state=='heat')))
+                    result['plan']['prices_used']=False
+                if result['plan'] and room.get('air_control'):
+                    result['plan']['air_control']=True
+                    result['plan']['device_target']=room['garage_heat_target'] if room.get('is_garage') else self.settings['air_heat_target']
                 if result['plan']:
                     heat = result['plan']['scheduled_heat']
                     old = self.suggested_runs.get(rid,{})
@@ -478,6 +511,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['learning_note'] = 'Initial model: needs at least 12 heating hours and 12 idle hours.'
             else:
                 result['learning_note'] = 'Model adapting to observations; assess reliability from prediction error.'
+            result['air_control']=bool(room.get('air_control'))
+            result['activity_basis']='heat_mode' if room.get('air_control') and not room['activity_entity'] and thermostat_state and thermostat_state.attributes.get('hvac_action') is None else 'demand'
+            result['is_garage']=room.get('is_garage',False)
+            result['heating_zone_id']=room.get('heating_zone_id','')
+            if room.get('heat_control')=='zone_member':result['zone_monitor']=True
             result['learning_progress'] = learning_progress(model,now)
             result['heat_retention'] = heat_retention(model)
             room_data[rid] = result
@@ -517,22 +555,41 @@ class PilotCoordinator(DataUpdateCoordinator):
     async def release_managed_rooms(self, now, force=False):
         """Restore normal comfort targets on relinquishing thermostat ownership."""
         snapshot = deepcopy(self.settings)
-        configured = {r['thermostat']:r for r in snapshot['rooms']}
+        configured = {r['thermostat']:r for r in resolved_rooms(snapshot)}
         released = [{**old,'id':entity} for entity,old in self.managed_rooms.items()
                     if force or not self.live_enabled() or entity not in configured]
+        air_released=[room for room in released if air_room(room,snapshot)]
+        released=[room for room in released if room not in air_released]
         targets = {old['id']:self.fallback_target(configured.get(old['thermostat'],old)) for old in released}
         errors = await self.control.apply(released,targets,now.timestamp(),lambda:self.settings==snapshot)
-        for room in released:
-            if room['id'] in self.control.results:
+        intents={r['id']:self.air_control.intent(r,snapshot,now.timestamp(),release=True) for r in air_released}
+        errors+=await self.air_control.apply(air_released,intents,now.timestamp(),lambda:self.settings==snapshot)
+        for room in released+air_released:
+            if (self.air_control.results.get(room['id'],{}).get('confirmed',False) if room in air_released else room['id'] in self.control.results):
                 self.managed_rooms.pop(room['thermostat'],None)
-        if released:
+        if released or air_released:
             await self.store.async_save(self.storage_data())
         return errors
 
     async def apply_live_targets(self, data, now):
         """Reconcile current windows and restore comfort targets when inputs fail."""
+        self.air_control.deadlines=[]
+        live=self.live_enabled()
+        if live and not self._air_was_live:self.air_control.cycles.clear()
+        self._air_was_live=live
         release_errors = await self.release_managed_rooms(now)
+        air_rooms=[r for r in resolved_rooms(self.settings) if air_room(r,self.settings)]
+        intents={}
+        for room in air_rooms:
+            planned=data.get('rooms',{}).get(room['id'],{}).get('plan')
+            current=thermostat_state(planned,now) if planned and planned.get('slots') and stamp(planned['slots'][0]['start'])<=now<stamp(planned['slots'][-1]['end']) else None
+            intent=self.air_control.intent(room,self.settings,now.timestamp(),current,enabled=self.settings['heating_enabled'])
+            intents[room['id']]=intent
+            if room['id'] in data.get('rooms',{}):data['rooms'][room['id']]['pump_suggestion']=intent
         if not self.live_enabled():
+            for room in air_rooms:
+                status=self.air_control.results.get(room['thermostat'])
+                if status and room['id'] in data.get('rooms',{}):data['rooms'][room['id']]['pump_control']=status
             return {'mode':'simulation' if electric_heating(self.settings) else 'observation','errors':release_errors,'fallback_rooms':[]}
         snapshot = deepcopy(self.settings)
         if self._plan_settings != snapshot:
@@ -548,7 +605,8 @@ class PilotCoordinator(DataUpdateCoordinator):
         except ValueError:
             prices = []
         sources_ok = sources_ok and bool(prices)
-        for room in snapshot['rooms']:
+        for room in resolved_rooms(snapshot):
+            if not room_electric(room,snapshot) or air_room(room,snapshot) or room.get('heat_control')=='zone_member':continue
             planned = data.get('rooms',{}).get(room['id'],{}).get('plan')
             rows = (planned or {}).get('slots',[])
             current_plan = rows and stamp(rows[0]['start']) <= now < stamp(rows[-1]['end'])
@@ -560,22 +618,27 @@ class PilotCoordinator(DataUpdateCoordinator):
             targets[room['id']] = target
         permitted = lambda: self.settings == snapshot and self.live_enabled()
         control_rooms=[{**room,'control_minimum':snapshot['minimum'] if targets[room['id']]>=snapshot['minimum'] else None,
-                        'control_maximum':snapshot['maximum']} for room in snapshot['rooms']]
+                        'control_maximum':snapshot['maximum']} for room in resolved_rooms(snapshot) if room['id'] in targets]
         errors = release_errors+await self.control.apply(control_rooms,targets,now.timestamp(),permitted)
-        for room in snapshot['rooms']:
-            if room['id'] in self.control.results:
+        errors+=await self.air_control.apply(air_rooms,intents,now.timestamp(),permitted)
+        for rid,status in self.air_control.results.items():
+            if rid in data.get('rooms',{}):data['rooms'][rid]['pump_control']=status
+        errors.extend(error for intent in intents.values() for error in intent['errors'])
+        for room in resolved_rooms(snapshot):
+            if room['id'] in self.control.results or room['id'] in self.air_control.results:
                 self.managed_rooms[room['thermostat']] = deepcopy(room)
         if fallback and snapshot['heating_enabled']:
             errors.append(f"{self.fallback_summary()['season'].capitalize()} fallback targets are being used because required data or a current heating plan is unavailable: "+', '.join(fallback)+'.')
         await self.store.async_save(self.storage_data())
-        return {'mode':'live' if snapshot['heating_enabled'] else 'paused','errors':errors,'fallback_rooms':fallback,'targets':dict(self.control.results)}
+        return {'mode':'live' if snapshot['heating_enabled'] else 'paused','errors':errors,'fallback_rooms':fallback,'targets':dict(self.control.results),'heat_pumps':dict(self.air_control.results)}
 
     async def apply_season_targets(self, heating_active):
         errors = []
         if not electric_heating(self.settings) or not self.settings['apply_season_setpoints'] or self.live_enabled():
             self.applied_season_targets.clear()
             return errors
-        for room in self.settings['rooms']:
+        for room in resolved_rooms(self.settings):
+            if not room_electric(room,self.settings) or air_room(room,self.settings) or room.get('heat_control')=='zone_member':continue
             target = room['baseline'] if heating_active else self.fallback_target(room)
             state = self.hass.states.get(room['thermostat'])
             if target is None or state is None or state.state in ('unknown','unavailable'):
