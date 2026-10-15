@@ -34,6 +34,17 @@ const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room(
  let finishOld;const raced=new Card();raced.connectedCallback();let count=0;raced.hass={connection:{},callWS:()=>++count===1?new Promise(resolve=>finishOld=resolve):Promise.resolve({...sample,entry_id:'new'})};
  raced.setConfig({entry_id:'new'});finishOld({...sample,entry_id:'old'});await new Promise(setImmediate);assert.equal(raced._data.entry_id,'new');raced.disconnectedCallback();
  const editor=new Editor();editor.setConfig({columns:[]});editor.update({columns:['room','model']});assert.equal(editor.event.type,'config-changed');assert.deepEqual(Array.from(editor.event.detail.config.columns),['model']);assert.match(editor.shadowRoot.innerHTML,/checked disabled/);
+ // Simulate HA echoing every typed title back through setConfig.
+ const typing=new Editor();let renders=0;const renderEditor=typing.render.bind(typing);typing.render=()=>{renders++;renderEditor();};typing.setConfig({});
+ typing.dispatchEvent=event=>{typing.event=event;typing.setConfig(event.detail.config);};
+ for(const text of ['M','My','My room','My room title'])typing.update({title:text});
+ assert.equal(renders,1);assert.equal(typing._config.title,'My room title');
+ typing.setConfig({...typing.event.detail.config,title:'Externally changed'});assert.equal(renders,2);
+ // A late integration-list refresh also preserves focus and the selection/caret.
+ let focused=false,selection;
+ typing.shadowRoot.activeElement={matches:selector=>selector==='[data-title]',selectionStart:3,selectionEnd:7,selectionDirection:'forward'};
+ typing.shadowRoot.querySelector=selector=>selector==='[data-title]'?{addEventListener(){},focus(){focused=true;},setSelectionRange(...args){selection=args;}}:null;
+ typing.render();assert.equal(focused,true);assert.deepEqual(selection,[3,7,'forward']);
  // Card badges use exactly the panel's bands, including typed construction references.
  const panelContext={HTMLElement:class{},customElements:{get:()=>true},location:{pathname:''}};vm.createContext(panelContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),panelContext);
  for(const reference of [null,2.12])for(const hours of [.5,1,2,4,8,12])for(const updated of [true,false]){

@@ -63,14 +63,21 @@ class RetentionCard extends HTMLElement{
 }
 class RetentionEditor extends HTMLElement{
  constructor(){super();this.attachShadow({mode:'open'});this._entries=[];}
- setConfig(value){this._config=config(value);this.render();}
+ setConfig(value){
+  const next=config(value),previous=this._config;
+  this._config=next;
+  // Home Assistant echoes config-changed after each keystroke. Keep the live input.
+  if(previous&&previous.title===next.title&&previous.entry_id===next.entry_id&&JSON.stringify(previous.columns)===JSON.stringify(next.columns))return;
+  this.render();
+ }
  set hass(value){this._hass=value;if(!this._asked&&value?.callWS){this._asked=true;value.callWS({type:'thermal_pilot/retention'}).then(data=>{this._entries=data.entries||[];this.render();}).catch(()=>{});}}
  update(patch){this._config={...this._config,...patch};this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this._config,columns:this._config.columns.filter(key=>key!=='room')}},bubbles:true,composed:true}));}
- render(){if(!this._config)return;const fi=this._hass?.language==='fi',t=text=>fi?(finnish[text]||text):text;
+ render(){if(!this._config)return;const active=this.shadowRoot.activeElement;const titleFocus=active?.matches?.('[data-title]')?{start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection}:null;const fi=this._hass?.language==='fi',t=text=>fi?(finnish[text]||text):text;
  this.shadowRoot.innerHTML=`<style>:host{display:block;color:var(--primary-text-color);font:14px system-ui}label{display:flex;gap:10px;align-items:center;padding:10px 0}select,input[type=text]{padding:8px;max-width:100%;font:inherit}fieldset{border:1px solid var(--divider-color,#aaa);margin:12px 0;padding:12px}</style><label>${fi?'Otsikko (valinnainen)':'Title (optional)'} <input type="text" data-title value="${esc(this._config.title||'')}"></label><label>${fi?'Integraatio':'Integration'} <select data-entry><option value="">${fi?'Automaattinen (yksi integraatio)':'Automatic (single integration)'}</option>${this._entries.map(entry=>`<option value="${esc(entry.entry_id)}" ${entry.entry_id===this._config.entry_id?'selected':''}>${esc(entry.title)}</option>`).join('')}</select></label><fieldset><legend>${fi?'Näytettävät sarakkeet':'Visible columns'}</legend><label><input type="checkbox" checked disabled>${t('Room')} (${fi?'pakollinen':'required'})</label>${optionalColumns.map(key=>`<label><input type="checkbox" data-column="${key}" ${this._config.columns.includes(key)?'checked':''}>${t(labels[key])}</label>`).join('')}</fieldset>`;
  this.shadowRoot.querySelector('[data-title]')?.addEventListener('input',event=>this.update({title:event.target.value}));
  this.shadowRoot.querySelector('[data-entry]')?.addEventListener('change',event=>this.update({entry_id:event.target.value}));
  this.shadowRoot.querySelectorAll('[data-column]').forEach(input=>input.addEventListener('change',()=>this.update({columns:['room',...Array.from(this.shadowRoot.querySelectorAll('[data-column]')).filter(item=>item.checked).map(item=>item.dataset.column)]})));
+ if(titleFocus){const input=this.shadowRoot.querySelector('[data-title]');input?.focus({preventScroll:true});input?.setSelectionRange(titleFocus.start,titleFocus.end,titleFocus.direction);}
  }
 }
 if(!customElements.get('thermal-pilot-heat-retention-card'))customElements.define('thermal-pilot-heat-retention-card',RetentionCard);
