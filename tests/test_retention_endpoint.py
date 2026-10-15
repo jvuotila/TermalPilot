@@ -37,3 +37,25 @@ class EndpointTests(unittest.TestCase):
         self.hass.data['thermal_pilot']['one'].data=None
         self.handler(self.hass,self.connection,{'id':1})
         self.assertEqual(self.connection.result['rooms'],[])
+
+class CardRegistrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_automatic_module_loading_once_after_static_path_registration(self):
+        tree=ast.parse(SOURCE.read_text())
+        setup=next(node for node in tree.body if isinstance(node,ast.AsyncFunctionDef) and node.name=='async_setup_entry')
+        # Run the real registration portion, before unrelated coordinator startup.
+        setup.body=setup.body[:2]+[ast.Return(value=ast.Constant(value=True))]
+        ast.fix_missing_locations(setup)
+        events=[]
+        async def register_paths(paths):events.append(('paths',paths))
+        frontend=types.SimpleNamespace(add_extra_js_url=lambda hass,url:events.append(('module',url)))
+        namespace={'DOMAIN':'thermal_pilot','VERSION':'test-version','Path':Path,'__file__':str(SOURCE),
+                   'StaticPathConfig':lambda *args:args,'frontend':frontend,
+                   'websocket_api':types.SimpleNamespace(async_register_command=lambda hass,handler:None)}
+        for name in ('ws_get','ws_retention','ws_save','ws_history','ws_reset'):namespace[name]=object()
+        exec(compile(ast.Module(body=[setup],type_ignores=[]),str(SOURCE),'exec'),namespace)
+        hass=types.SimpleNamespace(data={},http=types.SimpleNamespace(async_register_static_paths=register_paths))
+        await namespace['async_setup_entry'](hass,None)
+        await namespace['async_setup_entry'](hass,None)
+        self.assertEqual([event[0] for event in events],['paths','module'])
+        self.assertIn('/thermal_pilot/heat-retention-card.js',[path[0] for path in events[0][1]])
+        self.assertEqual(events[1][1],'/thermal_pilot/heat-retention-card.js?v=test-version')

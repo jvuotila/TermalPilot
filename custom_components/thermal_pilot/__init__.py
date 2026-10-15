@@ -25,6 +25,7 @@ async def async_setup_entry(hass, entry):
                 str(Path(__file__).parent/'frontend'/'rooms-floor-plan.png'), False)])
         for handler in (ws_get, ws_retention, ws_save, ws_history, ws_reset):
             websocket_api.async_register_command(hass, handler)
+        frontend.add_extra_js_url(hass, f'/thermal_pilot/heat-retention-card.js?v={VERSION}')
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
     entry.async_on_unload(coordinator.stop)

@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.15 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.16 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -832,12 +832,14 @@ Each garage has its own **Construction type** (unknown, timber frame, masonry, o
 
 ## Dashboard heat-retention card
 
-Add `/thermal_pilot/heat-retention-card.js` as a **JavaScript module** under
-**Settings → Dashboards → Resources** (enable Advanced mode in your profile if
-Resources is hidden). Restart Home Assistant after installing this version.
+The integration loads the card automatically; no dashboard resource setup is
+needed. Restart Home Assistant after updating, then refresh your browser.
 Add the **ThermalPilot heat retention** card from the dashboard card picker.
-Its visual editor lets you choose columns; Room is always included. The card
-shows only the table and follows the integration's language setting. It refreshes
+If you previously added `/thermal_pilot/heat-retention-card.js` manually under
+**Settings → Dashboards → Resources**, you can remove that resource entry;
+existing cards keep the same configuration.
+Its visual editor lets you set an optional title and choose columns; Room is
+always included. Leave the title blank to show only the table. The card and follows the integration's language setting. It refreshes
 every minute and supports sorting by clicking the column headers. Garages stay
 in their own group at the bottom. Dashboard viewers can read the table without
 access to ThermalPilot's admin settings or heating controls.
@@ -846,6 +848,7 @@ Example manual card configuration:
 
 ```yaml
 type: custom:thermal-pilot-heat-retention-card
+title: Room heat retention  # Optional
 columns:
   - loss_6h
   - drop_1c

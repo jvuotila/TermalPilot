@@ -27,6 +27,9 @@ const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room(
  sample.rooms[0].name='<img src=x onerror=alert(1)>';await card.refresh();assert.doesNotMatch(card.shadowRoot.innerHTML,/<img/);assert.match(card.shadowRoot.innerHTML,/&lt;img/);
  card._hass.callWS=async()=>{throw Error('private server detail');};await card.refresh();assert.doesNotMatch(card.shadowRoot.innerHTML,/private server detail|<td>Slow/);assert.match(card.shadowRoot.innerHTML,/colspan=/);
  assert.ok(timers.size);card.disconnectedCallback();assert.equal(timers.size,0);
+ const titled=new Card();titled.setConfig({title:'My <garage> & rooms'});assert.match(titled.shadowRoot.innerHTML,/<h2 class="title">My &lt;garage&gt; &amp; rooms<\/h2>/);
+ titled.setConfig({title:'   '});assert.doesNotMatch(titled.shadowRoot.innerHTML,/<h2/);
+ assert.throws(()=>titled.setConfig({title:123}),/title must be text/);
  // An old integration response must not overwrite a newly selected integration.
  let finishOld;const raced=new Card();raced.connectedCallback();let count=0;raced.hass={connection:{},callWS:()=>++count===1?new Promise(resolve=>finishOld=resolve):Promise.resolve({...sample,entry_id:'new'})};
  raced.setConfig({entry_id:'new'});finishOld({...sample,entry_id:'old'});await new Promise(setImmediate);assert.equal(raced._data.entry_id,'new');raced.disconnectedCallback();
