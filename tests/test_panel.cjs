@@ -255,7 +255,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.19 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.20 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -295,7 +295,7 @@ pricePanel.history=[{room_id:'r0',time:priceTime/1000-86400,price:99,activity:1,
 const focusedHistory=pricePanel.priceChart(true);assert.match(focusedHistory,/Selected period: 48 hours/);assert.match(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
 console.log('History chart includes selected past days and omits the numeric color key.');
 
-const statusPanel=new Component();statusPanel.settings={rooms:[],heating_enabled:true};statusPanel.info={data:{rooms:{},history_info:{started_at:1791590400}}};const statusOrder=statusPanel.overview();const order=['Operation','Outdoor temperature','Heating water temperature','Data collection','Stored history','Last update'];for(let i=1;i<order.length;i++)assert(statusOrder.indexOf('<dt>'+order[i-1])<statusOrder.indexOf('<dt>'+order[i]));assert.doesNotMatch(statusOrder,/toggle-active/);assert.match(statusOrder,/Collection started:/);
+const statusPanel=new Component();statusPanel.settings={rooms:[],heating_enabled:true,water_entity:'sensor.heating_water'};statusPanel.info={data:{rooms:{},history_info:{started_at:1791590400}}};const statusOrder=statusPanel.overview();const order=['Operation','Outdoor temperature','Heating water temperature','Data collection','Stored history','Last update'];for(let i=1;i<order.length;i++)assert(statusOrder.indexOf('<dt>'+order[i-1])<statusOrder.indexOf('<dt>'+order[i]));assert.doesNotMatch(statusOrder,/toggle-active/);assert.match(statusOrder,/Collection started:/);
 statusPanel.render();assert.match(statusPanel.shadowRoot.innerHTML,/role="tablist"/);assert.match(statusPanel.shadowRoot.innerHTML,/role="tabpanel"/);assert.match(statusPanel.shadowRoot.innerHTML,/aria-selected="true"/);assert.match(statusPanel.shadowRoot.innerHTML,/status-pill.active\{background:#2ecc7126/);
 console.log('Tabs and status cards checks passed (accessible roles, green active badges, order, collection date, no duplicate passive button).');
 
@@ -975,3 +975,14 @@ assert.match(collapsedHelp,/not measured energy efficiency/);assert.match(collap
 assert.ok(retentionHelpHTML.indexOf('retention-help')>retentionHelpHTML.indexOf('</table>'));
 retentionPanel.retentionHelpOpen=true;assert.match(retentionPanel.heatRetentionView(),/id="retention-help" open/);
 console.log('Retention explanation is compact by default, with detailed context in expandable help.');
+
+const waterStatusPanel=new Component();waterStatusPanel.info={data:{rooms:{},water:32}};
+for(const settings of [
+ {house_heat_source:'air_to_water',house_distribution:'water_floor',water_entity:''},
+ {house_heat_source:'electric_resistance',house_distribution:'electric_floor',water_entity:'sensor.old_water'},
+ {house_heat_source:'air_to_air',house_distribution:'warm_air',water_entity:'sensor.old_water'},
+]){waterStatusPanel.settings={rooms:[],...settings};assert.doesNotMatch(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);}
+waterStatusPanel.settings={rooms:[],house_distribution:'water_floor',water_entity:'sensor.heating_water'};
+assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
+waterStatusPanel.info.data.water=null;assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
+console.log('Water status card requires a configured sensor and water circulation; temporary unavailable readings retain the configured card.');
