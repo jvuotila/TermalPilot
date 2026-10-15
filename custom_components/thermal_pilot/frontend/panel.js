@@ -1202,9 +1202,12 @@ details{scroll-margin-block:16px}
  header.page-layout{padding:12px 10px 0}
  .page-title h1{font-size:25px}
  .badge{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
- .tab-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px}
- .tab-list button{min-height:44px;padding:12px 6px}
- .tab-panel.page-layout{margin:0 10px 12px;padding:10px;border-radius:0 0 12px 12px}
+ .tab-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(48px,auto);align-items:stretch;gap:6px;margin:16px 0 12px;padding:6px;border-radius:12px;background:var(--secondary-background-color,#eaf0f4)}
+ .tab-list button,.tab-list button.active{min-width:0;min-height:48px;height:100%;margin:0;padding:10px 12px;border:2px solid transparent;border-radius:8px;font-size:14px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+ .tab-list button{background:transparent;color:var(--secondary-text-color,#526671)}
+ .tab-list button.active{background:var(--primary-color,#087c85);border-color:var(--primary-color,#087c85);color:var(--text-primary-color,#fff);font-weight:700;box-shadow:0 1px 4px #0002}
+ .tab-list button:focus-visible{outline:2px solid var(--primary-text-color,#213547);outline-offset:1px}
+ .tab-panel.page-layout{margin:0 10px 12px;padding:10px;border-radius:12px}
  #settings>section,.observation-cards>section,.history-summary>section,.status-card,.price-card{padding:12px}
  #settings,.observation-cards,.history-summary{gap:16px}
  .grid{grid-template-columns:minmax(0,1fr)}
