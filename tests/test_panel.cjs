@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.10 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.11 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -873,3 +873,15 @@ assert.match(previewPanel.settingsView('rooms'),/data-field="source.house_constr
 const constructionField=zonePanel.field(['garage_construction','Construction type','select:unknown,timber_frame,masonry,lightweight_metal'],{garage_construction:'timber_frame'},'room0');
 assert.match(constructionField,/value="timber_frame">Timber frame/);assert.match(constructionField,/Construction of this garage only/);
 console.log('Construction comparisons passed: type-relative bands, unchanged initial Learning, house selector and separate garage selector.');
+const garageChartPanel=new Component();garageChartPanel.historyHours=24;garageChartPanel.priceChartWidth=1000;
+garageChartPanel.settings={rooms:[{id:'gz',name:'Z garage',is_garage:true},{id:'home',name:'House room'},{id:'ga',name:'A garage',is_garage:true}],heating_zones:[]};
+garageChartPanel.info={data:{price_chart:zoneChartPanel.info.data.price_chart,rooms:{}}};garageChartPanel.history=[];
+for(const history of [true,false]){
+ const html=garageChartPanel.priceChart(history);
+ assert.match(html,/font-size:18px;font-weight:600">Garages<\/text>/);
+ assert.match(html,/fill="#e2d7cb"/);assert.match(html,/fill="#d7c9ba"/);
+ const names=[...html.matchAll(/data-user-text title="([^"]+)"/g)].map(match=>match[1]);assert.deepEqual(names,['House room','A garage','Z garage']);
+}
+garageChartPanel.settings.rooms=garageChartPanel.settings.rooms.filter(room=>room.is_garage);
+const onlyGarageChart=garageChartPanel.priceChart(true);assert.doesNotMatch(onlyGarageChart,/font-weight:600">Rooms<\/text>/);assert.match(onlyGarageChart,/font-weight:600">Garages<\/text>/);
+console.log('Garage chart section passed: separate heading, distinctive alternating tint, alphabetic garage rows, Plan/History and garage-only layouts.');
