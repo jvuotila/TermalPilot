@@ -51,11 +51,44 @@ class CardRegistrationTests(unittest.IsolatedAsyncioTestCase):
         namespace={'DOMAIN':'thermal_pilot','VERSION':'test-version','Path':Path,'__file__':str(SOURCE),
                    'StaticPathConfig':lambda *args:args,'frontend':frontend,
                    'websocket_api':types.SimpleNamespace(async_register_command=lambda hass,handler:None)}
-        for name in ('ws_get','ws_retention','ws_save','ws_history','ws_reset'):namespace[name]=object()
+        for name in ('ws_get','ws_retention','ws_plan_chart','ws_save','ws_history','ws_reset'):namespace[name]=object()
         exec(compile(ast.Module(body=[setup],type_ignores=[]),str(SOURCE),'exec'),namespace)
         hass=types.SimpleNamespace(data={},http=types.SimpleNamespace(async_register_static_paths=register_paths))
         await namespace['async_setup_entry'](hass,None)
         await namespace['async_setup_entry'](hass,None)
-        self.assertEqual([event[0] for event in events],['paths','module'])
+        self.assertEqual([event[0] for event in events],['paths','module','module'])
         self.assertIn('/thermal_pilot/heat-retention-card.js',[path[0] for path in events[0][1]])
         self.assertEqual(events[1][1],'/thermal_pilot/heat-retention-card.js?v=test-version')
+
+        self.assertEqual(events[2][1],'/thermal_pilot/plan-chart-card.js?v=test-version')
+
+class PlanChartEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        from datetime import datetime, timezone
+        tree=ast.parse(SOURCE.read_text());handler=next(item for item in tree.body if isinstance(item,ast.AsyncFunctionDef) and item.name=='ws_plan_chart')
+        self.assertFalse(any(isinstance(item,ast.Attribute) and item.attr=='require_admin' for item in handler.decorator_list))
+        handler.decorator_list=[];namespace={'PilotCoordinator':Coordinator,'DOMAIN':'thermal_pilot','dt_util':types.SimpleNamespace(utcnow=lambda:datetime(2026,10,15,tzinfo=timezone.utc))}
+        exec(compile(ast.Module(body=[handler],type_ignores=[]),str(SOURCE),'exec'),namespace);self.handler=namespace['ws_plan_chart'];self.connection=Connection();self.coordinator=Coordinator()
+        self.coordinator.settings.update(house_heat_source='air_to_water',heating_zones=[{'id':'zone','name':'Zone','thermostat':'climate.secret','heating_strategy':'tariff'}])
+        self.coordinator.data['price_chart']=[{'start':'start','end':'end','price':10,'internal':'secret'}]
+        self.coordinator.data['rooms']['room'].update(air_control=True,plan={'commands':[{'time':'later','action':'raise','setpoint':24}],'slots':[{'end':'end','temperature':20}],'reason':'private'})
+        self.rows=[{'room_id':'room','time':1,'pump_mode':'heat','temperature':7,'forecast_context':['secret']},{'room_id':'zone:zone','zone_id':'zone','time':1,'zone_mode':'cool'}]
+        self.coordinator.history_db=types.SimpleNamespace(read=lambda cutoff:self.rows)
+        async def executor(fn,*args):return fn(*args)
+        self.hass=types.SimpleNamespace(data={'thermal_pilot':{'one':self.coordinator}},async_add_executor_job=executor)
+    async def test_read_only_snapshot_keeps_chart_fields_and_excludes_internal_data(self):
+        await self.handler(self.hass,self.connection,{'id':1})
+        result=self.connection.result
+        self.assertEqual(result['settings']['language'],'fi')
+        self.assertNotIn('secret',result['settings']);self.assertNotIn('thermostat',result['settings']['heating_zones'][0])
+        self.assertNotIn('model',result['data']['rooms']['room'])
+        self.assertEqual(result['data']['rooms']['room']['plan'],{'commands':[{'time':'later','action':'raise'}],'slots':[{'end':'end'}]})
+        self.assertEqual(result['history'][0],{'room_id':'room','time':1,'pump_mode':'heat'})
+        self.assertEqual(result['history'][1]['zone_mode'],'cool')
+        self.assertNotIn('internal',result['data']['price_chart'][0])
+    async def test_multiple_integrations_and_unloaded_selection(self):
+        self.hass.data['thermal_pilot']['two']=Coordinator('Other')
+        await self.handler(self.hass,self.connection,{'id':1})
+        self.assertTrue(self.connection.result['requires_selection'])
+        await self.handler(self.hass,self.connection,{'id':1,'entry_id':'missing'})
+        self.assertEqual(self.connection.error[1],'not_loaded')

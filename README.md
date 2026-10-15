@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.17 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.18 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -862,3 +862,21 @@ the card editor. Optional YAML keys are `entry_id`, `sort_by` (`room`, `loss_6h`
 `drop_1c`, or `cooling_speed`) and `sort_direction` (`asc` or `desc`).
 The cooling-speed badges remain approximate model comparisons, not certified
 energy-efficiency ratings.
+
+## Dashboard heating-plan card
+
+Add **ThermalPilot heating plan** from the dashboard card picker. The integration
+loads it automatically. The card shows the Plan chart's legend, electricity
+prices, room timelines, garages and heating zones. Explanatory text above and
+below the chart is omitted. Its optional title is blank by default, and it uses
+the integration's language. Hover, focus or tap a chart bar to see details.
+The chart refreshes every minute and adapts to the card width.
+
+```yaml
+type: custom:thermal-pilot-plan-chart-card
+title: Heating plan  # Optional
+```
+
+If multiple ThermalPilot integrations are loaded, choose one in the visual
+editor, or specify its `entry_id` in YAML. This card only displays information;
+it does not change heating settings or control devices.

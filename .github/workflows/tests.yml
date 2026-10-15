@@ -18,3 +18,5 @@ jobs:
       - run: node tests/test_live_panel.cjs
       - run: node --check custom_components/thermal_pilot/frontend/heat-retention-card.js
       - run: node tests/test_retention_card.cjs
+      - run: node --check custom_components/thermal_pilot/frontend/plan-chart-card.js
+      - run: node tests/test_plan_card.cjs

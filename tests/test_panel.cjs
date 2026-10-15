@@ -45,12 +45,13 @@ const historyPanel=new Component();historyPanel.settings={rooms:[{id:'history-ro
 const readableHistory=historyPanel.historyView();
 assert.match(readableHistory,/Measured temperature/);assert.match(readableHistory,/Saved 3-hour forecast/);assert.match(readableHistory,/No completed 3-hour forecasts/);
 assert.match(readableHistory,/00:00/);assert.match(readableHistory,/00:15/);assert.match(readableHistory,/00:30/);
-assert.match(readableHistory,/<td>Off<\/td><td>On<\/td>/);assert.match(readableHistory,/<td>Unknown<\/td><td>Unknown<\/td>/);
-assert.match(readableHistory,/Suggested thermostat target \(°C\)/);assert.match(readableHistory,/not an average/);
+assert.doesNotMatch(readableHistory,/<th>15-minute interval<|Each row shows the latest observation|Table shows up to 288 intervals/);
+assert.match(readableHistory,/data-room-history="history-room"/);
+assert.doesNotMatch(readableHistory,/Suggested thermostat target \(°C\)|not an average/);
 assert.doesNotMatch(readableHistory,/>Idle<|>Inactive<|>Heating</);
 const chartWithLargePrediction=historyPanel.chart([{time:hour,temperature:20,prediction:25}],'temperature','prediction');
 assert.match(chartWithLargePrediction,/25.1 °C/);assert.match(chartWithLargePrediction,/stroke-dasharray/);
-console.log('Readable history tests passed (quarter-hour latest observations, legends, On/Off/Unknown, scale includes both lines).');
+console.log('Readable history tests passed (quarter-hour latest observations, legends, compact cards without the raw table, scale includes both lines).');
 
 const accordionPanel=new Component();accordionPanel.settings={rooms:[{id:'room-a',name:'Study'}],heating_enabled:true};
 accordionPanel.info={data:{rooms:{'room-a':{name:'Study',learning_progress:{percent:62.5}}}}};accordionPanel.tab='overview';
@@ -254,7 +255,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.17 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.18 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -947,3 +948,21 @@ nameWidthPanel.settings.heating_zones[0].name='Very long zone name '.repeat(30);
 assert.ok(nameWidth(nameWidthPanel.priceChart(false))<=400);
 nameWidthPanel.priceChartWidth=400;assert.equal(nameWidth(nameWidthPanel.priceChart(false)),360);
 console.log('Chart name column adapts to longest room or zone name, stays aligned, caps width and preserves compact layout.');
+const compactPlanPanel=new Component();compactPlanPanel.settings=structuredClone(previewPanel.settings);compactPlanPanel.info=structuredClone(previewPanel.info);
+for(const room of Object.values(compactPlanPanel.info.data.rooms))room.learning_progress={initial_complete:true,percent:100};
+const compactRoomCards=compactPlanPanel.overview().split('<div class="observation-cards">')[1];
+assert.doesNotMatch(compactRoomCards,/>Actual heating<|>Observed heat mode<|>3-hour forecast error<|class="learning-card"|<th>Planned heating starts<|<th>Planned heating ends<|<th>Starts<|<th>Price \(c\/kWh\)<|<th>Prediction °C</);
+assert.match(compactRoomCards,/>Measured<strong>/);assert.match(compactRoomCards,/Suggested thermostat target/);
+assert.match(compactRoomCards,/<th>Change target at<\/th>/);assert.match(compactRoomCards,/class="temperature-chart"/);
+assert.equal(compactPlanPanel.learningView({model:{heated_hours:12,idle_hours:13}}),'');
+assert.match(compactPlanPanel.learningView({model:{heated_hours:6,idle_hours:12},learning_progress:{initial_complete:false,percent:75}}),/class="learning-card"/);
+console.log('Compact Plan cards preserve temperatures, commands and forecast chart; hide completed collection and remove duplicate metrics and tables.');
+
+const finnishNotesPanel=new Component();finnishNotesPanel.settings={...structuredClone(zoneChartPanel.settings),language:'fi'};finnishNotesPanel.info=structuredClone(zoneChartPanel.info);finnishNotesPanel.history=zoneChartPanel.history;finnishNotesPanel.statusHistory=zoneChartPanel.statusHistory;
+for(const history of [true,false]){
+ const notes=finnishNotesPanel.priceChart(history).match(/<small data-chart-notes[^>]*>([\s\S]*?)<\/small>/)[1];
+ assert.match(notes,/Kaikkien huoneiden aikajanat/);assert.match(notes,/Vyöhykkeiden riveillä/);assert.match(notes,/Turkoosi näyttää/);assert.match(notes,/Ajat kohdistetaan/);
+ assert.doesNotMatch(notes,/All room|Zone rows|Teal shows|Recorded activity|Times align|Hover/);
+ if(history)assert.match(notes,/Valittu ajanjakso/);
+}
+console.log('Plan and History chart explanations are fully Finnish when integration language is Finnish.');

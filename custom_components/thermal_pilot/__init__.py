@@ -19,13 +19,16 @@ async def async_setup_entry(hass, entry):
     if not domain.get('_registered'):
         await hass.http.async_register_static_paths([StaticPathConfig(
             '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False),
+            StaticPathConfig('/thermal_pilot/plan-chart-card.js',
+                str(Path(__file__).parent/'frontend'/'plan-chart-card.js'), False),
             StaticPathConfig('/thermal_pilot/heat-retention-card.js',
                 str(Path(__file__).parent/'frontend'/'heat-retention-card.js'), False),
             StaticPathConfig('/thermal_pilot/rooms-floor-plan.png',
                 str(Path(__file__).parent/'frontend'/'rooms-floor-plan.png'), False)])
-        for handler in (ws_get, ws_retention, ws_save, ws_history, ws_reset):
+        for handler in (ws_get, ws_retention, ws_plan_chart, ws_save, ws_history, ws_reset):
             websocket_api.async_register_command(hass, handler)
         frontend.add_extra_js_url(hass, f'/thermal_pilot/heat-retention-card.js?v={VERSION}')
+        frontend.add_extra_js_url(hass, f'/thermal_pilot/plan-chart-card.js?v={VERSION}')
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
     entry.async_on_unload(coordinator.stop)
@@ -108,6 +111,40 @@ def ws_retention(hass, connection, msg):
            for room_id,room in (coordinator.data or {}).get('rooms',{}).items() if room.get('heat_retention')]
     connection.send_result(msg['id'],{'entry_id':entry_id,'entries':entries,'rooms':rooms,
                                     'language':coordinator.settings.get('language','en')})
+
+
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/plan_chart', vol.Optional('entry_id'):str})
+@websocket_api.async_response
+async def ws_plan_chart(hass, connection, msg):
+    """Read-only chart snapshot; exclude settings, forecasts and model internals."""
+    coordinators={key:value for key,value in hass.data.get(DOMAIN,{}).items() if isinstance(value,PilotCoordinator)}
+    entries=[{'entry_id':key,'title':getattr(value.entry,'title','ThermalPilot')} for key,value in coordinators.items()]
+    entry_id=msg.get('entry_id') or (entries[0]['entry_id'] if len(entries)==1 else None)
+    if not entry_id:
+        connection.send_result(msg['id'],{'entries':entries,'requires_selection':len(entries)>1})
+        return
+    coordinator=coordinators.get(entry_id)
+    if coordinator is None:
+        connection.send_error(msg['id'],'not_loaded','Integration is not loaded.')
+        return
+    rows=await hass.async_add_executor_job(coordinator.history_db.read,dt_util.utcnow().timestamp()-48*3600)
+    def subset(value,keys):return {key:value[key] for key in keys if key in value}
+    settings=coordinator.settings;data=coordinator.data or {}
+    room_keys=('id','name','is_garage','heat_control','garage_strategy','heating_zone_id')
+    zone_keys=('id','name','source_type','heating_strategy','climate_mode','main_room_id')
+    chart_rooms={}
+    for room_id,room in data.get('rooms',{}).items():
+        chart_rooms[room_id]=subset(room,('air_control','is_garage'))
+        if plan:=room.get('plan'):
+            chart_rooms[room_id]['plan']={'commands':[subset(command,('time','action')) for command in plan.get('commands',[])],
+                'slots':[{'end':plan['slots'][-1]['end']}] if plan.get('slots') else []}
+    connection.send_result(msg['id'],{'entry_id':entry_id,'entries':entries,
+        'settings':{'language':settings.get('language','en'),'house_heat_source':settings.get('house_heat_source'),
+                    'rooms':[subset(room,room_keys) for room in settings.get('rooms',[])],
+                    'heating_zones':[subset(zone,zone_keys) for zone in settings.get('heating_zones',[])]},
+        'data':{'rooms':chart_rooms,'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
+        'history':[subset(row,('room_id','time','activity','suggested_heat','pump_mode','pump_basis','pump_entity',
+                               'zone_id','zone_mode','zone_basis','zone_entity')) for row in rows]})
 
 
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool, vol.Optional('confirm_learning_reset',default=False):bool})
