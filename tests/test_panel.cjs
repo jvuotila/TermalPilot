@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.11 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.12 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -434,6 +434,13 @@ let retentionHTML=retentionPanel.heatRetentionView();
 assert.ok(retentionHTML.indexOf('Slow &lt;cooling&gt;')<retentionHTML.indexOf('Fast cooling'));
 assert.match(retentionHTML,/0.70 °C/);assert.match(retentionHTML,/8.0 hours/);assert.match(retentionHTML,/Initial estimate/);assert.match(retentionHTML,/Adapting/);assert.match(retentionHTML,/not measured energy efficiency/);
 assert.match(retentionHTML,/id="retention-accordion" open/);retentionPanel.retentionOpen=false;assert.doesNotMatch(retentionPanel.heatRetentionView(),/id="retention-accordion" open/);
+retentionPanel.info.data.rooms.garageZ={name:'Garage Z',is_garage:true,heat_retention:{drop_6h:.1,hours_per_degree:10,updated:false}};
+retentionPanel.info.data.rooms.garageA={name:'Garage A',heat_retention:{drop_6h:4,hours_per_degree:1,updated:false}};
+retentionPanel.settings={rooms:[{id:'garageA',is_garage:true}]};
+retentionHTML=retentionPanel.heatRetentionView();
+assert.ok(retentionHTML.indexOf('Fast cooling')<retentionHTML.indexOf('Garage A'));
+assert.ok(retentionHTML.indexOf('Garage A')<retentionHTML.indexOf('Garage Z'));
+assert.equal((retentionHTML.match(/class="garage-retention-row"/g)||[]).length,2);
 console.log('Room retention UI checks passed: common reference, slower-first sorting, escaped names, data labels and accordion state.');
 
 const windMatches=vm.runInContext('entityMatches',context);
