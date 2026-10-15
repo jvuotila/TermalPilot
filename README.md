@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.14 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.15 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -829,3 +829,33 @@ Cooling-speed badges in Room heat retention use provisional 1°C-drop bands at t
 For a selected house type, very fast / fast / moderate / slow / very slow badges use cooling-time ratios below 0.5 / 0.8 / 1.25 / 2 / at least 2 relative to its reference. Unknown uses the general absolute bands. Initial models remain gray. The type also seeds new ordinary-room models; changing it never resets learning or overwrites existing model parameters.
 
 Each garage has its own **Construction type** (unknown, timber frame, masonry, or lightweight metal). Garage-specific numerical construction references are not available, so garages retain general cooling-speed bands and their four-hour starting prior rather than inheriting the house benchmark. Learned garage values remain unchanged.
+
+## Dashboard heat-retention card
+
+Add `/thermal_pilot/heat-retention-card.js` as a **JavaScript module** under
+**Settings → Dashboards → Resources** (enable Advanced mode in your profile if
+Resources is hidden). Restart Home Assistant after installing this version.
+Add the **ThermalPilot heat retention** card from the dashboard card picker.
+Its visual editor lets you choose columns; Room is always included. The card
+shows only the table and follows the integration's language setting. It refreshes
+every minute and supports sorting by clicking the column headers. Garages stay
+in their own group at the bottom. Dashboard viewers can read the table without
+access to ThermalPilot's admin settings or heating controls.
+
+Example manual card configuration:
+
+```yaml
+type: custom:thermal-pilot-heat-retention-card
+columns:
+  - loss_6h
+  - drop_1c
+  - cooling_speed
+  - model
+```
+
+Omit `columns` to show all columns, or use `columns: []` for Room only.
+If more than one ThermalPilot integration is loaded, select the integration in
+the card editor. Optional YAML keys are `entry_id`, `sort_by` (`room`, `loss_6h`,
+`drop_1c`, or `cooling_speed`) and `sort_direction` (`asc` or `desc`).
+The cooling-speed badges remain approximate model comparisons, not certified
+energy-efficiency ratings.

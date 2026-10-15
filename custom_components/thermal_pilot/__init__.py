@@ -19,9 +19,11 @@ async def async_setup_entry(hass, entry):
     if not domain.get('_registered'):
         await hass.http.async_register_static_paths([StaticPathConfig(
             '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False),
+            StaticPathConfig('/thermal_pilot/heat-retention-card.js',
+                str(Path(__file__).parent/'frontend'/'heat-retention-card.js'), False),
             StaticPathConfig('/thermal_pilot/rooms-floor-plan.png',
                 str(Path(__file__).parent/'frontend'/'rooms-floor-plan.png'), False)])
-        for handler in (ws_get, ws_save, ws_history, ws_reset):
+        for handler in (ws_get, ws_retention, ws_save, ws_history, ws_reset):
             websocket_api.async_register_command(hass, handler)
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
@@ -81,6 +83,30 @@ def ws_get(hass, connection, msg):
         } for room in c.settings['rooms']}
         connection.send_result(msg['id'], {'settings':c.settings, 'data':c.data, 'room_entities':room_entities,
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS, 'zone_defaults':ZONE_DEFAULTS, 'zone_fields':ZONE_FIELDS})
+
+
+@websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/retention', vol.Optional('entry_id'):str})
+@callback
+def ws_retention(hass, connection, msg):
+    """Read-only dashboard data for authenticated users; no source/settings access."""
+    coordinators={key:value for key,value in hass.data.get(DOMAIN,{}).items() if isinstance(value,PilotCoordinator)}
+    entries=[{'entry_id':key,'title':getattr(value.entry,'title','ThermalPilot')} for key,value in coordinators.items()]
+    entry_id=msg.get('entry_id')
+    if not entry_id and len(entries)==1:entry_id=entries[0]['entry_id']
+    if not entry_id:
+        connection.send_result(msg['id'],{'entries':entries,'rooms':[],'requires_selection':len(entries)>1})
+        return
+    coordinator=coordinators.get(entry_id)
+    if coordinator is None:
+        connection.send_error(msg['id'],'not_loaded','Integration is not loaded.')
+        return
+    settings={room['id']:room for room in coordinator.settings['rooms']}
+    rooms=[{'id':room_id,'name':settings.get(room_id,{}).get('name',room.get('name','')),
+            'is_garage':bool(settings.get(room_id,{}).get('is_garage',room.get('is_garage',False))),
+            'heat_retention':room['heat_retention']}
+           for room_id,room in (coordinator.data or {}).get('rooms',{}).items() if room.get('heat_retention')]
+    connection.send_result(msg['id'],{'entry_id':entry_id,'entries':entries,'rooms':rooms,
+                                    'language':coordinator.settings.get('language','en')})
 
 
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/save', vol.Required('entry_id'):str, vol.Required('settings'):dict, vol.Optional('enable_live_control',default=False):bool, vol.Optional('confirm_learning_reset',default=False):bool})
