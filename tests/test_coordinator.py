@@ -811,6 +811,20 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.c.learning_changes(proposed)[0]['scope'],'full')
         self.assertEqual(self.c.models,original)
 
+    async def test_air_room_history_records_heat_cool_idle_and_mode_fallback(self):
+        self.c.settings['rooms']=[self.garage]
+        pump=self.hass.states['climate.garage']
+        for action,expected in [('heating','heat'),('cooling','cool'),('idle',None),('fan',None)]:
+            pump.state='heat';pump.attributes['hvac_action']=action
+            await self.c._async_update_data()
+            row=next(row for row in self.c.history_db.read(now.timestamp()-300) if row['room_id']==self.garage['id'])
+            self.assertEqual(row['pump_mode'],expected)
+            self.assertEqual(row['pump_basis'],'activity')
+        pump.attributes.pop('hvac_action');pump.state='cool'
+        await self.c._async_update_data()
+        row=next(row for row in self.c.history_db.read(now.timestamp()-300) if row['room_id']==self.garage['id'])
+        self.assertEqual((row['pump_mode'],row['pump_basis']),('cool','operating_mode'))
+
     async def test_zone_history_uses_activity_and_records_even_when_control_disabled(self):
         from thermal_pilot.const import ZONE_DEFAULTS
         self.c.settings['heating_zones']=[{**ZONE_DEFAULTS,'id':'observed','name':'Observed pump','thermostat':'climate.garage','heating_enabled':False}]

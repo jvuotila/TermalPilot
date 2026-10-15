@@ -489,6 +489,13 @@ class PilotCoordinator(DataUpdateCoordinator):
                 model['response'] = 0.0
             activity = self.activity(room)
             thermostat_state = self.hass.states.get(room['thermostat'])
+            pump_mode=None;pump_basis='activity'
+            if room.get('air_control') and thermostat_state and thermostat_state.state not in ('unknown','unavailable'):
+                action=thermostat_state.attributes.get('hvac_action')
+                if action in ('heating','cooling'):pump_mode='heat' if action=='heating' else 'cool'
+                elif action is None:
+                    pump_mode=thermostat_state.state if thermostat_state.state in ('heat','cool') else None
+                    pump_basis='operating_mode'
             actual_request = number(thermostat_state.attributes.get('temperature')) if thermostat_state else None
             result = {'name':room['name'], 'temperature':temperature, 'actual_activity':activity,
                       'actual_setpoint':actual_request, 'baseline':baseline, 'model':deepcopy(model), 'plan':None, 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context}
@@ -542,7 +549,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                 result['model'] = deepcopy(model)
                 result['one_step_prediction'] = prediction
                 if self.season['collecting']:
-                    readings.append({'room_id':rid, **current, 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context, 'actual_setpoint':actual_request,
+                    readings.append({'room_id':rid, **current, **({'pump_mode':pump_mode,'pump_basis':pump_basis,'pump_entity':room['thermostat']} if room.get('air_control') else {}), 'forecast_context':fingerprint+[self.settings['wind_entity']]+solar_context, 'actual_setpoint':actual_request,
                                  'prediction':prediction, 'suggested_heat':result['plan']['heat'] if result['plan'] else None,
                                  'suggested_setpoint':result['plan']['setpoint'] if result['plan'] else None,
                                  'price':slots[0].price if slots else None})

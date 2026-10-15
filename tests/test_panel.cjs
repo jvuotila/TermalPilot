@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.13 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.14 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -756,7 +756,7 @@ const previousConfirm=context.confirm;let removalPrompt;context.confirm=prompt=>
 context.confirm=()=>true;removeMemberButton.onclick();assert.equal(removeMemberPanel.settings.rooms.length,1);assert.deepEqual([...removeMemberPanel.zoneRoomDrafts.z],['b']);assert.equal(removeMemberPanel.settings.heating_zones[0].main_room_id,'b');context.confirm=previousConfirm;
 console.log('Zone room membership passed: configured-room choices, occupied-zone exclusion, linking/removing rooms, main-room updates, and cancel/confirm deletion warning with membership cleanup.');
 
-const garageRetention=previewPanel.heatRetentionView();assert.match(garageRetention,/<tr class="garage-retention-row"><td><span data-user-text>Garage \(example\)/);console.log('Preview includes an example garage with a distinct retention row.');
+const garageRetention=previewPanel.heatRetentionView();assert.match(garageRetention,/<tr[^>]* class="garage-retention-row"><td><span data-user-text>Garage \(example\)/);console.log('Preview includes an example garage with a distinct retention row.');
 // Save failures stay visible near the save controls until dismissed or edited.
 const errorPanel=new Component();errorPanel._hass={states:{}};errorPanel.settings={rooms:[],language:'fi'};
 errorPanel.info={source_fields:[],room_fields:[]};errorPanel.tab='settings';errorPanel.messageLevel='error';
@@ -868,7 +868,7 @@ const coolingRating=vm.runInContext('retentionRating',context);
 for(const [hours,expected]of [[.5,'very-fast'],[1,'fast'],[1.99,'fast'],[2,'moderate'],[3.99,'moderate'],[4,'slow'],[7.99,'slow'],[8,'very-slow'],[20,'very-slow']])assert.equal(coolingRating({updated:true,hours_per_degree:hours}).level,expected);
 for(const hours of [0,-1,NaN,Infinity])assert.equal(coolingRating({updated:true,hours_per_degree:hours}).level,'learning');
 assert.equal(coolingRating({updated:false,hours_per_degree:4.8}).level,'learning');
-assert.match(retentionPanel.heatRetentionView(),/<th>Cooling speed<\/th>/);
+assert.match(retentionPanel.heatRetentionView(),/data-retention-sort="speed"/);
 assert.match(retentionPanel.heatRetentionView(),/data-retention-rating="moderate"/);
 assert.match(retentionPanel.heatRetentionView(),/data-retention-rating="learning"/);
 console.log('Cooling-speed badges passed: all threshold boundaries, invalid values, neutral initial models and retained numerical values.');
@@ -903,3 +903,47 @@ for(const html of [garageCardsPanel.overview(),garageCardsPanel.historyView()]){
  assert.equal((cards.match(/class="observation-card garage-observation-card"/g)||[]).length,2);
 }
 console.log('Plan and History room cards put garages last, alphabetically, with distinct styling.');
+
+const pumpChartPanel=new Component(),pumpNow=Date.now();pumpChartPanel.priceChartWidth=1000;pumpChartPanel.historyHours=24;
+pumpChartPanel.settings={rooms:[{id:'garage',name:'Garage',is_garage:true,garage_strategy:'temperature'}],heating_zones:[]};
+pumpChartPanel.info={data:{rooms:{garage:{air_control:true,plan:{commands:[{time:new Date(pumpNow+3600000).toISOString(),action:'raise'},{time:new Date(pumpNow+7200000).toISOString(),action:'restore'}]}}}}};
+pumpChartPanel.history=[[-30,'heat'],[-25,'heat'],[-20,null],[-15,'cool'],[-10,null]].map(([minutes,mode])=>({room_id:'garage',time:pumpNow/1000+minutes*60,pump_mode:mode,activity:mode===null?1:0}));pumpChartPanel.statusHistory=pumpChartPanel.history;
+for(const history of [true,false]){
+ const svg=pumpChartPanel.priceChart(history),lane=svg.match(/<g data-pump-timeline="garage">[\s\S]*?<\/g>/)[0];
+ assert.match(lane,/data-pump-period="heat"/);assert.match(lane,/data-pump-period="cool"/);
+ assert.doesNotMatch(lane,/>Suggested<|>Relay<|data-pump-period="plan"/);
+ assert.equal((lane.match(/data-pump-period=/g)||[]).length,2);
+}
+pumpChartPanel.settings.rooms[0].garage_strategy='tariff';
+assert.match(pumpChartPanel.priceChart(false),/data-pump-period="plan"/);
+assert.doesNotMatch(pumpChartPanel.priceChart(true),/data-pump-period="plan"/);
+pumpChartPanel.history=[{room_id:'garage',time:pumpNow/1000-600,activity:1}];
+assert.match(pumpChartPanel.priceChart(true),/data-pump-period="heat"/);
+console.log('Air pump room timelines share heat/cool/plan lane, omit standby and gate future plans on tariff strategy.');
+
+const sortPanel=new Component();sortPanel.settings={rooms:[]};
+const retentionRoom=(name,hours,updated=true)=>({name,heat_retention:{drop_6h:6/hours,hours_per_degree:hours,updated,heating_hours:0,idle_hours:0}});
+sortPanel.info={data:{rooms:{slow:retentionRoom('Slow',9),fast:retentionRoom('Fast',.5),learning:retentionRoom('Learning',4,false),garage:{...retentionRoom('Garage',12),is_garage:true}}}};
+sortPanel.render=()=>{};const roomOrder=()=>Array.from(sortPanel.heatRetentionView().matchAll(/<span data-user-text>([^<]+)<\/span>/g),m=>m[1]);
+assert.deepEqual(roomOrder(),['Slow','Learning','Fast','Garage']);
+sortPanel.sortRetention('drop');assert.deepEqual(roomOrder(),['Fast','Learning','Slow','Garage']);
+assert.match(sortPanel.heatRetentionView(),/aria-sort="descending"/);
+sortPanel.sortRetention('hours');assert.deepEqual(roomOrder(),['Fast','Learning','Slow','Garage']);
+sortPanel.sortRetention('hours');assert.deepEqual(roomOrder(),['Slow','Learning','Fast','Garage']);
+sortPanel.sortRetention('speed');assert.deepEqual(roomOrder(),['Fast','Slow','Learning','Garage']);
+sortPanel.sortRetention('speed');assert.deepEqual(roomOrder(),['Slow','Fast','Learning','Garage']);
+assert.deepEqual(Object.keys(sortPanel.info.data.rooms),['slow','fast','learning','garage']);
+console.log('Retention sorting passed: numeric directions, speed bands, Learning last, garage group retained and source data unchanged.');
+const nameWidthPanel=new Component();nameWidthPanel.priceChartWidth=1000;nameWidthPanel.historyHours=24;nameWidthPanel.history=[];nameWidthPanel.statusHistory=[];
+nameWidthPanel.settings={rooms:[{id:'g',name:'Garage',is_garage:true}],heating_zones:[{id:'zone',name:'Zone'}]};nameWidthPanel.info={data:{rooms:{}}};
+const nameWidth=html=>Number(html.match(/<foreignObject[^>]*width="([\d.]+)"/)[1]);
+const shortNameWidth=nameWidth(nameWidthPanel.priceChart(false));
+nameWidthPanel.settings.heating_zones[0].name='Downstairs heat pump (example)';
+const longerNames=nameWidthPanel.priceChart(false),longNameWidth=nameWidth(longerNames);
+assert.ok(longNameWidth>shortNameWidth);
+const allNameWidths=Array.from(longerNames.matchAll(/<foreignObject[^>]*width="([\d.]+)"/g),m=>Number(m[1]));
+assert.ok(allNameWidths.every(width=>width===longNameWidth));
+nameWidthPanel.settings.heating_zones[0].name='Very long zone name '.repeat(30);
+assert.ok(nameWidth(nameWidthPanel.priceChart(false))<=400);
+nameWidthPanel.priceChartWidth=400;assert.equal(nameWidth(nameWidthPanel.priceChart(false)),360);
+console.log('Chart name column adapts to longest room or zone name, stays aligned, caps width and preserves compact layout.');
