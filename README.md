@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.8 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.9 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -782,7 +782,11 @@ Choose one linked room as **Main room**. Only that controller room sends command
 be removed from their existing zone. Removing a linked room shows a warning and
 also removes its zone membership; if it was the main room, another linked room
 is selected. Zones with no linked rooms remain configured but do not control
-heating. Each zone offers:
+heating. New zones use temperature-only heating unless **Zone heating strategy** is set to **Electricity tariff optimization**. Temperature-only heating follows the main room’s target with a 0.2°C band, subject to shared lower and upper limits. Existing zones retain their tariff strategy on upgrade. Cooling remains temperature-only.
+
+The heating charts show zones below room rows, sorted by name on a warm background. Amber and blue mark recorded heating and cooling; off and standby periods are blank. History shows recorded zone activity only. Plan also shows future heating windows for tariff-optimized heating zones. When only HVAC operating mode is available, the tooltip identifies it as mode observation rather than compressor activity. Zone recording starts after this update; older room history is not relabeled as zone activity.
+
+Each zone offers:
 
 - **Main room sensor** — use the main room’s measured temperature.
 - **Average of room sensors** — use the mean of the linked room readings.
@@ -817,3 +821,5 @@ A damper contact indicates position, not proof of a burning fire.
 The new garage and zone controls have automated tests using Home Assistant service
 doubles; physical heat-pump behavior still needs validation in simulation and on
 the selected equipment. Refresh the Settings screenshots when publishing this UI.
+
+Cooling-speed badges in Room heat retention use provisional 1°C-drop bands at the fixed 20°C indoor / −10°C outdoor reference: under 1 hour (very fast), 1–2 hours (fast), 2–4 hours (moderate), 4–8 hours (slow), and at least 8 hours (very slow). Initial estimates remain gray and show Learning. These describe modeled cooling, not insulation quality or an official energy class; thresholds can be refined later.

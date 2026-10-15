@@ -810,3 +810,35 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         proposed['rooms'][0]['temperature_entity']='sensor.changed'
         self.assertEqual(self.c.learning_changes(proposed)[0]['scope'],'full')
         self.assertEqual(self.c.models,original)
+
+    async def test_zone_history_uses_activity_and_records_even_when_control_disabled(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        self.c.settings['heating_zones']=[{**ZONE_DEFAULTS,'id':'observed','name':'Observed pump','thermostat':'climate.garage','heating_enabled':False}]
+        pump=self.hass.states['climate.garage'];pump.state='cool';pump.attributes['hvac_action']='idle'
+        self.assertIsNone(self.c.zone_observations(now)[0]['zone_mode'])
+        pump.attributes['hvac_action']='cooling'
+        self.assertEqual(self.c.zone_observations(now)[0]['zone_mode'],'cool')
+        pump.attributes.pop('hvac_action');pump.state='heat'
+        row=self.c.zone_observations(now)[0]
+        self.assertEqual((row['zone_mode'],row['zone_basis']),('heat','operating_mode'))
+        pump.state='unavailable';self.assertIsNone(self.c.zone_observations(now)[0]['zone_mode'])
+        await self.c._async_update_data()
+        rows=self.c.history_db.read(now.timestamp()-300)
+        self.assertTrue(any(row.get('zone_id')=='observed' for row in rows))
+
+    async def test_initial_garage_prior_is_four_hours_and_fitted_loss_is_preserved(self):
+        from thermal_pilot.model import initial_model,heat_retention
+        fresh=initial_model(self.garage)
+        self.assertEqual(heat_retention(fresh)['hours_per_degree'],4)
+        self.assertFalse(heat_retention(fresh)['updated'])
+        self.c.settings['rooms']=[self.garage]
+        await self.c._async_update_data()
+        rid=self.garage['id'];model=self.c.models[rid]
+        model.update(loss=.007,samples=200,heated_hours=20,idle_hours=30,parameter_updates=0)
+        await self.c._async_update_data()
+        self.assertEqual(heat_retention(self.c.models[rid])['hours_per_degree'],4)
+        self.assertFalse(heat_retention(self.c.models[rid])['updated'])
+        self.assertEqual(self.c.models[rid]['samples'],200)
+        model.update(loss=.012,parameter_updates=3)
+        await self.c._async_update_data()
+        self.assertEqual(self.c.models[rid]['loss'],.012)

@@ -82,6 +82,7 @@ ZONE_FIELDS = [
  ('main_room_id', 'Main room', 'text'),
  ('heating_enabled', 'Control zone heat pump', 'bool'),
  ('climate_mode', 'Heat pump use', 'select:heat,cool,both'),
+ ('heating_strategy','Zone heating strategy','select:temperature,tariff'),
  ('cooling_target', 'Cooling target temperature (°C)', 'number', 16, 30, 0.1),
 ]
 
@@ -145,7 +146,7 @@ def room_electric(room,settings):
 
 
 def price_required(settings):
-    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and r.get('zone_climate_mode')!='cool' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
+    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and r.get('zone_climate_mode')!='cool' and r.get('zone_heating_strategy','tariff')=='tariff' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
 
 
 def garage_sensor_lists(room):
@@ -173,7 +174,7 @@ def resolved_rooms(settings):
         zone=zones.get(room.get('heating_zone_id'))
         if zone:
             room.update(zone_fireplace_entity=zone['fireplace_entity'],zone_fireplace_active_state=zone['fireplace_active_state'])
-            if zone.get('source_type','air_to_air')=='air_to_air':room.update(thermostat=zone['thermostat'],heat_control='air_to_air' if zone['main_room_id']==room['id'] else 'zone_member',zone_policy=zone['temperature_policy'],zone_control_enabled=zone.get('heating_enabled',True),zone_climate_mode=zone.get('climate_mode','heat'),zone_cooling_target=zone.get('cooling_target',24.0))
+            if zone.get('source_type','air_to_air')=='air_to_air':room.update(thermostat=zone['thermostat'],heat_control='air_to_air' if zone['main_room_id']==room['id'] else 'zone_member',zone_policy=zone['temperature_policy'],zone_control_enabled=zone.get('heating_enabled',True),zone_climate_mode=zone.get('climate_mode','heat'),zone_cooling_target=zone.get('cooling_target',24.0),zone_heating_strategy=zone.get('heating_strategy','tariff'))
         rooms.append(room)
     return rooms
 
@@ -237,7 +238,7 @@ def stored_settings(data, options):
     # Preserve the control behavior of zones created before the opt-in switch.
     for zone in settings.get('heating_zones',[]):
         for key,value in ZONE_DEFAULTS.items():
-            zone.setdefault(key,True if key=='heating_enabled' else deepcopy(value))
+            zone.setdefault(key,True if key=='heating_enabled' else 'tariff' if key=='heating_strategy' else deepcopy(value))
     return settings
 
 

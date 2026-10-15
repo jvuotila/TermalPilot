@@ -6,7 +6,7 @@ slab delay; it is not a physical measurement of the slab's stored energy.
 from dataclasses import dataclass
 from datetime import date as date_type, datetime, timedelta, timezone
 import math
-from .const import DEFAULTS, AIR_INITIAL_LAG_HOURS
+from .const import DEFAULTS, AIR_INITIAL_LAG_HOURS, GARAGE_INITIAL_COOLING_HOURS
 
 
 def number(value, default=None):
@@ -138,7 +138,7 @@ def curve_hours(room, outdoor):
 def initial_model(room):
     room = {**DEFAULTS, **room}
     # At the cold design point, full heating balances daily losses at curve_max_hours.
-    loss = 0.007
+    loss = -math.log(29/30)/GARAGE_INITIAL_COOLING_HOURS if room.get('is_garage') else 0.007
     span = room['curve_max_hours']-room['curve_min_hours']
     if span > .1:
         gain = loss*24*(room['curve_warm_temp']-room['curve_cold_temp'])/span
@@ -148,7 +148,7 @@ def initial_model(room):
         base_gain = 0.0
     base_gain = max(0.0,base_gain)
     return {'loss': loss, 'gain': gain, 'base_gain':base_gain, 'samples': 0, 'heated_hours': 0.0,
-            'idle_hours': 0.0, 'xx': 0.0, 'xy': 0.0, 'yy': 0.0,
+            'idle_hours': 0.0, 'parameter_updates':0, 'xx': 0.0, 'xy': 0.0, 'yy': 0.0,
             'xz': 0.0, 'yz': 0.0, 'response': 0.0, 'mae': None}
 
 

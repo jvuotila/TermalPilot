@@ -254,13 +254,13 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.8 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.9 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
 pricePanel.info={data:{price_chart:[{start:new Date(priceTime).toISOString(),end:new Date(priceTime+900000).toISOString(),price:-5}],rooms:{r0:{plan:{commands:[{time:new Date(priceTime).toISOString(),action:'raise'},{time:new Date(priceTime+600000).toISOString(),action:'lower'}]}}}}};
-let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:566px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:566px/);
-pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:746px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
+let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:596px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:596px/);
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:776px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
 console.log('Electricity chart checks passed: thresholds, negative prices, real windows, missing history, ten rooms, fixed height.');
 // Size the SVG from its rendered viewport immediately and on resize.
 let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
@@ -268,7 +268,7 @@ const sizingContext={...context,document:{createElement:()=>{const template={inn
 vm.createContext(sizingContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),sizingContext);
 const sized=new sizingComponent();sized.settings=pricePanel.settings;sized.info=pricePanel.info;sized.tab='overview';
 const viewport={clientWidth:3024,querySelector:()=>({replaceWith:svg=>replacedHTML=svg.html})};sized.shadowRoot.querySelector=()=>viewport;sized.mountPriceChartSizing();
-assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 566"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 566"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
+assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 596"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 596"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
 console.log('Price chart layout checks passed (immediate container measurement, resize, collapsed container, observer cleanup).');
 
 const trend=new Component();trend.info={data:{price_chart:[{start:'2026-10-10T00:00:00Z',end:'2026-10-12T00:00:00Z'}]}};
@@ -347,16 +347,16 @@ for(const screen of [320,390,600]){
   assert.equal(width,mobile.priceChartWidth);assert.doesNotMatch(html,/min-width:900px|NaN/);
   assert.equal((html.match(/<foreignObject/g)||[]).length,10);
   // Mobile names sit above their own lanes; no left column eats the chart width.
-  assert.match(html,/foreignObject x="20" y="179"/);
-  const firstLane=html.match(/<rect x="(\d+)" y="204" width="([\d.]+)" height="14"/);
+  assert.match(html,/foreignObject x="20" y="209"/);
+  const firstLane=html.match(/<rect x="(\d+)" y="234" width="([\d.]+)" height="14"/);
   assert.ok(firstLane);assert.ok(Number(firstLane[1])+Number(firstLane[2])<=width);
  }
  const temperature=mobile.chart(samples,'temperature','prediction');
  const width=Number(temperature.match(/viewBox="0 0 (\d+)/)[1]);
  assert.ok(width<=screen);assert.doesNotMatch(temperature,/NaN/);
 }
-resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 806"/);
-resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 566"/);
+resizeCallback([{contentRect:{width:280}}]);assert.match(replacedHTML,/viewBox="0 0 280 836"/);
+resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 596"/);
 console.log('Mobile checks passed: bubbling Home Assistant menu event, ten readable room lanes, narrow temperature charts and desktop/mobile resizing.');
 
 // History retains activity when all price data is missing, for every selected period.
@@ -524,13 +524,14 @@ console.log('Finnish language checks passed: default labels/flags, translation, 
 const electricityMode=vm.runInContext('electricHeating',context);
 assert.equal(electricityMode({house_heat_source:'gas_boiler'}),false);
 assert.equal(electricityMode({house_heat_source:'air_to_water'}),true);
-const originalPreviewRooms=previewPanel.settings.rooms;
+const originalPreviewRooms=previewPanel.settings.rooms,originalPreviewZones=previewPanel.settings.heating_zones;
+previewPanel.settings.heating_zones=[];
 previewPanel.settings.rooms=originalPreviewRooms.filter(room=>!room.is_garage&&room.heat_control!=='air_to_air');
 previewPanel.settings.house_heat_source='gas_boiler';
 assert.match(previewPanel.settingsView(),/data-electric-group hidden/);
 assert.doesNotMatch(previewPanel.overview(),/class="price-card"/);
 assert.match(previewPanel.controlBadges(),/Comfort planning/);
-previewPanel.settings.rooms=originalPreviewRooms;
+previewPanel.settings.rooms=originalPreviewRooms;previewPanel.settings.heating_zones=originalPreviewZones;
 assert.equal(electricityMode(previewPanel.settings),true,'An electric garage remains supported beside a non-electric house');
 previewPanel.settings.house_heat_source='air_to_water';
 console.log('Non-electric UI checks passed: optional hidden prices, comfort-mode label and no scheduling chart.');
@@ -828,3 +829,39 @@ console.log('Rooms and zones tab passed: ordered navigation, split sections, sav
  assert.equal(calls.length,3);assert.equal(calls[2].confirm_learning_reset,true);assert.equal(warningPanel.saveConfirmation,true);
  console.log('Learning reset warning passed: named full/partial resets, cancellation without saving and explicit confirmed retry.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+const zoneChartPanel=new Component(),zoneChartNow=Date.now();
+zoneChartPanel.historyHours=24;zoneChartPanel.priceChartWidth=1000;
+zoneChartPanel.settings={rooms:[{id:'room-z',name:'Room Z'}],heating_zones:[{id:'z-last',name:'Zulu zone',heating_strategy:'tariff',climate_mode:'heat',main_room_id:'room-z'},{id:'z-first',name:'Alpha zone',heating_strategy:'temperature',climate_mode:'heat'},{id:'z-cool',name:'Cooling zone',heating_strategy:'tariff',climate_mode:'cool'}]};
+zoneChartPanel.info={data:{price_chart:[{start:new Date(zoneChartNow-86400000).toISOString(),end:new Date(zoneChartNow+86400000).toISOString(),price:10}],rooms:{'room-z':{plan:{commands:[{time:new Date(zoneChartNow+3600000).toISOString(),action:'raise'},{time:new Date(zoneChartNow+7200000).toISOString(),action:'restore'}]}}}}};
+zoneChartPanel.history=[];
+for(const zone of zoneChartPanel.settings.heating_zones)for(const [minutes,mode] of [[-30,'heat'],[-25,'heat'],[-20,null],[-15,'cool'],[-10,'cool'],[-5,null]])zoneChartPanel.history.push({room_id:'zone:'+zone.id,zone_id:zone.id,time:zoneChartNow/1000+minutes*60,zone_mode:mode,zone_basis:'activity',zone_entity:'climate.'+zone.id});
+zoneChartPanel.statusHistory=zoneChartPanel.history;
+const zoneHistorySVG=zoneChartPanel.priceChart(true),zonePlanSVG=zoneChartPanel.priceChart(false);
+assert.ok(zoneHistorySVG.indexOf('data-zone-timeline="z-first"')<zoneHistorySVG.indexOf('data-zone-timeline="z-cool"'));assert.ok(zoneHistorySVG.indexOf('data-zone-timeline="z-cool"')<zoneHistorySVG.indexOf('data-zone-timeline="z-last"'));
+assert.match(zoneHistorySVG,/fill="#f7ead8"/);assert.match(zoneHistorySVG,/data-zone-period="heat"/);assert.match(zoneHistorySVG,/data-zone-period="cool"/);assert.doesNotMatch(zoneHistorySVG,/data-zone-period="plan"/);
+const zoneGroup=(html,id)=>html.match(new RegExp('<g data-zone-timeline="'+id+'">[\\s\\S]*?<\\/g>'))[0];
+assert.doesNotMatch(zoneGroup(zonePlanSVG,'z-first'),/data-zone-period="plan"/);assert.doesNotMatch(zoneGroup(zonePlanSVG,'z-cool'),/data-zone-period="plan"/);assert.match(zoneGroup(zonePlanSVG,'z-last'),/data-zone-period="plan"/);
+assert.doesNotMatch(zoneGroup(zoneHistorySVG,'z-first'),/>Off<|mode Off|data-zone-period="off"/);
+zoneChartPanel.info.data.price_chart=[];assert.match(zoneChartPanel.priceChart(false),/data-zone-timeline="z-first"/);
+zoneChartPanel.priceChartWidth=320;assert.match(zoneChartPanel.priceChart(true),/data-zone-period="cool"/);
+console.log('Zone chart passed: alphabetic rows at bottom, distinct tint, heat/cool only, tariff-only Plan windows, History without plans, no-price and mobile layouts.');
+zoneChartPanel.priceChartWidth=1000;
+const combinedZoneChart=zoneChartPanel.priceChart(true),combinedZone=zoneGroup(combinedZoneChart,'z-first');
+const zoneHeatY=combinedZone.match(/data-zone-period="heat"[^>]* y="([^"]+)"/)[1],zoneCoolY=combinedZone.match(/data-zone-period="cool"[^>]* y="([^"]+)"/)[1];
+assert.equal(zoneHeatY,zoneCoolY);
+assert.match(combinedZoneChart,/style="font-size:18px;font-weight:600">Rooms<\/text>/);
+assert.match(combinedZoneChart,/style="font-size:18px;font-weight:600">Heating zones<\/text>/);
+console.log('Chart section headings and shared heating/cooling zone lane passed.');
+const unifiedZone=zoneGroup(zoneChartPanel.priceChart(false),'z-last');
+const unifiedHeatY=unifiedZone.match(/data-zone-period="heat"[^>]* y="([^"]+)"/)[1],unifiedPlanY=unifiedZone.match(/data-zone-period="plan"[^>]* y="([^"]+)"/)[1];
+assert.equal(unifiedHeatY,unifiedPlanY);
+assert.match(unifiedZone,/data-zone-period="plan"[^>]*fill="#087c85"/);
+console.log('Recorded heating, cooling and future plans share one zone timeline with distinct colors.');
+const coolingRating=vm.runInContext('retentionRating',context);
+for(const [hours,expected]of [[.5,'very-fast'],[1,'fast'],[1.99,'fast'],[2,'moderate'],[3.99,'moderate'],[4,'slow'],[7.99,'slow'],[8,'very-slow'],[20,'very-slow']])assert.equal(coolingRating({updated:true,hours_per_degree:hours}).level,expected);
+for(const hours of [0,-1,NaN,Infinity])assert.equal(coolingRating({updated:true,hours_per_degree:hours}).level,'learning');
+assert.equal(coolingRating({updated:false,hours_per_degree:4.8}).level,'learning');
+assert.match(retentionPanel.heatRetentionView(),/<th>Cooling speed<\/th>/);
+assert.match(retentionPanel.heatRetentionView(),/data-retention-rating="moderate"/);
+assert.match(retentionPanel.heatRetentionView(),/data-retention-rating="learning"/);
+console.log('Cooling-speed badges passed: all threshold boundaries, invalid values, neutral initial models and retained numerical values.');

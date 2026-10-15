@@ -102,6 +102,17 @@ class HistoryTests(unittest.TestCase):
         with self.db._connect() as con:
             self.assertEqual([r[0] for r in con.execute('SELECT horizon FROM forecasts')],[1])
 
+    def test_zone_history_is_independent_bounded_and_keeps_standby_boundaries(self):
+        rows=[{'room_id':'zone:one','zone_id':'one','time':time,'zone_mode':mode,'zone_basis':'activity','zone_entity':'climate.pump'} for time,mode in [(900,'heat'),(1200,None),(1500,'cool')]]
+        self.db.append_zones(rows,0)
+        self.assertEqual([r['zone_mode'] for r in self.db.read(0)],['heat',None,'cool'])
+        self.db.append_zones([{**rows[-1],'time':1501,'zone_mode':None}],0)
+        self.assertEqual(len(self.db.read(0)),3)
+        self.assertEqual(self.db.read(0)[-1]['zone_mode'],None)
+        self.assertEqual(self.db.forecast_accuracy(0),{})
+        self.db.append_zones([],1300)
+        self.assertEqual(len(self.db.read(0)),1)
+
 
 class SeasonTests(unittest.TestCase):
     def test_active_collects_in_warm_weather(self):
@@ -118,3 +129,4 @@ class SeasonTests(unittest.TestCase):
         self.assertFalse(collection_state({},None,0,DEFAULTS)['collecting'])
     def test_legacy_average_is_removed(self):
         self.assertNotIn('average',collection_state({'average':10},5,0,DEFAULTS))
+

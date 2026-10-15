@@ -191,6 +191,27 @@ class PilotCoordinator(DataUpdateCoordinator):
                 'applied_season_targets':self.applied_season_targets,
                 'fingerprints':self.config_fingerprint,'sensor_health':self.sensor_health,'managed_rooms':self.managed_rooms,'fallback_state':self.fallback_state}
 
+    def zone_observations(self,now):
+        rows=[]
+        for zone in self.settings.get('heating_zones',[]):
+            fireplace=zone.get('source_type')=='fireplace'
+            entity=zone.get('fireplace_entity','') if fireplace else zone.get('thermostat','')
+            state=self.hass.states.get(entity) if entity else None
+            mode=None;basis='activity'
+            if state and state.state not in ('unknown','unavailable'):
+                if fireplace:
+                    mode='heat' if state.state==zone.get('fireplace_active_state','on') else None
+                    basis='fireplace'
+                else:
+                    action=state.attributes.get('hvac_action')
+                    if action in ('heating','cooling'):mode='heat' if action=='heating' else 'cool'
+                    elif action is None:
+                        mode=state.state if state.state in ('heat','cool') else None
+                        basis='operating_mode'
+            rows.append({'zone_id':zone['id'],'room_id':'zone:'+zone['id'],'time':now.timestamp(),
+                         'zone_mode':mode,'zone_basis':basis,'zone_entity':entity})
+        return rows
+
     def learning_changes(self,settings):
         changes=[]
         for room in resolved_rooms(settings):
@@ -310,6 +331,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         outdoor = self.value(self.settings['outdoor_entity'])
         source = self.hass.states.get(self.settings['price_entity'])
         heating_active = self.settings['heating_enabled']
+        await self.hass.async_add_executor_job(self.history_db.append_zones,self.zone_observations(now),now.timestamp()-HISTORY_DAYS*86400)
         forecasts = await self.get_forecast(now)
         self.fallback_state = fallback_season(self.fallback_state,forecasts,self.forecast_type,outdoor,now,ZoneInfo(self.hass.config.time_zone),self.settings['summer_minimum_temperature'])
         await self.check_temperature_sensors(now,heating_active)
@@ -448,6 +470,11 @@ class PilotCoordinator(DataUpdateCoordinator):
                     model['loss']=old_loss
                     model['retention_learned']=bool((heat_retention(previous_model) or {}).get('updated'))
                 self.previous.pop(rid, None)
+            # Upgrade only the unchanged default garage prior; never replace a fit
+            # or retained room loss, and keep its accepted observations intact.
+            if room.get('is_garage') and not model.get('parameter_updates',0) and not model.get('retention_learned') and model.get('loss')==.007:
+                model['loss']=initial_model(room)['loss']
+                model['parameter_updates']=0
             self.config_fingerprint[rid] = fingerprint
             if model.get('wind_source','')!=self.settings['wind_entity']:
                 for key in ('wind_loss','wind_statistics','wind_updates'):model.pop(key,None)
@@ -482,7 +509,7 @@ class PilotCoordinator(DataUpdateCoordinator):
                     self.previous[rid] = current
                 else:
                     self.previous.pop(rid,None)
-                if room_electric(room,self.settings) and room.get('heat_control')!='zone_member' and not (room.get('heating_zone_id') and (room.get('zone_climate_mode')=='cool' or self.air_control.zone_season(room['heating_zone_id'],self.fallback_state.get('summer',False),now.timestamp()))) and slots and all(t is not None for t in outdoors):
+                if room_electric(room,self.settings) and room.get('heat_control')!='zone_member' and not (room.get('heating_zone_id') and (room.get('zone_heating_strategy')=='temperature' or room.get('zone_climate_mode')=='cool' or self.air_control.zone_season(room['heating_zone_id'],self.fallback_state.get('summer',False),now.timestamp()))) and slots and all(t is not None for t in outdoors):
                     run = self.suggested_runs.get(rid,{})
                     settings = {**room, 'terminal_reserve_hours':price_outlook['reserve_hours'],
                         'wind_speed':wind_status['speed'], 'solar_forecast':[value*solar_facing(slot.start+(slot.end-slot.start)/2,latitude,longitude,room.get('solar_direction','south')) if value is not None else None for value,slot in zip(solar_forecast,slots)],

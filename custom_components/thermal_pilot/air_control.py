@@ -103,9 +103,14 @@ class AirHeatPumpControl:
                 heating=False;reason='Heating zone upper limit reached'
             elif too_cold:
                 heating=True;reason='Heating zone below lower limit'
-            elif planned is None:
+            elif planned is None and not (room.get('heating_zone_id') and room.get('zone_heating_strategy')=='temperature'):
                 # Missing price data falls back to room comfort, independently of tariffs.
                 heating=temperature<room['baseline'];reason='Room comfort fallback'
+            elif room.get('heating_zone_id') and room.get('zone_heating_strategy')=='temperature':
+                # A small temperature band avoids price-driven preheating and chatter.
+                if temperature<=room['baseline']-.2:heating=True
+                elif temperature>=room['baseline']+.2:heating=False
+                reason='Zone temperature control' if heating else 'Zone temperature standby'
             else:
                 heating=bool(planned.get('heat')) or temperature<planned.get('setpoint',room['baseline'])
                 reason='Room heating plan' if heating else 'Standby'

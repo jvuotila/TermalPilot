@@ -30,6 +30,8 @@ class HistoryDatabase:
                 raise ValueError('Unsupported history database schema version')
             con.execute('CREATE TABLE IF NOT EXISTS observations (room_id TEXT NOT NULL, time INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(room_id,time))')
             con.execute('CREATE INDEX IF NOT EXISTS observations_time ON observations(time)')
+            con.execute('CREATE TABLE IF NOT EXISTS zone_observations (zone_id TEXT NOT NULL, time INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(zone_id,time))')
+            con.execute('CREATE INDEX IF NOT EXISTS zone_observations_time ON zone_observations(time)')
             con.execute('CREATE TABLE IF NOT EXISTS forecasts (room_id TEXT NOT NULL, issued_bucket INTEGER NOT NULL, horizon INTEGER NOT NULL, due REAL NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(room_id,issued_bucket,horizon))')
             con.execute('CREATE INDEX IF NOT EXISTS forecasts_due ON forecasts(due)')
             con.execute('CREATE TABLE IF NOT EXISTS season_accumulators (season TEXT NOT NULL, room_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(season,room_id))')
@@ -74,6 +76,14 @@ class HistoryDatabase:
                 con.execute('INSERT OR REPLACE INTO season_accumulators VALUES (?,?,?)',(season,r['room_id'],json.dumps(stat,separators=(',',':'))))
             con.execute('DELETE FROM observations WHERE time < ?', (int(cutoff),))
 
+    def append_zones(self, rows, cutoff):
+        """Keep zone identity separate from changing room membership and main room."""
+        with self._connect() as con:
+            for row in rows:
+                con.execute('INSERT OR REPLACE INTO zone_observations VALUES (?,?,?)',
+                            (row['zone_id'],int(row['time'])//300*300,json.dumps(row,separators=(',',':'),allow_nan=False)))
+            con.execute('DELETE FROM zone_observations WHERE time < ?',(int(cutoff),))
+
     def record_forecasts(self, rooms, issued, cutoff):
         """Freeze the first forecast each hour. Later measurements never rewrite it."""
         from .model import stamp
@@ -109,6 +119,7 @@ class HistoryDatabase:
         """Join frozen forecasts to later observations, allowing five-minute timing tolerance."""
         with self._connect() as con:
             all_rows=[json.loads(row[0]) for row in con.execute('SELECT payload FROM observations WHERE time >= ? ORDER BY time,room_id',(int(cutoff-6*3600-300),))]
+            zone_rows=[json.loads(row[0]) for row in con.execute('SELECT payload FROM zone_observations WHERE time >= ? ORDER BY time,zone_id',(int(cutoff),))]
             forecasts=[(rid,json.loads(payload)) for rid,payload in con.execute('SELECT room_id,payload FROM forecasts WHERE due >= ? ORDER BY due',(cutoff,))]
         grouped={}
         for row in all_rows:
@@ -138,7 +149,7 @@ class HistoryDatabase:
                                     'error':abs(actual['temperature']-f['temperature']),
                                     'persistence_error':abs(actual['temperature']-f['initial_temperature']),
                                     'heating_match':match}
-        return [r for r in all_rows if r['time']>=cutoff]
+        return sorted([r for r in all_rows if r['time']>=cutoff]+zone_rows,key=lambda r:(r['time'],r['room_id']))
 
     def forecast_accuracy(self, cutoff):
         results={}

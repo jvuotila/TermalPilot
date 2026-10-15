@@ -286,3 +286,10 @@ class AirTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('climate.garage',self.control.reversals)
         await self.control.apply([self.room],{self.room['id']:cooling},610,lambda:True)
         self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'cool')
+
+    def test_zone_temperature_strategy_ignores_tariff_plan(self):
+        self.room.update(is_garage=False,heat_control='air_to_air',heating_zone_id='zone',zone_heating_strategy='temperature',baseline=20)
+        self.hass.states['sensor.garage'].state='19.7'
+        self.assertEqual(self.intent(planned={'heat':False,'setpoint':18})['mode'],'heat')
+        self.hass.states['sensor.garage'].state='20.3'
+        self.assertEqual(self.intent(planned={'heat':True,'setpoint':22})['mode'],'fan_only')
