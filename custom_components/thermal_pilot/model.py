@@ -6,7 +6,7 @@ slab delay; it is not a physical measurement of the slab's stored energy.
 from dataclasses import dataclass
 from datetime import date as date_type, datetime, timedelta, timezone
 import math
-from .const import DEFAULTS, AIR_INITIAL_LAG_HOURS, GARAGE_INITIAL_COOLING_HOURS
+from .const import DEFAULTS, AIR_INITIAL_LAG_HOURS, GARAGE_INITIAL_COOLING_HOURS, HOUSE_COOLING_REFERENCES
 
 
 def number(value, default=None):
@@ -135,10 +135,23 @@ def curve_hours(room, outdoor):
     return room['curve_min_hours'] + max(0, min(1, fraction))*(room['curve_max_hours']-room['curve_min_hours'])
 
 
+def cooling_reference(room):
+    """Convert the broad 10-degree building example to our fixed 1-degree test.
+
+This is a single-exponential equivalence, not a measured first-degree cooldown.
+Garages deliberately do not inherit the occupied-house benchmark.
+"""
+    kind=room.get('house_construction','unknown')
+    duration=HOUSE_COOLING_REFERENCES.get(kind) if not room.get('is_garage') else None
+    if duration is None:return None
+    return {'reference_type':kind,'reference_hours':duration*math.log(30/29)/math.log(40/30)}
+
+
 def initial_model(room):
     room = {**DEFAULTS, **room}
     # At the cold design point, full heating balances daily losses at curve_max_hours.
-    loss = -math.log(29/30)/GARAGE_INITIAL_COOLING_HOURS if room.get('is_garage') else 0.007
+    reference=cooling_reference(room)
+    loss = -math.log(29/30)/GARAGE_INITIAL_COOLING_HOURS if room.get('is_garage') else -math.log(29/30)/reference['reference_hours'] if reference else 0.007
     span = room['curve_max_hours']-room['curve_min_hours']
     if span > .1:
         gain = loss*24*(room['curve_warm_temp']-room['curve_cold_temp'])/span
@@ -339,7 +352,7 @@ def learn_solar(model, previous, current, dt, residual):
     model['solar_updates']=model.get('solar_updates',0)+1
 
 
-def heat_retention(model):
+def heat_retention(model,room=None):
     """Comparable modeled cooling with identical reference conditions, not energy efficiency.
 
 Use loss alone: 20°C indoors, -10°C outdoors, no heating, residual response
@@ -350,7 +363,7 @@ or background gains. Effective loss includes both heat leakage and thermal mass.
         return None
     drop=30*(-math.expm1(-loss*6))
     hours=-math.log(29/30)/loss
-    return {'drop_6h':round(drop,3),'hours_per_degree':round(hours,2),
+    return {**(cooling_reference(room) or {} if room else {}),'drop_6h':round(drop,3),'hours_per_degree':round(hours,2),
             'indoor':20,'outdoor':-10,'heating_hours':round(model.get('heated_hours',0),1),
             'idle_hours':round(model.get('idle_hours',0),1),
             'updated':bool(model.get('retention_learned')) or model.get('parameter_updates',0)>0 or ('parameter_updates' not in model and abs(loss-.007)>1e-9 and model.get('heated_hours',0)>=12 and model.get('idle_hours',0)>=12)}

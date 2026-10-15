@@ -13,6 +13,7 @@ SOURCE_FIELDS = [
  ('air_fan_idle','Standby fan speed','text'),
  ('air_swing','Heating swing mode','text'),
  ('air_swing_idle','Standby swing mode','text'),
+ ('house_construction','House construction','select:unknown,wooden_detached,masonry_detached,concrete_apartment,heavy_masonry_apartment'),
  ('house_heat_source','Heat source','select:air_to_water,ground_source,air_to_air,electric_resistance,oil_boiler,gas_boiler,wood_boiler,pellet_boiler,district_heating,other'),
  ('house_distribution','Heat distribution','select:water_floor,water_radiators,electric_floor,electric_ceiling,electric_panels,warm_air,mixed,other'),
  ('house_heated_floor','Heated floor','select:concrete_slab,thin_screed,lightweight,not_applicable,unknown'),
@@ -53,6 +54,7 @@ ROOM_FIELDS = [
  ('heating_zone_id', 'Heating zone (optional)', 'text'),
  ('heat_control', 'Room heating control', 'select:house,air_to_air'),
  ('baseline', 'Target temperature (°C)', 'number', 5, 30, 0.1),
+ ('garage_construction','Construction type','select:unknown,timber_frame,masonry,lightweight_metal'),
  ('garage_strategy', 'Heating strategy', 'select:temperature,tariff'),
  ('garage_minimum', 'Lower temperature limit (°C)', 'number', -5, 25, 0.1),
  ('garage_maximum', 'Upper temperature limit (°C)', 'number', -5, 30, 0.1),
@@ -184,7 +186,7 @@ def air_room(room,settings):
 
 
 def room_settings(room,settings):
-    effective={**room,**{key:settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','boost','setback','minimum','maximum')}}
+    effective={**room,'house_construction':settings.get('house_construction','unknown'),**{key:settings[key] for key in ('lag_hours','curve_warm_temp','curve_cold_temp','boost','setback','minimum','maximum')}}
     if air_room(room,settings) or room.get('heat_control')=='zone_member':
         effective['lag_hours']=AIR_INITIAL_LAG_HOURS
         effective['air_control']=True

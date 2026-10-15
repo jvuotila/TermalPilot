@@ -842,3 +842,29 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         model.update(loss=.012,parameter_updates=3)
         await self.c._async_update_data()
         self.assertEqual(self.c.models[rid]['loss'],.012)
+
+    async def test_construction_reference_changes_badge_context_without_resetting_room_model(self):
+        from thermal_pilot.const import HOUSE_COOLING_REFERENCES
+        from thermal_pilot.model import heat_retention,initial_model,cooling_reference
+        self.c.settings['rooms']=[self.floor]
+        await self.c._async_update_data()
+        rid=self.floor['id'];model=self.c.models[rid]
+        model.update(loss=.008,parameter_updates=3,heated_hours=30,idle_hours=40)
+        original=heat_retention(model)
+        proposed=deepcopy(self.c.settings);proposed['house_construction']='wooden_detached'
+        self.assertEqual(self.c.learning_changes(proposed),[])
+        self.c.settings=proposed
+        data=await self.c._async_update_data()
+        self.assertIs(self.c.models[rid],model)
+        self.assertEqual(data['rooms'][rid]['heat_retention']['drop_6h'],original['drop_6h'])
+        self.assertAlmostEqual(data['rooms'][rid]['heat_retention']['reference_hours'],2.12,places=2)
+        self.assertEqual(data['rooms'][rid]['heat_retention']['reference_type'],'wooden_detached')
+        for kind in HOUSE_COOLING_REFERENCES:
+            room={**self.floor,'house_construction':kind}
+            self.assertAlmostEqual(heat_retention(initial_model(room))['hours_per_degree'],round(cooling_reference(room)['reference_hours'],2))
+            self.assertFalse(heat_retention(initial_model(room))['updated'])
+        # Garage metadata is separate and never borrows an occupied-house reference.
+        for kind in ['unknown','timber_frame','masonry','lightweight_metal']:
+            garage={**self.garage,'garage_construction':kind,'house_construction':'heavy_masonry_apartment'}
+            self.assertIsNone(cooling_reference(garage))
+            self.assertEqual(heat_retention(initial_model(garage))['hours_per_degree'],4)

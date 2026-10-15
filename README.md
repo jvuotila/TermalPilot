@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.9 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.10 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -823,3 +823,9 @@ doubles; physical heat-pump behavior still needs validation in simulation and on
 the selected equipment. Refresh the Settings screenshots when publishing this UI.
 
 Cooling-speed badges in Room heat retention use provisional 1°C-drop bands at the fixed 20°C indoor / −10°C outdoor reference: under 1 hour (very fast), 1–2 hours (fast), 2–4 hours (moderate), 4–8 hours (slow), and at least 8 hours (very slow). Initial estimates remain gray and show Learning. These describe modeled cooling, not insulation quality or an official energy class; thresholds can be refined later.
+
+**House construction** under Rooms and zones → House heating settings selects an approximate construction reference for ordinary-room cooling badges: wooden detached house (~2.12 h), masonry detached house (~3.54 h), concrete-element apartment building (~4.24 h), or heavy masonry apartment building (~11.31 h) per 1°C drop in the fixed 20°C / −10°C test. These are single-exponential conversions of the older whole-building examples in [Security Committee, 2015, printed pages 56–57](https://turvallisuuskomitea.fi/wp-content/uploads/2015/06/Verkkojulkaisu-S%C3%A4hk%C3%B6riippuvuus-modernissa-yhteiskunnassa.pdf#page=60), originally +20°C to +10°C at −20°C outdoors. They are broad comparison priors, not measured first-degree cooldowns or insulation classes.
+
+For a selected house type, very fast / fast / moderate / slow / very slow badges use cooling-time ratios below 0.5 / 0.8 / 1.25 / 2 / at least 2 relative to its reference. Unknown uses the general absolute bands. Initial models remain gray. The type also seeds new ordinary-room models; changing it never resets learning or overwrites existing model parameters.
+
+Each garage has its own **Construction type** (unknown, timber frame, masonry, or lightweight metal). Garage-specific numerical construction references are not available, so garages retain general cooling-speed bands and their four-hour starting prior rather than inheriting the house benchmark. Learned garage values remain unchanged.

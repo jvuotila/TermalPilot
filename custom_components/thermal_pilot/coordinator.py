@@ -560,7 +560,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             result['heating_zone_id']=room.get('heating_zone_id','')
             if room.get('heat_control')=='zone_member':result['zone_monitor']=True
             result['learning_progress'] = learning_progress(model,now)
-            result['heat_retention'] = heat_retention(model)
+            result['heat_retention'] = heat_retention(model,room)
             room_data[rid] = result
         cutoff = now.timestamp()-HISTORY_DAYS*86400
         await self.hass.async_add_executor_job(self.history_db.append, readings, cutoff, self.season['season_id'])
