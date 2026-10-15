@@ -45,6 +45,12 @@ const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room(
  typing.shadowRoot.activeElement={matches:selector=>selector==='[data-title]',selectionStart:3,selectionEnd:7,selectionDirection:'forward'};
  typing.shadowRoot.querySelector=selector=>selector==='[data-title]'?{addEventListener(){},focus(){focused=true;},setSelectionRange(...args){selection=args;}}:null;
  typing.render();assert.equal(focused,true);assert.deepEqual(selection,[3,7,'forward']);
+ const languagesCard=new Card();languagesCard._data=structuredClone(sample);languagesCard._data.language='fi';
+ assert.equal(languagesCard.t('Room'),'Huone');languagesCard._config={...languagesCard._config,language:'en'};assert.equal(languagesCard.t('Room'),'Room');
+ languagesCard._config.language='de';assert.equal(languagesCard.t('Room'),'Raum');languagesCard._config.language='auto';assert.equal(languagesCard.t('Room'),'Huone');
+ assert.throws(()=>languagesCard.setConfig({language:'invalid'}),/Invalid card language/);
+ const languageEditor=new Editor();languageEditor.setConfig({language:'fi'});assert.match(languageEditor.shadowRoot.innerHTML,/data-language/);assert.match(languageEditor.shadowRoot.innerHTML,/value="fi" selected/);
+ assert.match(languageEditor.shadowRoot.innerHTML,/value="auto"/);assert.match(languageEditor.shadowRoot.innerHTML,/value="hu"/);
  // Card badges use exactly the panel's bands, including typed construction references.
  const panelContext={HTMLElement:class{},customElements:{get:()=>true},location:{pathname:''}};vm.createContext(panelContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),panelContext);
  for(const reference of [null,2.12])for(const hours of [.5,1,2,4,8,12])for(const updated of [true,false]){

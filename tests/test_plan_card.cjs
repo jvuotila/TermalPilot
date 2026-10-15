@@ -23,5 +23,10 @@ const response={entries:[{entry_id:'home',title:'Home'}],settings:{language:'en'
  const editor=new Editor();let renders=0;const render=editor.render.bind(editor);editor.render=()=>{renders++;render();};editor.setConfig({});editor.dispatchEvent=event=>editor.setConfig(event.detail.config);for(const title of ['H','He','Heat'])editor.update({title});assert.equal(renders,1);
  // Use the exact same integration language renderer, never the viewer's HA language.
  assert.equal(card.t('Rooms'),'Rooms');card.settings.language='fi';assert.equal(card.t('Rooms'),'Huoneet');
+ const languageCard=new Card();languageCard._integrationLanguage='fi';languageCard.info=structuredClone(response);languageCard.settings=structuredClone(response.settings);languageCard._config={language:'en'};languageCard.render();assert.equal(languageCard.t('Rooms'),'Rooms');
+ languageCard._config.language='auto';languageCard.render();assert.equal(languageCard.t('Rooms'),'Huoneet');
+ languageCard._config.language='de';languageCard.render();assert.notEqual(languageCard.t('Rooms'),'Rooms');
+ assert.equal(response.settings.language,'en');assert.throws(()=>languageCard.setConfig({language:'invalid'}),/Invalid card language/);
+ const languageEditor=new Editor();languageEditor.setConfig({language:'fi'});assert.match(languageEditor.shadowRoot.innerHTML,/data-language/);assert.match(languageEditor.shadowRoot.innerHTML,/value="fi" selected/);assert.match(languageEditor.shadowRoot.innerHTML,/value="auto"/);assert.match(languageEditor.shadowRoot.innerHTML,/value="hu"/);
  console.log('Plan dashboard card passed: shared renderer, compact content, title, timelines and plans, resizing, language, read-only refresh, cleanup and stable editor.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

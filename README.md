@@ -12,22 +12,31 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.18 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.19 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
 
-Examples from a configured installation. Room names, selected sensors and values
-shown here are examples, not preset defaults.
+Examples from the offline preview and a configured Home Assistant installation.
+Room names, selected sensors, activity and values are illustrative, not preset
+defaults or measured performance claims.
 
 ![Electricity prices with suggested heating windows and observed thermostat activity](docs/screenshots/electricity-and-heating.png)
 
 <details>
-<summary>Room plan and forecast accuracy</summary>
+<summary>Heat retention, room plans and history</summary>
+
+### Room heat retention
+
+![Sortable room heat-retention estimates with cooling-speed badges and a separate garage row](docs/screenshots/room-heat-retention.png)
 
 ### Room plan
 
-![Room temperature forecast, initial learning progress and planned thermostat targets](docs/screenshots/room-plan.png)
+![Compact room plan with measured and target temperatures, thermostat changes and a temperature forecast](docs/screenshots/room-plan.png)
+
+### Heating history
+
+![Recorded room heating, garage activity and zone heating and cooling timelines](docs/screenshots/electricity-and-heating-history.png)
 
 ### Room history
 
@@ -46,13 +55,30 @@ shown here are examples, not preset defaults.
 
 ![House heating system, distribution and response settings](docs/screenshots/house-heating-settings.png)
 
-### Shared room settings
+### Shared room and zone settings
 
 ![Shared temperature limits, heating boost and peak-hour reduction](docs/screenshots/shared-room-settings.png)
 
 ### Rooms
 
 ![Room settings with an expanded room and the architectural floor-plan background](docs/screenshots/rooms-settings.png)
+
+### Heating zones
+
+![Heating-zone configuration with heat pump, room membership and tariff strategy](docs/screenshots/heating-zones-settings.png)
+
+</details>
+
+<details>
+<summary>Dashboard cards</summary>
+
+### Heat retention card
+
+![Home Assistant heat-retention card editor with an optional title and selectable columns](docs/screenshots/heat-retention-card.png)
+
+### Heating plan card
+
+![Home Assistant heating-plan card editor with an optional title and compact room, garage and zone timelines](docs/screenshots/heating-plan-card.png)
 
 </details>
 
@@ -839,7 +865,7 @@ If you previously added `/thermal_pilot/heat-retention-card.js` manually under
 **Settings → Dashboards → Resources**, you can remove that resource entry;
 existing cards keep the same configuration.
 Its visual editor lets you set an optional title and choose columns; Room is
-always included. Leave the title blank to show only the table. The card and follows the integration's language setting. It refreshes
+always included. Leave the title blank to show only the table. The card and follows the integration's language setting unless you choose a card language. It refreshes
 every minute and supports sorting by clicking the column headers. Garages stay
 in their own group at the bottom. Dashboard viewers can read the table without
 access to ThermalPilot's admin settings or heating controls.
@@ -858,7 +884,8 @@ columns:
 
 Omit `columns` to show all columns, or use `columns: []` for Room only.
 If more than one ThermalPilot integration is loaded, select the integration in
-the card editor. Optional YAML keys are `entry_id`, `sort_by` (`room`, `loss_6h`,
+the card editor. Optional YAML keys are `entry_id`, `language` (`auto` or an integration language
+code such as `fi`), `sort_by` (`room`, `loss_6h`,
 `drop_1c`, or `cooling_speed`) and `sort_direction` (`asc` or `desc`).
 The cooling-speed badges remain approximate model comparisons, not certified
 energy-efficiency ratings.
@@ -869,7 +896,7 @@ Add **ThermalPilot heating plan** from the dashboard card picker. The integratio
 loads it automatically. The card shows the Plan chart's legend, electricity
 prices, room timelines, garages and heating zones. Explanatory text above and
 below the chart is omitted. Its optional title is blank by default, and it uses
-the integration's language. Hover, focus or tap a chart bar to see details.
+the integration's language unless a card language is selected. Hover, focus or tap a chart bar to see details.
 The chart refreshes every minute and adapts to the card width.
 
 ```yaml
@@ -879,4 +906,6 @@ title: Heating plan  # Optional
 
 If multiple ThermalPilot integrations are loaded, choose one in the visual
 editor, or specify its `entry_id` in YAML. This card only displays information;
-it does not change heating settings or control devices.
+it does not change heating settings or control devices. The optional `language`
+setting accepts `auto` (use the integration language) or a supported language
+code such as `en` or `fi`.
