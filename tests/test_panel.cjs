@@ -254,7 +254,7 @@ assert.doesNotMatch(previewSettings,/standing charge|room\d+\.activity_attribute
 for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])assert.ok(!/, C$/.test(field[1]),field[1]);
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
-console.log('Version 0.9.12 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
+console.log('Version 0.9.13 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
 for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
@@ -892,3 +892,14 @@ for(const history of [true,false]){
 garageChartPanel.settings.rooms=garageChartPanel.settings.rooms.filter(room=>room.is_garage);
 const onlyGarageChart=garageChartPanel.priceChart(true);assert.doesNotMatch(onlyGarageChart,/font-weight:600">Rooms<\/text>/);assert.match(onlyGarageChart,/font-weight:600">Garages<\/text>/);
 console.log('Garage chart section passed: separate heading, distinctive alternating tint, alphabetic garage rows, Plan/History and garage-only layouts.');
+
+const garageCardsPanel=new Component();garageCardsPanel.history=[];
+garageCardsPanel.settings={rooms:[{id:'gz',name:'Garage Z',is_garage:true},{id:'r',name:'Regular room'},{id:'ga',name:'Garage A'}]};
+garageCardsPanel.info={data:{rooms:{gz:{name:'Garage Z'},r:{name:'Regular room'},ga:{name:'Garage A',is_garage:true}}}};
+for(const html of [garageCardsPanel.overview(),garageCardsPanel.historyView()]){
+ const cards=html.slice(html.indexOf('<div class="observation-cards">'));
+ assert.ok(cards.indexOf('Regular room')<cards.indexOf('Garage A'));
+ assert.ok(cards.indexOf('Garage A')<cards.indexOf('Garage Z'));
+ assert.equal((cards.match(/class="observation-card garage-observation-card"/g)||[]).length,2);
+}
+console.log('Plan and History room cards put garages last, alphabetically, with distinct styling.');
