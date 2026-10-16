@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.23 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.24 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots

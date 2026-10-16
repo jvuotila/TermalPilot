@@ -2,7 +2,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=req
 const definitions=new Map(),timers=new Set();let timer=0;
 class Element{attachShadow(){this.shadowRoot={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};}dispatchEvent(event){this.event=event;}}
 const context={HTMLElement:Element,customElements:{get:name=>definitions.get(name),define:(name,value)=>definitions.set(name,value)},setInterval:()=>{timers.add(++timer);return timer;},clearInterval:id=>timers.delete(id),console,CustomEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},Date,structuredClone};vm.createContext(context);
-const base=path.join(__dirname,'../custom_components/thermal_pilot/frontend/');vm.runInContext(fs.readFileSync(base+'panel.js','utf8'),context);vm.runInContext(fs.readFileSync(base+'plan-chart-card.js','utf8').replace("import './panel.js';",''),context);
+const base=path.join(__dirname,'../custom_components/thermal_pilot/frontend/');vm.runInContext(fs.readFileSync(base+'panel.js','utf8'),context);vm.runInContext(fs.readFileSync(base+'plan-chart-card.js','utf8').replace(/^await import\(.*$/m,''),context);
 const Card=definitions.get('thermal-pilot-plan-chart-card'),Editor=definitions.get('thermal-pilot-plan-chart-card-editor'),now=Date.now();
 const response={entries:[{entry_id:'home',title:'Home'}],settings:{language:'en',rooms:[{id:'room',name:'Kitchen'},{id:'garage',name:'Garage',is_garage:true,garage_strategy:'temperature'}],heating_zones:[{id:'zone',name:'Zone',heating_strategy:'tariff',main_room_id:'room'}]},data:{price_chart:[{start:new Date(now-3600000).toISOString(),end:new Date(now+86400000).toISOString(),price:10}],rooms:{room:{plan:{commands:[{action:'raise',time:new Date(now+3600000).toISOString()},{action:'restore',time:new Date(now+7200000).toISOString()}]}}}},history:[{room_id:'garage',time:now/1000-600,pump_mode:'heat'},{room_id:'zone:zone',zone_id:'zone',time:now/1000-600,zone_mode:'cool',zone_basis:'activity'}]};
 response.data.zones={zone:{plan:structuredClone(response.data.rooms.room.plan)}};
@@ -31,3 +31,17 @@ response.data.zones={zone:{plan:structuredClone(response.data.rooms.room.plan)}}
  const languageEditor=new Editor();languageEditor.setConfig({language:'fi'});assert.match(languageEditor.shadowRoot.innerHTML,/data-language/);assert.match(languageEditor.shadowRoot.innerHTML,/value="fi" selected/);assert.match(languageEditor.shadowRoot.innerHTML,/value="auto"/);assert.match(languageEditor.shadowRoot.innerHTML,/value="hu"/);
  console.log('Plan dashboard card passed: shared renderer, compact content, title, timelines and plans, resizing, language, read-only refresh, cleanup and stable editor.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+// A cached unversioned panel must not register before the sidebar's current module.
+const moduleSource=fs.readFileSync(base+'plan-chart-card.js','utf8');
+const dependency=moduleSource.split('\n').find(line=>line.startsWith('await import('));
+assert.ok(dependency,'Plan card must await its panel dependency before registering');
+for(const [cardUrl,panelUrl] of [
+ ['https://ha.example/thermal_pilot/plan-chart-card.js?v=0.9.24','https://ha.example/thermal_pilot/panel.js?v=0.9.24'],
+ ['https://ha.example/thermal_pilot/plan-chart-card.js','https://ha.example/thermal_pilot/panel.js']
+]){
+ const expression=dependency.slice('await import('.length,-2).replaceAll('import.meta.url',JSON.stringify(cardUrl));
+ assert.equal(vm.runInNewContext(expression,{URL}).href,panelUrl);
+}
+assert.doesNotMatch(moduleSource,/import '\.\/panel\.js';/);
+console.log('Dashboard and sidebar share the same versioned panel dependency, preventing cached first-registration conflicts.');

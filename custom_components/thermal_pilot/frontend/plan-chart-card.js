@@ -1,5 +1,6 @@
 // Share the Plan chart renderer, localization and hover details with the panel.
-import './panel.js';
+// Use the same versioned module URL as the sidebar; custom elements register only once.
+await import(new URL(`./panel.js${new URL(import.meta.url).search}`, import.meta.url));
 (() => {
 const Panel=customElements.get('thermal-pilot-panel');
 const cardLanguages={"en": "English", "fi": "Finnish", "sv": "Svenska", "nb": "Norsk (bokmål)", "da": "Dansk", "de": "Deutsch", "pt": "Português", "es": "Español", "fr": "Français", "et": "Eesti", "lv": "Latviešu", "lt": "Lietuvių", "pl": "Polski", "it": "Italiano", "nl": "Nederlands", "is": "Íslenska", "ro": "Română", "cs": "Čeština", "sk": "Slovenčina", "bg": "Български", "sr": "Српски", "hr": "Hrvatski", "el": "Ελληνικά", "sq": "Shqip", "hu": "Magyar"};
