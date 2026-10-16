@@ -1273,11 +1273,12 @@ details{scroll-margin-block:16px}
  header.page-layout .header-status{display:none}
  .plan-layout .status-card{display:none}
  header.page-layout .tab-list{grid-column:1/-1;grid-row:2;margin-top:8px}
+ header.page-layout .tab-list button{font-size:16px}
  .compact-status{grid-column:2;grid-row:1;display:grid;grid-template-columns:minmax(250px,600px) 110px 125px minmax(235px,300px);align-items:start;gap:48px;min-width:0;padding:0;justify-self:end;align-self:center;transform:translateY(7px);width:100%}
  .compact-badges{min-width:0;margin:0;display:grid;grid-template-rows:44px auto;align-content:start}
  .compact-badges .status-badges{gap:8px;margin:0}
- .compact-status .status-pill{font-size:18px;line-height:1.2;padding:8px 12px;white-space:nowrap}
- .compact-status .status-info{width:20px;height:20px;flex-basis:20px}
+ .compact-status .status-pill{font-size:14px;line-height:1.2;padding:5px 8px;white-space:nowrap}
+ .compact-status .status-info{width:15px;height:15px;flex-basis:15px}
  .compact-metric{display:grid;grid-template-rows:44px auto;gap:0;align-content:start;min-width:0}
  .compact-label,.compact-metric>span{font-size:14px;font-weight:600;line-height:1.3;margin-bottom:12px;color:var(--secondary-text-color,#526671)}
  .compact-metric>strong{padding-top:3px;font-size:20px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums}
@@ -1297,7 +1298,7 @@ details{scroll-margin-block:16px}
 
  @media(min-width:1200px) and (max-width:1599px){
  .compact-status{grid-template-columns:minmax(280px,1fr) 110px 125px minmax(190px,220px);gap:24px;transform:translateY(4px)}
- .compact-status .status-pill{font-size:13px;padding:5px 8px}
+ .compact-status .status-pill{font-size:14px;padding:5px 8px}
  .compact-status .status-info{width:15px;height:15px;flex-basis:15px}
  .compact-badges .status-badges{gap:6px}
  .compact-status.compact-no-water{grid-template-columns:minmax(280px,1fr) 110px minmax(190px,220px)}

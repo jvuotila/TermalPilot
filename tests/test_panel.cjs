@@ -1155,7 +1155,7 @@ for(const tab of ['overview','history','rooms','settings']){
  assert.match(header,/<strong>0<small> °C/,'Zero must remain a valid reading');
  assert.match(header,/>33<small> °C/);
  assert.match(html,/@media\(min-width:1200px\) and \(max-width:1599px\)/);
- assert.match(html,/\.compact-status \.status-pill\{font-size:13px/);
+ assert.match(html,/\.compact-status \.status-pill\{font-size:14px/);
  if(tab==='overview'){
   assert.equal((html.match(/id="header-status-help-mode"/g)||[]).length,1);
   assert.equal((html.match(/id="status-help-mode"/g)||[]).length,1,'Mobile and desktop help need distinct IDs');
