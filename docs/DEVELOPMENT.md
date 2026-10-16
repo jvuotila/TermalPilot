@@ -26,3 +26,5 @@ catalog structure and [Screenshot maintenance](SCREENSHOTS.md) for capture guida
 Avoid adding implementation history to the README. Keep it focused on what the
 integration does, installation, first use and essential operating distinctions.
 Use Git history/releases for changes and the focused documents here for detail.
+
+Changes to settings, learning state or history storage must follow the [backup compatibility contract](BACKUP-COMPATIBILITY.md). Keep released backup fixtures and restore tests passing.

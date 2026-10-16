@@ -184,3 +184,8 @@ This backs up ThermalPilot's own data, including retained history rather than al
 discarded raw observations. It does not include Home Assistant's recorder, entities,
 credentials, dashboards or other integrations. Use a Home Assistant backup for those.
 The current archive format accepts ZIP files up to 256 MiB.
+
+Older backups are migrated before restore. Missing optional sensors and new controls
+stay unconfigured or disabled; required planning limits use safe defaults. Room/zone
+identifiers and links are preserved. See [backup compatibility](BACKUP-COMPATIBILITY.md)
+for the migration and regression-test policy.
