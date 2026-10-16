@@ -1142,3 +1142,27 @@ for(const width of [390,1200]){
 forecastChart.info.data.weather_forecast=[];
 assert.doesNotMatch(forecastChart.priceChart(false),/data-weather-timeline|data-weather-density/);
 console.log('Plan weather uses real timestamps on the price axis, localized details, responsive spacing and hourly scrolling; absent forecasts and History stay unchanged.');
+
+const desktopStatus=new Component();desktopStatus.settings={language:'fi',simulation_enabled:true,rooms:[],house_distribution:'water_floor',water_entity:'sensor.water'};
+desktopStatus.info={source_fields:[],room_fields:[],zone_fields:[],data:{rooms:{},outdoor:0,water:33,updated:'2026-10-16T12:00:00Z',source_status:{prices:true,outdoor:true,water:true},fallback_season:{season:'winter'},history_info:{rows:123,bytes:1048576,started_at:0},warnings:['Missing essential input.']}};
+for(const tab of ['overview','history','rooms','settings']){
+ desktopStatus.tab=tab;desktopStatus.render();const html=desktopStatus.shadowRoot.innerHTML;
+ const header=html.match(/<header[^>]*>([^]*?)<\/header>/)[1];
+ assert.match(header,/<aside class="compact-status"/);
+ assert.ok(header.indexOf('compact-status')<header.indexOf('<nav'));
+ assert.match(header,/Aktiivinen: Simulointi/);assert.match(header,/Tarkemmat tiedot/);
+ assert.match(header,/header-status-help-mode/);
+ assert.match(header,/<strong>0<small> °C/,'Zero must remain a valid reading');
+ assert.match(header,/>33<small> °C/);
+ assert.match(html,/@media\(min-width:1200px\) and \(max-width:1599px\)/);
+ assert.match(html,/\.compact-status \.status-pill\{font-size:13px/);
+ if(tab==='overview'){
+  assert.equal((html.match(/id="header-status-help-mode"/g)||[]).length,1);
+  assert.equal((html.match(/id="status-help-mode"/g)||[]).length,1,'Mobile and desktop help need distinct IDs');
+  assert.ok(html.indexOf('Missing essential input.')>html.indexOf('</dl></section>'),'Warnings must be outside the status card hidden on desktop');
+ }
+}
+desktopStatus.statusDetailsOpen=true;assert.match(desktopStatus.compactStatusView(),/id="status-details" open/);
+desktopStatus.settings.water_entity='';assert.match(desktopStatus.compactStatusView(),/compact-no-water/);assert.doesNotMatch(desktopStatus.compactStatusView(),/Lämmitysveden lämpötila/);
+desktopStatus.info.data.outdoor=null;assert.match(desktopStatus.compactStatusView(),/<strong>—<small> °C/);
+console.log('Desktop status stays outside every tab, preserves alerts and mobile cards, handles missing water, localizes details and uses separate help IDs.');

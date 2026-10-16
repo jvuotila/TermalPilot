@@ -109,6 +109,14 @@ sensors select a quieter fan mode. Fan and swing choices must be supported by th
 pump. **Leave unchanged** sends no command for that setting. Garage control
 requires Heat, Fan-only and Off support.
 
+## Status on desktop and phones
+
+On desktop, status appears above the tabs: operation/source badges, current
+outdoor and optional heating-water temperatures, and data coverage. **Details**
+contains stored-history totals, collection start and last update. It remains
+available while switching tabs. Narrower desktop windows use smaller badges;
+phones retain the full status cards on Plan. Warnings stay visible below the tabs.
+
 ## Learning and interpreting charts
 
 Initial collection needs at least 12 accepted heating hours and 12 idle hours.
