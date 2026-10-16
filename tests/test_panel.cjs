@@ -1,3 +1,4 @@
+const {readFrontendSource}=require('./frontend_source.cjs');
 /* Template tests without a browser. This does not verify visual rendering. */
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
 let Component;
@@ -7,7 +8,7 @@ class Element {
 const context={HTMLElement:Element,customElements:{get:()=>undefined,define:(name,value)=>{Component=value;}},
   structuredClone,Date,Number,String,Object,Math,JSON,Infinity,console,setInterval,clearInterval,setTimeout,clearTimeout,confirm:()=>true};
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),context);
+vm.runInContext(readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')),context);
 const panel=new Component();
 (async()=>{
  const graphPanel=new Component();graphPanel.tab='history';graphPanel.historyHours=48;graphPanel._hass={states:{}};
@@ -73,7 +74,7 @@ console.log('Room accordion tests passed (closed by default, summary learning pr
  let ToastPanel,nextTimer=0;const timers=new Map(),callbacks=[];
  const toastContext={...context,customElements:{get:()=>undefined,define:(_,value)=>ToastPanel=value},
   setTimeout:(callback,delay)=>{assert.equal(delay,5000);callbacks.push(callback);timers.set(++nextTimer,callback);return nextTimer;},clearTimeout:id=>timers.delete(id)};
- vm.createContext(toastContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),toastContext);
+ vm.createContext(toastContext);vm.runInContext(readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')),toastContext);
  const toastPanel=new ToastPanel();toastPanel._hass={states:{}};toastPanel.settings={rooms:[]};toastPanel.info={source_fields:[],room_fields:[]};toastPanel.tab='settings';
  const handlers={},form={addEventListener:(name,handler)=>handlers[name]=handler,querySelector:()=>null,querySelectorAll:()=>[]};let removed=0;
  toastPanel.shadowRoot.querySelector=selector=>selector==='#settings'?form:selector==='.save-toast'?{remove:()=>removed++}:null;
@@ -266,7 +267,7 @@ console.log('Electricity chart checks passed: thresholds, negative prices, real 
 // Size the SVG from its rendered viewport immediately and on resize.
 let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
 const sizingContext={...context,document:{createElement:()=>{const template={innerHTML:''};template.content={querySelector:()=>({html:template.innerHTML})};return template;}},customElements:{get:()=>undefined,define:(name,value)=>sizingComponent=value},ResizeObserver:class{constructor(callback){resizeCallback=callback;}observe(){}disconnect(){disconnects++;}}};
-vm.createContext(sizingContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),sizingContext);
+vm.createContext(sizingContext);vm.runInContext(readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')),sizingContext);
 const sized=new sizingComponent();sized.settings=pricePanel.settings;sized.info=pricePanel.info;sized.tab='overview';
 const viewport={clientWidth:3024,querySelector:()=>({replaceWith:svg=>replacedHTML=svg.html})};sized.shadowRoot.querySelector=()=>viewport;sized.mountPriceChartSizing();
 assert.equal(sized.priceChartWidth,3000);assert.match(replacedHTML,/viewBox="0 0 3000 596"/);resizeCallback([{contentRect:{width:1800}}]);assert.match(replacedHTML,/viewBox="0 0 1800 596"/);resizeCallback([{contentRect:{width:0}}]);assert.equal(sized.priceChartWidth,1800);sized.mountPriceChartSizing();assert.equal(disconnects,1);
@@ -673,7 +674,7 @@ console.log('All 25 language options passed: catalog coverage, SVG flags, select
 const planImage=fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/rooms-floor-plan.png'));
 assert.equal(planImage.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
 assert.equal(vm.runInContext('roomFloorPlanAsset',context),'/thermal_pilot/rooms-floor-plan.png');
-const assetDeclaration=fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8').match(/const roomFloorPlanAsset=.*?;/)[0];
+const assetDeclaration=readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')).match(/const roomFloorPlanAsset=.*?;/)[0];
 assert.equal(vm.runInNewContext(assetDeclaration+'roomFloorPlanAsset',{location:{pathname:'/preview/PREVIEW.html'}}),'./custom_components/thermal_pilot/frontend/rooms-floor-plan.png');
 console.log('Bundled floor-plan image passed: PNG asset, Home Assistant URL and local-preview URL.');
 
@@ -824,7 +825,7 @@ console.log('Rooms and zones tab passed: ordered navigation, split sections, sav
 (async()=>{
  let WarningPanel,allow=false;const prompts=[],calls=[];
  const warningContext={...context,confirm:text=>{prompts.push(text);return allow;},setTimeout:()=>1,clearTimeout:()=>{},customElements:{get:()=>undefined,define:(_,value)=>WarningPanel=value}};
- vm.createContext(warningContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),warningContext);
+ vm.createContext(warningContext);vm.runInContext(readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')),warningContext);
  const warningPanel=new WarningPanel();warningPanel.tab='rooms';warningPanel._hass={states:{}};warningPanel.settings={rooms:[],heating_zones:[],simulation_enabled:true};
  warningPanel.info={settings:structuredClone(warningPanel.settings),source_fields:[],room_fields:[],zone_fields:[]};
  const handlers={},form={addEventListener:(key,handler)=>handlers[key]=handler,querySelector:()=>null,querySelectorAll:()=>[]};
@@ -1093,3 +1094,29 @@ for(const history of [false,true]){
 }
 assert.doesNotMatch(finnishNotesPanel.priceChart(false,true),/chart-help|data-chart-notes/);
 console.log('Plan and History chart explanations are collapsed behind a localized accordion matching heat-retention help; dashboard card stays compact.');
+
+const finnishHelpPanel=new Component();finnishHelpPanel.settings={language:'fi',rooms:[]};
+finnishHelpPanel.info={data:{rooms:{r:{name:'Room',heat_retention:{drop_6h:1,hours_per_degree:4,heating_hours:0,idle_hours:16.5,updated:false}}}}};
+const finnishRetentionHelp=finnishHelpPanel.heatRetentionView();
+assert.match(finnishRetentionHelp,/Havaittua lämmitystä 0 tuntia; lepoa 16,5 tuntia\./);
+assert.match(finnishRetentionHelp,/Riittävä havaintomäärä ei yksin takaa/);
+assert.doesNotMatch(finnishRetentionHelp,/observed heating hours|idle hours|Enough observations/);
+assert.match(finnishHelpPanel.collectionQuality().detail,/Kerättyjen tietojen kattavuus/);
+assert.doesNotMatch(finnishHelpPanel.collectionQuality().detail,/Collected-data|Learning continues/);
+console.log('Dynamic model and data-coverage tooltips are fully Finnish, including localized decimal hours.');
+
+assert.match(finnishHelpPanel.overview(),/Tietojen kattavuus: Vähäinen/);
+assert.doesNotMatch(finnishHelpPanel.overview(),/Data coverage:|kattavuus: Low|Collected-data coverage/);
+for(const [hours,days,label] of [[3,1,'Rajallinen'],[12,3,'Kehittyvä'],[48,14,'Hyvä'],[120,42,'Korkea']]){
+ finnishHelpPanel.info.data.collection_evidence={rooms:1,heating_hours:hours,idle_hours:hours};
+ finnishHelpPanel.info.data.updated='2026-10-16T12:00:00Z';
+ finnishHelpPanel.info.data.history_info={started_at:Date.parse('2026-10-16T12:00:00Z')/1000-days*86400};
+ assert.ok(finnishHelpPanel.overview().includes('Tietojen kattavuus: '+label));
+}
+console.log('Every data-coverage badge level is translated as a complete Finnish phrase.');
+
+finnishHelpPanel.settings.house_distribution='water_floor';finnishHelpPanel.settings.water_entity='sensor.water';
+const finnishTemperatureCards=finnishHelpPanel.overview();
+assert.equal((finnishTemperatureCards.match(/title="Sähkön hintakaavion ajanjaksolta tallennetut lämpötilat, sovitettuna kortin leveyteen\."/g)||[]).length,2);
+assert.doesNotMatch(finnishTemperatureCards,/Recorded temperatures within the electricity price chart period/);
+console.log('Outdoor and heating-water temperature tooltips use the complete Finnish catalog message directly.');

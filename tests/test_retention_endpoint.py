@@ -58,6 +58,8 @@ class CardRegistrationTests(unittest.IsolatedAsyncioTestCase):
         await namespace['async_setup_entry'](hass,None)
         self.assertEqual([event[0] for event in events],['paths','module','module'])
         self.assertIn('/thermal_pilot/heat-retention-card.js',[path[0] for path in events[0][1]])
+        self.assertIn('/thermal_pilot/localization.js',[path[0] for path in events[0][1]])
+        self.assertIn('/thermal_pilot/languages',[path[0] for path in events[0][1]])
         self.assertEqual(events[1][1],'/thermal_pilot/heat-retention-card.js?v=test-version')
 
         self.assertEqual(events[2][1],'/thermal_pilot/plan-chart-card.js?v=test-version')

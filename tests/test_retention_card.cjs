@@ -1,3 +1,4 @@
+const {readFrontendSource}=require('./frontend_source.cjs');
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=require('path');
 const definitions=new Map(),timers=new Map();let nextTimer=0;
 class Element{
@@ -5,7 +6,7 @@ class Element{
  dispatchEvent(event){this.event=event;}
 }
 const context={HTMLElement:Element,customElements:{get:key=>definitions.get(key),define:(key,value)=>definitions.set(key,value)},setInterval:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearInterval:id=>timers.delete(id),CustomEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},console};
-vm.createContext(context);const src=fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/heat-retention-card.js'),'utf8');vm.runInContext(src,context);
+vm.createContext(context);const src=readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/heat-retention-card.js'));vm.runInContext(src,context);
 const Card=definitions.get('thermal-pilot-heat-retention-card'),Editor=definitions.get('thermal-pilot-heat-retention-card-editor');
 const room=(id,hours,updated=true,is_garage=false)=>({id,name:id,is_garage,heat_retention:{drop_6h:6/hours,hours_per_degree:hours,updated}});
 const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room('Garage',12,true,true),room('Fast',.5),room('Slow',9),room('Learning',4,false)]};
@@ -52,7 +53,7 @@ const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room(
  const languageEditor=new Editor();languageEditor.setConfig({language:'fi'});assert.match(languageEditor.shadowRoot.innerHTML,/data-language/);assert.match(languageEditor.shadowRoot.innerHTML,/value="fi" selected/);
  assert.match(languageEditor.shadowRoot.innerHTML,/value="auto"/);assert.match(languageEditor.shadowRoot.innerHTML,/value="hu"/);
  // Card badges use exactly the panel's bands, including typed construction references.
- const panelContext={HTMLElement:class{},customElements:{get:()=>true},location:{pathname:''}};vm.createContext(panelContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),panelContext);
+ const panelContext={HTMLElement:class{},customElements:{get:()=>true},location:{pathname:''}};vm.createContext(panelContext);vm.runInContext(readFrontendSource(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js')),panelContext);
  for(const reference of [null,2.12])for(const hours of [.5,1,2,4,8,12])for(const updated of [true,false]){
   const value={hours_per_degree:hours,reference_hours:reference,updated};const expected=vm.runInContext('retentionRating('+JSON.stringify(value)+').level',panelContext);
   const html=card.cell('cooling_speed',{heat_retention:value},1);assert.match(html,/<svg class="status-info"/);assert.match(html,/tabindex="0"/);assert.match(html,new RegExp('rating '+expected+'"'));

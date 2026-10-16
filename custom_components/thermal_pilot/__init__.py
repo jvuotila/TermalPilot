@@ -18,7 +18,9 @@ async def async_setup_entry(hass, entry):
     domain = hass.data.setdefault(DOMAIN, {})
     if not domain.get('_registered'):
         await hass.http.async_register_static_paths([StaticPathConfig(
-            '/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False),
+            '/thermal_pilot/localization.js', str(Path(__file__).parent/'frontend'/'localization.js'), False),
+            StaticPathConfig('/thermal_pilot/languages',str(Path(__file__).parent/'frontend'/'languages'), False),
+            StaticPathConfig('/thermal_pilot/panel.js', str(Path(__file__).parent/'frontend'/'panel.js'), False),
             StaticPathConfig('/thermal_pilot/plan-chart-card.js',
                 str(Path(__file__).parent/'frontend'/'plan-chart-card.js'), False),
             StaticPathConfig('/thermal_pilot/heat-retention-card.js',

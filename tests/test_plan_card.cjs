@@ -1,8 +1,9 @@
+const {readFrontendSource}=require('./frontend_source.cjs');
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=require('path');
 const definitions=new Map(),timers=new Set();let timer=0;
 class Element{attachShadow(){this.shadowRoot={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};}dispatchEvent(event){this.event=event;}}
 const context={HTMLElement:Element,customElements:{get:name=>definitions.get(name),define:(name,value)=>definitions.set(name,value)},setInterval:()=>{timers.add(++timer);return timer;},clearInterval:id=>timers.delete(id),console,CustomEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},Date,structuredClone};vm.createContext(context);
-const base=path.join(__dirname,'../custom_components/thermal_pilot/frontend/');vm.runInContext(fs.readFileSync(base+'panel.js','utf8'),context);vm.runInContext(fs.readFileSync(base+'plan-chart-card.js','utf8').replace(/^await import\(.*$/m,''),context);
+const base=path.join(__dirname,'../custom_components/thermal_pilot/frontend/');vm.runInContext(readFrontendSource(base+'panel.js'),context);vm.runInContext(readFrontendSource(base+'plan-chart-card.js').replace(/^await import\(.*$/m,''),context);
 const Card=definitions.get('thermal-pilot-plan-chart-card'),Editor=definitions.get('thermal-pilot-plan-chart-card-editor'),now=Date.now();
 const response={entries:[{entry_id:'home',title:'Home'}],settings:{language:'en',rooms:[{id:'room',name:'Kitchen'},{id:'garage',name:'Garage',is_garage:true,garage_strategy:'temperature'}],heating_zones:[{id:'zone',name:'Zone',heating_strategy:'tariff',main_room_id:'room'}]},data:{price_chart:[{start:new Date(now-3600000).toISOString(),end:new Date(now+86400000).toISOString(),price:10}],rooms:{room:{plan:{commands:[{action:'raise',time:new Date(now+3600000).toISOString()},{action:'restore',time:new Date(now+7200000).toISOString()}]}}}},history:[{room_id:'garage',time:now/1000-600,pump_mode:'heat'},{room_id:'zone:zone',zone_id:'zone',time:now/1000-600,zone_mode:'cool',zone_basis:'activity'}]};
 response.data.zones={zone:{plan:structuredClone(response.data.rooms.room.plan)}};
