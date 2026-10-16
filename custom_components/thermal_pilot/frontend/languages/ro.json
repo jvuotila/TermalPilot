@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Fiecare oră (derulare)",
     "Show weather forecast": "Arată prognoza meteo",
     "Show electricity prices": "Arată prețurile electricității",
-    "Details": "Detalii"
+    "Details": "Detalii",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Roșul închis indică încălzirea propusă; roșul indică necesarul de căldură observat; albastrul indică răcirea."
   },
   "legacy": {},
   "cardMessages": {

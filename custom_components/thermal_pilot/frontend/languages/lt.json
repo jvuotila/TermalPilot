@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Kiekviena valanda (slinkti)",
     "Show weather forecast": "Rodyti orų prognozę",
     "Show electricity prices": "Rodyti elektros kainas",
-    "Details": "Išsamiau"
+    "Details": "Išsamiau",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tamsiai raudona žymi siūlomą šildymą; raudona — stebėtą šilumos poreikį; mėlyna — vėsinimą."
   },
   "legacy": {},
   "cardMessages": {

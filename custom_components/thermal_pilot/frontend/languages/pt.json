@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Todas as horas (deslocar)",
     "Show weather forecast": "Mostrar previsão do tempo",
     "Show electricity prices": "Mostrar preços da eletricidade",
-    "Details": "Detalhes"
+    "Details": "Detalhes",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Vermelho escuro indica aquecimento sugerido; vermelho indica procura de calor observada; azul indica arrefecimento."
   },
   "legacy": {},
   "cardMessages": {

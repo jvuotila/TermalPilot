@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Ogni ora (scorri)",
     "Show weather forecast": "Mostra previsioni meteo",
     "Show electricity prices": "Mostra prezzi dell’elettricità",
-    "Details": "Dettagli"
+    "Details": "Dettagli",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Il rosso scuro indica il riscaldamento suggerito; il rosso la richiesta di calore osservata; il blu il raffrescamento."
   },
   "legacy": {},
   "cardMessages": {

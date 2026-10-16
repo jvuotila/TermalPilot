@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Svaki sat (pomicanje)",
     "Show weather forecast": "Prikaži vremensku prognozu",
     "Show electricity prices": "Prikaži cijene struje",
-    "Details": "Pojedinosti"
+    "Details": "Pojedinosti",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tamnocrvena označava predloženo grijanje; crvena opaženu potrebu za toplinom; plava hlađenje."
   },
   "legacy": {},
   "cardMessages": {

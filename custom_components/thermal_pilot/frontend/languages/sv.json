@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Varje timme (rulla)",
     "Show weather forecast": "Visa väderprognos",
     "Show electricity prices": "Visa elpriser",
-    "Details": "Detaljer"
+    "Details": "Detaljer",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Mörkrött visar föreslagen uppvärmning; rött visar observerat värmebehov; blått visar kylning."
   },
   "legacy": {},
   "cardMessages": {

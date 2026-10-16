@@ -257,12 +257,12 @@ for(const field of [...previewInfo.source_fields,...previewInfo.room_fields])ass
 assert.match(previewSettings,/Target temperature \(°C\)/);
 const planHTML=previewPanel.overview();assert.match(planHTML,/Thermostat timing/);assert.match(planHTML,/Change target at/);
 console.log('Version 0.9.21 preview tests passed (offset controls, simplified rooms, Celsius labels, timing table).');
-for(const [value,color] of [[-5,'#40ff00'],[0,'#40ff00'],[14.99,'#40ff00'],[15,'#ccff66'],[20,'#ffff00'],[25,'#ffcc00'],[35,'#ff9933'],[50,'#ff0000'],[60,'#cc0000'],[90,'#cc0000']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
+for(const [value,color] of [[-5,'#88ad91'],[0,'#88ad91'],[14.99,'#88ad91'],[15,'#a8b782'],[20,'#c3b577'],[25,'#c7a46e'],[35,'#cc936c'],[50,'#c9796b'],[60,'#ac605c'],[90,'#ac605c']])assert.equal(vm.runInContext(`priceColor(${value})`,context),color);
 const pricePanel=new Component();pricePanel.settings={rooms:Array.from({length:10},(_,i)=>({id:'r'+i,name:'Room '+i}))};pricePanel.clientWidth=3300;pricePanel.historyHours=48;
 const priceTime=Date.now()-300000;
 pricePanel.info={data:{price_chart:[{start:new Date(priceTime).toISOString(),end:new Date(priceTime+900000).toISOString(),price:-5}],rooms:{r0:{plan:{commands:[{time:new Date(priceTime).toISOString(),action:'raise'},{time:new Date(priceTime+600000).toISOString(),action:'lower'}]}}}}};
 let priceHTML=pricePanel.priceChart();assert.match(priceHTML,/height:596px/);assert.match(priceHTML,/id="price-accordion" open/);assert.match(priceHTML,/Suggested heating On/);assert.doesNotMatch(priceHTML,/NaN/);pricePanel.clientWidth=1200;assert.match(pricePanel.priceChart(),/height:596px/);
-pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:776px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#cc0000/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
+pricePanel.history=[{room_id:'r0',time:priceTime/1000,price:60,suggested_heat:1,activity:1}];priceHTML=pricePanel.priceChart(true);assert.match(priceHTML,/height:776px/);assert.match(priceHTML,/Actual relay On/);assert.match(priceHTML,/#ac605c/);pricePanel.history=[{room_id:'r0',time:priceTime/1000}];assert.match(pricePanel.priceChart(true),/Total electricity price/);const savedPublished=pricePanel.info.data.price_chart;pricePanel.info.data.price_chart=[];assert.match(pricePanel.priceChart(true),/No electricity prices are available for this period/);pricePanel.info.data.price_chart=savedPublished;
 console.log('Electricity chart checks passed: thresholds, negative prices, real windows, missing history, ten rooms, fixed height.');
 // Size the SVG from its rendered viewport immediately and on resize.
 let sizingComponent,resizeCallback,replacedHTML,disconnects=0;
@@ -496,8 +496,8 @@ detailsPanel.statusHistory=detailsPanel.history;
 const planWithActual=detailsPanel.priceChart(false);
 assert.match(planWithActual,/data-chart-detail="Study · Actual relay On/);
 assert.match(planWithActual,/Observed duration: 10 min/);
-assert.match(planWithActual,/fill="#e49025"/);
-assert.match(planWithActual,/Actual thermostat relay/);
+assert.match(planWithActual,/fill="#EC7063"/);
+assert.match(planWithActual,/data-heating-legend/);
 assert.match(planWithActual,/Suggested heating On/);
 detailsPanel.statusHistory=[{room_id:'detail',time:periodNow/1000+3600,activity:1}];
 assert.doesNotMatch(detailsPanel.priceChart(false),/data-chart-detail="Study · Actual relay On/);
@@ -848,7 +848,7 @@ for(const zone of zoneChartPanel.settings.heating_zones)for(const [minutes,mode]
 zoneChartPanel.statusHistory=zoneChartPanel.history;
 const zoneHistorySVG=zoneChartPanel.priceChart(true),zonePlanSVG=zoneChartPanel.priceChart(false);
 assert.ok(zoneHistorySVG.indexOf('data-zone-timeline="z-first"')<zoneHistorySVG.indexOf('data-zone-timeline="z-cool"'));assert.ok(zoneHistorySVG.indexOf('data-zone-timeline="z-cool"')<zoneHistorySVG.indexOf('data-zone-timeline="z-last"'));
-assert.match(zoneHistorySVG,/fill="#f7ead8"/);assert.match(zoneHistorySVG,/data-zone-period="heat"/);assert.match(zoneHistorySVG,/data-zone-period="cool"/);assert.doesNotMatch(zoneHistorySVG,/data-zone-period="plan"/);
+assert.match(zoneHistorySVG,/fill="#f5f0e8"/);assert.match(zoneHistorySVG,/data-zone-period="heat"/);assert.match(zoneHistorySVG,/data-zone-period="cool"/);assert.doesNotMatch(zoneHistorySVG,/data-zone-period="plan"/);
 const zoneGroup=(html,id)=>html.match(new RegExp('<g data-zone-timeline="'+id+'">[\\s\\S]*?<\\/g>'))[0];
 assert.doesNotMatch(zoneGroup(zonePlanSVG,'z-first'),/data-zone-period="plan"/);assert.doesNotMatch(zoneGroup(zonePlanSVG,'z-cool'),/data-zone-period="plan"/);assert.match(zoneGroup(zonePlanSVG,'z-last'),/data-zone-period="plan"/);
 assert.doesNotMatch(zoneGroup(zoneHistorySVG,'z-first'),/>Off<|mode Off|data-zone-period="off"/);
@@ -865,7 +865,7 @@ console.log('Chart section headings and shared heating/cooling zone lane passed.
 const unifiedZone=zoneGroup(zoneChartPanel.priceChart(false),'z-last');
 const unifiedHeatY=unifiedZone.match(/data-zone-period="heat"[^>]* y="([^"]+)"/)[1],unifiedPlanY=unifiedZone.match(/data-zone-period="plan"[^>]* y="([^"]+)"/)[1];
 assert.equal(unifiedHeatY,unifiedPlanY);
-assert.match(unifiedZone,/data-zone-period="plan"[^>]*fill="#087c85"/);
+assert.match(unifiedZone,/data-zone-period="plan"[^>]*fill="url\(#suggested-heating-stripes\)"/);
 console.log('Recorded heating, cooling and future plans share one zone timeline with distinct colors.');
 const coolingRating=vm.runInContext('retentionRating',context);
 for(const [hours,expected]of [[.5,'very-fast'],[1,'fast'],[1.99,'fast'],[2,'moderate'],[3.99,'moderate'],[4,'slow'],[7.99,'slow'],[8,'very-slow'],[20,'very-slow']])assert.equal(coolingRating({updated:true,hours_per_degree:hours}).level,expected);
@@ -889,7 +889,7 @@ garageChartPanel.info={data:{price_chart:zoneChartPanel.info.data.price_chart,ro
 for(const history of [true,false]){
  const html=garageChartPanel.priceChart(history);
  assert.match(html,/font-size:18px;font-weight:600">Garages<\/text>/);
- assert.match(html,/fill="#e2d7cb"/);assert.match(html,/fill="#d7c9ba"/);
+ assert.match(html,/fill="#eee8e1"/);assert.match(html,/fill="#e9e1d8"/);
  const names=[...html.matchAll(/data-user-text title="([^"]+)"/g)].map(match=>match[1]);assert.deepEqual(names,['House room','A garage','Z garage']);
 }
 garageChartPanel.settings.rooms=garageChartPanel.settings.rooms.filter(room=>room.is_garage);
@@ -963,7 +963,7 @@ console.log('Compact Plan cards preserve temperatures, commands and forecast cha
 const finnishNotesPanel=new Component();finnishNotesPanel.settings={...structuredClone(zoneChartPanel.settings),language:'fi'};finnishNotesPanel.info=structuredClone(zoneChartPanel.info);finnishNotesPanel.history=zoneChartPanel.history;finnishNotesPanel.statusHistory=zoneChartPanel.statusHistory;
 for(const history of [true,false]){
  const notes=finnishNotesPanel.priceChart(history).match(/<small data-chart-notes[^>]*>([\s\S]*?)<\/small>/)[1];
- assert.match(notes,/Kaikkien huoneiden aikajanat/);assert.match(notes,/Vyöhykkeiden riveillä/);assert.match(notes,/Turkoosi näyttää/);assert.match(notes,/Ajat kohdistetaan/);
+ assert.match(notes,/Kaikkien huoneiden aikajanat/);assert.match(notes,/Vyöhykkeiden riveillä/);assert.match(notes,/Ajat kohdistetaan/);
  assert.doesNotMatch(notes,/All room|Zone rows|Teal shows|Recorded activity|Times align|Hover/);
  if(history)assert.match(notes,/Valittu ajanjakso/);
 }
@@ -1166,3 +1166,32 @@ desktopStatus.statusDetailsOpen=true;assert.match(desktopStatus.compactStatusVie
 desktopStatus.settings.water_entity='';assert.match(desktopStatus.compactStatusView(),/compact-no-water/);assert.doesNotMatch(desktopStatus.compactStatusView(),/Lämmitysveden lämpötila/);
 desktopStatus.info.data.outdoor=null;assert.match(desktopStatus.compactStatusView(),/<strong>—<small> °C/);
 console.log('Desktop status stays outside every tab, preserves alerts and mobile cards, handles missing water, localizes details and uses separate help IDs.');
+
+for(const history of [false,true]){
+ const chart=finnishNotesPanel.priceChart(history);
+ assert.equal((chart.match(/data-heating-legend/g)||[]).length,1);
+ assert.match(chart,/data-heating-legend><b style="color:#EC7063">■<\/b> Lämmitys<\/span>/);
+ assert.doesNotMatch(chart,/Actual thermostat relay|Termostaatin todellinen reletila/);
+ const legend=chart.match(/<div style="display:flex;flex-wrap:wrap;gap:18px[^]*?<\/div>/)[0];
+ assert.doesNotMatch(legend,/Recorded heating|Tallennettu lämmitys/);
+}
+console.log('Plan and History use one orange Heating legend entry for thermostat and pump activity.');
+
+const shortCoolingLegend=finnishNotesPanel.priceChart(false);
+assert.match(shortCoolingLegend,/data-cooling-legend><b style="color:#3498DB">■<\/b> Jäähdytys<\/span>/);
+console.log('Cooling legend uses the short localized label.');
+
+for(const history of [false,true]){
+ const legendHTML=finnishNotesPanel.priceChart(history).match(/<div style="display:flex;flex-wrap:wrap;gap:18px[^]*?<\/div>/)[0];
+ assert.ok(legendHTML.indexOf('data-heating-legend')<legendHTML.indexOf('data-cooling-legend'));
+ assert.ok(legendHTML.indexOf('data-cooling-legend')<legendHTML.indexOf('Suggested heating window'));
+ assert.match(legendHTML,/data-heating-legend><b style="color:#EC7063"/);
+ assert.match(legendHTML,/data-cooling-legend><b style="color:#3498DB"/);
+ assert.match(legendHTML,/data-suggested-heating-legend/);
+    assert.match(legendHTML,/repeating-linear-gradient/);
+}
+console.log('Heating is red, suggestions dark red and last in the legend; cooling remains blue.');
+
+// Suggestions retain a non-color distinction in the calmer shared chart.
+assert.match(finnishNotesPanel.priceChart(false), /<pattern id="suggested-heating-stripes"/);
+assert.match(finnishNotesPanel.priceChart(false), /fill="url\(#suggested-heating-stripes\)"/);

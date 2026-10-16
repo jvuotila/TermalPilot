@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Elk uur (scrollen)",
     "Show weather forecast": "Weersverwachting tonen",
     "Show electricity prices": "Elektriciteitsprijzen tonen",
-    "Details": "Details"
+    "Details": "Details",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Donkerrood toont voorgestelde verwarming; rood toont waargenomen warmtevraag; blauw toont koeling."
   },
   "legacy": {},
   "cardMessages": {

@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Každá hodina (posouvat)",
     "Show weather forecast": "Zobrazit předpověď počasí",
     "Show electricity prices": "Zobrazit ceny elektřiny",
-    "Details": "Podrobnosti"
+    "Details": "Podrobnosti",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tmavě červená označuje navržené vytápění; červená pozorovaný požadavek na teplo; modrá chlazení."
   },
   "legacy": {},
   "cardMessages": {

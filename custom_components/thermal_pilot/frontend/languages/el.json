@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Κάθε ώρα (κύλιση)",
     "Show weather forecast": "Εμφάνιση πρόγνωσης καιρού",
     "Show electricity prices": "Εμφάνιση τιμών ρεύματος",
-    "Details": "Λεπτομέρειες"
+    "Details": "Λεπτομέρειες",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Το σκούρο κόκκινο δείχνει την προτεινόμενη θέρμανση· το κόκκινο την παρατηρούμενη ζήτηση θέρμανσης· το μπλε την ψύξη."
   },
   "legacy": {},
   "cardMessages": {

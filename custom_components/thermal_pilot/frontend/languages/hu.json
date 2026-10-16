@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Minden óra (görgetés)",
     "Show weather forecast": "Időjárás-előrejelzés megjelenítése",
     "Show electricity prices": "Áramárak megjelenítése",
-    "Details": "Részletek"
+    "Details": "Részletek",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "A sötétvörös a javasolt fűtést, a piros a megfigyelt hőigényt, a kék a hűtést jelzi."
   },
   "legacy": {},
   "cardMessages": {

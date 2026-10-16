@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Katra stunda (ritināt)",
     "Show weather forecast": "Rādīt laika prognozi",
     "Show electricity prices": "Rādīt elektrības cenas",
-    "Details": "Detaļas"
+    "Details": "Detaļas",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tumši sarkans apzīmē ieteikto apkuri; sarkans — novēroto siltuma pieprasījumu; zils — dzesēšanu."
   },
   "legacy": {},
   "cardMessages": {

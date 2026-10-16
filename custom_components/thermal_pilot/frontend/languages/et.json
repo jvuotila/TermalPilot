@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Iga tund (keri)",
     "Show weather forecast": "Näita ilmaprognoosi",
     "Show electricity prices": "Näita elektrihindu",
-    "Details": "Üksikasjad"
+    "Details": "Üksikasjad",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tumepunane näitab soovitatud kütmist; punane näitab täheldatud küttevajadust; sinine näitab jahutust."
   },
   "legacy": {},
   "cardMessages": {

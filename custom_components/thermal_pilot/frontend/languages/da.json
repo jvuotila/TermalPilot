@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Hver time (rul)",
     "Show weather forecast": "Vis vejrudsigt",
     "Show electricity prices": "Vis elpriser",
-    "Details": "Detaljer"
+    "Details": "Detaljer",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Mørkerød viser foreslået opvarmning; rød viser observeret varmebehov; blå viser køling."
   },
   "legacy": {},
   "cardMessages": {

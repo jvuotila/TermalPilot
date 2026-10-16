@@ -420,7 +420,8 @@
     "Every hour (scroll)": "Всеки час (превъртане)",
     "Show weather forecast": "Показване на прогнозата",
     "Show electricity prices": "Показване на цените на тока",
-    "Details": "Подробности"
+    "Details": "Подробности",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Тъмночервено показва предложеното отопление; червено — наблюдаваната нужда от топлина; синьо — охлаждането."
   },
   "legacy": {},
   "cardMessages": {

@@ -264,7 +264,8 @@
     "Snow and rain": "Räntää",
     "Windy": "Tuulista",
     "Windy and cloudy": "Tuulista ja pilvistä",
-    "Details": "Tarkemmat tiedot"
+    "Details": "Tarkemmat tiedot",
+    "Dark red shows suggested heating; red shows observed heating demand; blue shows cooling.": "Tummanpunainen näyttää suunnitellun lämmityksen, punainen havaitun lämmityspyynnön ja sininen jäähdytyksen."
   },
   "legacy": {
     "Plan": "Suunnitelma",
