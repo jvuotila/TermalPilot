@@ -12,7 +12,7 @@ Independent electric garage rooms and air-to-air zones can still use their own
 controllers alongside those house systems. Garage temperature-only cycling also
 works without an electricity-price sensor.
 
-Version **0.9.21 — experimental simulation-first Home Assistant custom integration**.
+Version **0.9.22 — experimental simulation-first Home Assistant custom integration**.
 
 
 ## Screenshots
@@ -798,6 +798,18 @@ Returning from live control to simulation first releases the pump to standby.
 
 For a pump heating several ordinary rooms, create a **Heating zone**, select its
 pump, and use **Add room** inside the zone to select configured rooms.
+Zones are secondary heat/cooling sources. Adding a room to a zone preserves its
+primary thermostat, relay, water-floor heating plan and room learning. The zone
+pump has a separate controller and plan; a cooling-only zone does not disable
+winter floor heating. An off pump in seasonal cooling standby stays off.
+Configure each room's own primary thermostat even when it belongs to a zone.
+Adding or removing zone membership does not reset the primary room model.
+While a secondary source is actively heating or cooling, affected samples are
+excluded from primary heating-model fitting to avoid attributing its effect to
+the floor-heating system. Existing retained room models are preserved when
+migrating from the former zone-override behavior; previously discarded learning
+cannot be reconstructed automatically.
+
 New zones start with **Control zone heat pump** switched off: the pump is
 observed without being controlled. Switch it on and enable global live control
 to allow commands. Switching it off releases a previously controlled pump to

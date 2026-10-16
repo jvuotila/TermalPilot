@@ -138,11 +138,16 @@ async def ws_plan_chart(hass, connection, msg):
         if plan:=room.get('plan'):
             chart_rooms[room_id]['plan']={'commands':[subset(command,('time','action')) for command in plan.get('commands',[])],
                 'slots':[{'end':plan['slots'][-1]['end']}] if plan.get('slots') else []}
+    chart_zones={}
+    for zone_id,zone in data.get('zones',{}).items():
+        plan=zone.get('plan')
+        chart_zones[zone_id]={'plan':{'commands':[subset(command,('time','action')) for command in plan.get('commands',[])],
+            'slots':[{'end':plan['slots'][-1]['end']}] if plan.get('slots') else []} if plan else None}
     connection.send_result(msg['id'],{'entry_id':entry_id,'entries':entries,
         'settings':{'language':settings.get('language','en'),'house_heat_source':settings.get('house_heat_source'),
                     'rooms':[subset(room,room_keys) for room in settings.get('rooms',[])],
                     'heating_zones':[subset(zone,zone_keys) for zone in settings.get('heating_zones',[])]},
-        'data':{'rooms':chart_rooms,'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
+        'data':{'rooms':chart_rooms,'zones':chart_zones,'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
         'history':[subset(row,('room_id','time','activity','suggested_heat','pump_mode','pump_basis','pump_entity',
                                'zone_id','zone_mode','zone_basis','zone_entity')) for row in rows]})
 

@@ -721,7 +721,8 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.hass.states['sensor.garage'].state='18'
         self.c.settings.update(rooms=[main,member],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
         data=await self.c._async_update_data()
-        self.assertTrue(data['rooms'][member['id']]['zone_monitor'])
+        self.assertFalse(data['rooms'][member['id']].get('air_control'))
+        self.assertIn('zone',data['zones'])
         writes=[call for call in self.hass.services.async_call.call_args_list if call.args[0]=='climate']
         self.assertEqual(len(writes),1);self.assertEqual(writes[0].args[2]['entity_id'],'climate.garage')
     async def test_release_retries_until_fan_only_is_reported(self):
@@ -766,13 +767,14 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.c.settings.update(rooms=[main],heating_zones=[zone],simulation_enabled=False,live_control_confirmed=True)
         with patch('thermal_pilot.coordinator.fallback_season',return_value={'summer':True,'days':{}}):
             data=await self.c._async_update_data()
-            self.assertIsNone(data['rooms'][main['id']]['plan'])
+            self.assertIsNone(data['zones']['zone']['plan'])
+            self.assertIsNotNone(data['rooms'][main['id']]['plan'])
             self.assertEqual(self.hass.services.async_call.call_args.args[2]['hvac_mode'],'cool')
             self.hass.states['climate.garage'].state='cool'
             await self.c._async_update_data()
             self.assertTrue(self.c.previous[main['id']]['excluded'])
 
-    async def test_cooling_zone_keeps_learned_loss_but_not_old_heating_fit(self):
+    async def test_cooling_zone_keeps_primary_heating_model_unchanged(self):
         from thermal_pilot.const import ZONE_DEFAULTS
         from thermal_pilot.model import heat_retention
         self.c.settings.update(rooms=[self.floor])
@@ -787,8 +789,8 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after['drop_6h'],before['drop_6h'])
         self.assertEqual(after['hours_per_degree'],before['hours_per_degree'])
         self.assertTrue(after['updated'])
-        self.assertEqual(self.c.models[rid]['xx'],0)
-        self.assertEqual(self.c.models[rid]['heated_hours'],0)
+        self.assertEqual(self.c.models[rid]['xx'],100)
+        self.assertEqual(self.c.models[rid]['heated_hours'],30)
         # A different room temperature sensor still requires a fresh model.
         self.hass.states['sensor.new_room']=State('20')
         self.floor['temperature_entity']='sensor.new_room'
@@ -806,7 +808,7 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.c.learning_changes(proposed),[])
         proposed['rooms'][0]['heating_zone_id']='summer'
         proposed['heating_zones']=[{**ZONE_DEFAULTS,'id':'summer','name':'Summer','thermostat':'climate.garage','main_room_id':rid,'climate_mode':'cool'}]
-        self.assertEqual(self.c.learning_changes(proposed),[{'room_id':rid,'name':'Renamed','scope':'heating_response'}])
+        self.assertEqual(self.c.learning_changes(proposed),[])
         proposed['rooms'][0]['temperature_entity']='sensor.changed'
         self.assertEqual(self.c.learning_changes(proposed)[0]['scope'],'full')
         self.assertEqual(self.c.models,original)
@@ -882,3 +884,64 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
             garage={**self.garage,'garage_construction':kind,'house_construction':'heavy_masonry_apartment'}
             self.assertIsNone(cooling_reference(garage))
             self.assertEqual(heat_retention(initial_model(garage))['hours_per_degree'],4)
+
+    async def test_cooling_only_secondary_zone_preserves_live_winter_floor_heating(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        from thermal_pilot.config import resolved_rooms, learning_fingerprint
+        rid=self.floor['id']
+        await self.c._async_update_data()
+        fingerprint=learning_fingerprint(self.floor,self.c.settings)
+        model=self.c.models[rid];model.update(loss=.008,samples=100,heated_hours=20,idle_hours=30,parameter_updates=4)
+        self.floor['heating_zone_id']='summer'
+        self.c.settings.update(rooms=[self.floor],heating_zones=[{**ZONE_DEFAULTS,'id':'summer','name':'Summer cooling','thermostat':'climate.garage','main_room_id':rid,'climate_mode':'cool','heating_enabled':True}],simulation_enabled=False,live_control_confirmed=True)
+        self.hass.states['climate.garage'].state='off'
+        self.hass.states['sensor.room'].state='18'
+        self.hass.states['climate.room'].attributes['temperature']=18
+        result=await self.c._async_update_data()
+        self.assertEqual(resolved_rooms(self.c.settings)[0]['thermostat'],'climate.room')
+        self.assertEqual(self.c.config_fingerprint[rid],fingerprint)
+        self.assertIs(self.c.models[rid],model)
+        self.assertEqual(model['samples'],100)
+        self.assertFalse(result['rooms'][rid]['air_control'])
+        self.assertIsNotNone(result['rooms'][rid]['plan'])
+        self.assertNotIn('pump_suggestion',result['rooms'][rid])
+        self.assertIsNone(result['zones']['summer']['plan'])
+        self.assertEqual(result['zones']['summer']['pump_suggestion']['mode'],'off')
+        writes=[call.args[2] for call in self.hass.services.async_call.call_args_list]
+        self.assertTrue(any(write['entity_id']=='climate.room' and write.get('temperature',0)>18 for write in writes))
+        self.assertFalse(any(write['entity_id']=='climate.garage' and write.get('hvac_mode')!='off' for write in writes))
+        self.assertIsNotNone(self.c.previous[rid]['water'])
+        self.assertEqual(self.c.previous['zone:summer']['water_factor'],1)
+
+    async def test_secondary_tariff_zone_has_own_plan_model_and_sensor_aggregation(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        rid=self.floor['id'];self.floor['heating_zone_id']='secondary'
+        other={**self.floor,'id':'33333333-3333-4333-8333-333333333333','name':'Other','thermostat':'climate.other','temperature_entity':'sensor.other'}
+        self.hass.states['climate.other']=State('heat',{'temperature':20,'hvac_action':'idle','min_temp':5,'max_temp':35})
+        self.hass.states['sensor.other']=State('18')
+        self.c.settings.update(rooms=[self.floor,other],heating_zones=[{**ZONE_DEFAULTS,'id':'secondary','name':'Secondary','thermostat':'climate.garage','main_room_id':rid,'temperature_policy':'average','heating_strategy':'tariff'}])
+        result=await self.c._async_update_data()
+        self.assertEqual(result['zones']['secondary']['temperature'],19)
+        self.assertTrue(result['zones']['secondary']['plan']['air_control'])
+        self.assertFalse(result['rooms'][rid]['air_control'])
+        self.assertIsNot(result['zones']['secondary']['plan'],result['rooms'][rid]['plan'])
+        self.assertIn('zone:secondary',self.c.models)
+        self.assertNotIn('zone:secondary',result['rooms'])
+        self.assertFalse(any(row['room_id'].startswith('zone:') and not row.get('zone_id') for row in self.c.history_db.read(now.timestamp()-300)))
+
+    async def test_legacy_zone_override_migrates_without_discarding_retained_model(self):
+        from thermal_pilot.const import ZONE_DEFAULTS
+        from thermal_pilot.config import learning_fingerprint
+        rid=self.floor['id'];self.floor['heating_zone_id']='summer'
+        self.c.settings['rooms']=[self.floor]
+        self.c.settings['heating_zones']=[{**ZONE_DEFAULTS,'id':'summer','thermostat':'climate.garage','main_room_id':rid,'climate_mode':'cool'}]
+        old_room={**self.floor,'thermostat':'climate.garage','heat_control':'air_to_air','secondary_zone':True}
+        self.c.config_fingerprint[rid]=learning_fingerprint(old_room,self.c.settings)
+        from thermal_pilot.model import initial_model
+        retained=initial_model(self.floor);retained.update(loss=.008,samples=120,heated_hours=20,idle_hours=30,parameter_updates=5)
+        self.c.models[rid]=retained
+        await self.c._async_update_data()
+        self.assertIs(self.c.models[rid],retained)
+        self.assertEqual(retained['loss'],.008)
+        self.assertEqual(retained['samples'],120)
+        self.assertEqual(self.c.config_fingerprint[rid][0],'climate.room')

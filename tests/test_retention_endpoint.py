@@ -70,6 +70,7 @@ class PlanChartEndpointTests(unittest.IsolatedAsyncioTestCase):
         handler.decorator_list=[];namespace={'PilotCoordinator':Coordinator,'DOMAIN':'thermal_pilot','dt_util':types.SimpleNamespace(utcnow=lambda:datetime(2026,10,15,tzinfo=timezone.utc))}
         exec(compile(ast.Module(body=[handler],type_ignores=[]),str(SOURCE),'exec'),namespace);self.handler=namespace['ws_plan_chart'];self.connection=Connection();self.coordinator=Coordinator()
         self.coordinator.settings.update(house_heat_source='air_to_water',heating_zones=[{'id':'zone','name':'Zone','thermostat':'climate.secret','heating_strategy':'tariff'}])
+        self.coordinator.data['zones']={'zone':{'plan':{'commands':[{'time':'zone-later','action':'raise','setpoint':24}],'slots':[{'end':'zone-end'}]}}}
         self.coordinator.data['price_chart']=[{'start':'start','end':'end','price':10,'internal':'secret'}]
         self.coordinator.data['rooms']['room'].update(air_control=True,plan={'commands':[{'time':'later','action':'raise','setpoint':24}],'slots':[{'end':'end','temperature':20}],'reason':'private'})
         self.rows=[{'room_id':'room','time':1,'pump_mode':'heat','temperature':7,'forecast_context':['secret']},{'room_id':'zone:zone','zone_id':'zone','time':1,'zone_mode':'cool'}]
@@ -83,6 +84,7 @@ class PlanChartEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('secret',result['settings']);self.assertNotIn('thermostat',result['settings']['heating_zones'][0])
         self.assertNotIn('model',result['data']['rooms']['room'])
         self.assertEqual(result['data']['rooms']['room']['plan'],{'commands':[{'time':'later','action':'raise'}],'slots':[{'end':'end'}]})
+        self.assertEqual(result['data']['zones']['zone']['plan']['commands'],[{'time':'zone-later','action':'raise'}])
         self.assertEqual(result['history'][0],{'room_id':'room','time':1,'pump_mode':'heat'})
         self.assertEqual(result['history'][1]['zone_mode'],'cool')
         self.assertNotIn('internal',result['data']['price_chart'][0])

@@ -5,6 +5,7 @@ const context={HTMLElement:Element,customElements:{get:name=>definitions.get(nam
 const base=path.join(__dirname,'../custom_components/thermal_pilot/frontend/');vm.runInContext(fs.readFileSync(base+'panel.js','utf8'),context);vm.runInContext(fs.readFileSync(base+'plan-chart-card.js','utf8').replace("import './panel.js';",''),context);
 const Card=definitions.get('thermal-pilot-plan-chart-card'),Editor=definitions.get('thermal-pilot-plan-chart-card-editor'),now=Date.now();
 const response={entries:[{entry_id:'home',title:'Home'}],settings:{language:'en',rooms:[{id:'room',name:'Kitchen'},{id:'garage',name:'Garage',is_garage:true,garage_strategy:'temperature'}],heating_zones:[{id:'zone',name:'Zone',heating_strategy:'tariff',main_room_id:'room'}]},data:{price_chart:[{start:new Date(now-3600000).toISOString(),end:new Date(now+86400000).toISOString(),price:10}],rooms:{room:{plan:{commands:[{action:'raise',time:new Date(now+3600000).toISOString()},{action:'restore',time:new Date(now+7200000).toISOString()}]}}}},history:[{room_id:'garage',time:now/1000-600,pump_mode:'heat'},{room_id:'zone:zone',zone_id:'zone',time:now/1000-600,zone_mode:'cool',zone_basis:'activity'}]};
+response.data.zones={zone:{plan:structuredClone(response.data.rooms.room.plan)}};
 (async()=>{
  const card=new Card(),calls=[];card.setConfig({});card.hass={language:'fi',connection:{},callWS:async request=>{calls.push(request);return structuredClone(response);}};
  card.connectedCallback();await new Promise(setImmediate);

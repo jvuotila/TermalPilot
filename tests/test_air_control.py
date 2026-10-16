@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 ROOT=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot'
 pkg=types.ModuleType('thermal_pilot');pkg.__path__=[str(ROOT)];sys.modules.setdefault('thermal_pilot',pkg)
 from thermal_pilot.const import DEFAULTS,ROOM_DEFAULTS,ZONE_DEFAULTS
-from thermal_pilot.config import validate,room_settings,resolved_rooms
+from thermal_pilot.config import validate,room_settings,resolved_rooms,zone_rooms
 from thermal_pilot.air_control import AirHeatPumpControl,zone_temperature
 
 def state(value,attrs=None):return types.SimpleNamespace(state=value,attributes=attrs or {})
@@ -83,12 +83,18 @@ class AirTests(unittest.IsolatedAsyncioTestCase):
             settings['air_zone_temperature']=policy;self.assertEqual(zone_temperature(self.hass,main,settings),(expected,False))
         self.hass.states['sensor.second'].state='23';self.assertTrue(zone_temperature(self.hass,main,settings)[1])
         self.hass.states['sensor.second'].state='unknown';self.assertEqual(zone_temperature(self.hass,main,settings),(None,False))
-    def test_zones_have_exactly_one_main_controller(self):
-        main={**self.room,'is_garage':False,'heating_zone_id':'00000000-0000-4000-8000-000000000003','thermostat':''}
-        second={**main,'id':'00000000-0000-4000-8000-000000000002','name':'Second','temperature_entity':'sensor.second'};self.hass.states['sensor.second']=state('20')
+    def test_zones_have_one_secondary_controller_and_preserve_primary_thermostats(self):
+        main={**self.room,'is_garage':False,'heat_control':'house','heating_zone_id':'00000000-0000-4000-8000-000000000003','thermostat':'climate.floor1'}
+        second={**main,'id':'00000000-0000-4000-8000-000000000002','name':'Second','temperature_entity':'sensor.second','thermostat':'climate.floor2'}
+        self.hass.states['sensor.second']=state('20')
+        self.hass.states['climate.floor1']=state('heat',{'min_temp':5,'max_temp':35})
+        self.hass.states['climate.floor2']=state('heat',{'min_temp':5,'max_temp':35})
         zone={**ZONE_DEFAULTS,'id':main['heating_zone_id'],'name':'House pump','thermostat':'climate.garage','main_room_id':main['id']}
         settings={**self.settings,'price_entity':'sensor.price','rooms':[main,second],'heating_zones':[zone]};self.hass.states['sensor.price']=state('10',{'today':[10]*96})
-        self.assertEqual([r['heat_control'] for r in resolved_rooms(validate(settings,self.hass))],['air_to_air','zone_member'])
+        validated=validate(settings,self.hass)
+        self.assertEqual([r['thermostat'] for r in resolved_rooms(validated)],['climate.floor1','climate.floor2'])
+        self.assertEqual([r['heat_control'] for r in zone_rooms(validated)],['air_to_air','zone_member'])
+        self.assertEqual(zone_rooms(validated)[0]['id'],'zone:'+zone['id'])
         zone['main_room_id']='bad'
         with self.assertRaises(ValueError):validate(settings,self.hass)
     async def test_open_door_does_not_start_new_heating_before_pause_timer(self):

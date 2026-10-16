@@ -704,7 +704,7 @@ const zonePanel=new Component();zonePanel._hass={states:{'climate.pump':{entity_
 zonePanel.settings={rooms:[{id:'g',name:'Garage',thermostat:'climate.pump',is_garage:true,garage_minimum:5,garage_maximum:9,garage_swing:'both'},{id:'room',name:'Room',thermostat:'climate.pump',heat_control:'air_to_air',heating_zone_id:'zone'}],heating_zones:[{id:'zone',name:'House pump',thermostat:'climate.pump',source_type:'air_to_air',main_room_id:'room',temperature_policy:'average'}],air_swing:''};
 zonePanel.info={source_fields:[['air_swing','Heating swing mode','text']],room_fields:[['name','Room name','text'],['is_garage','Garage','bool'],['heating_zone_id','Heating zone (optional)','text'],['thermostat','Thermostat','climate'],['baseline','Target temperature (°C)','number',5,30],['garage_minimum','Garage lower temperature limit (°C)','number',-5,25],['garage_maximum','Garage upper temperature limit (°C)','number',-5,30],['garage_swing','Garage heating swing mode','text']],zone_fields:[['name','Zone name','text'],['thermostat','Zone heat pump','climate'],['main_room_id','Main room','text'],['temperature_policy','Heating zone temperature','select:main,average,coldest']],data:{rooms:{}}};
 const zoneHTML=zonePanel.settingsView();
-assert.match(zoneHTML,/<h2>Heating zones<\/h2>/);assert.match(zoneHTML,/data-field="zone0.main_room_id"/);assert.match(zoneHTML,/data-field="room0.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room0.baseline"/);assert.doesNotMatch(zoneHTML,/data-field="room1.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room1.thermostat"/);
+assert.match(zoneHTML,/<h2>Heating zones<\/h2>/);assert.match(zoneHTML,/data-field="zone0.main_room_id"/);assert.match(zoneHTML,/data-field="room0.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room0.baseline"/);assert.doesNotMatch(zoneHTML,/data-field="room1.garage_minimum"/);assert.match(zoneHTML,/data-field="room1.thermostat"/);
 assert.match(zoneHTML,/5–9 °C/);
 const swingHTML=zonePanel.field(['garage_swing','Garage heating swing mode','text'],zonePanel.settings.rooms[0],'room0');
 assert.match(swingHTML,/<select/);assert.match(swingHTML,/value="vertical"/);assert.match(swingHTML,/value="both" selected/);assert.match(swingHTML,/Leave unchanged/);assert.doesNotMatch(swingHTML,/<input/);
@@ -841,6 +841,7 @@ const zoneChartPanel=new Component(),zoneChartNow=Date.now();
 zoneChartPanel.historyHours=24;zoneChartPanel.priceChartWidth=1000;
 zoneChartPanel.settings={rooms:[{id:'room-z',name:'Room Z'}],heating_zones:[{id:'z-last',name:'Zulu zone',heating_strategy:'tariff',climate_mode:'heat',main_room_id:'room-z'},{id:'z-first',name:'Alpha zone',heating_strategy:'temperature',climate_mode:'heat'},{id:'z-cool',name:'Cooling zone',heating_strategy:'tariff',climate_mode:'cool'}]};
 zoneChartPanel.info={data:{price_chart:[{start:new Date(zoneChartNow-86400000).toISOString(),end:new Date(zoneChartNow+86400000).toISOString(),price:10}],rooms:{'room-z':{plan:{commands:[{time:new Date(zoneChartNow+3600000).toISOString(),action:'raise'},{time:new Date(zoneChartNow+7200000).toISOString(),action:'restore'}]}}}}};
+zoneChartPanel.info.data.zones={'z-last':{plan:structuredClone(zoneChartPanel.info.data.rooms['room-z'].plan)}};
 zoneChartPanel.history=[];
 for(const zone of zoneChartPanel.settings.heating_zones)for(const [minutes,mode] of [[-30,'heat'],[-25,'heat'],[-20,null],[-15,'cool'],[-10,'cool'],[-5,null]])zoneChartPanel.history.push({room_id:'zone:'+zone.id,zone_id:zone.id,time:zoneChartNow/1000+minutes*60,zone_mode:mode,zone_basis:'activity',zone_entity:'climate.'+zone.id});
 zoneChartPanel.statusHistory=zoneChartPanel.history;
@@ -986,3 +987,58 @@ waterStatusPanel.settings={rooms:[],house_distribution:'water_floor',water_entit
 assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
 waterStatusPanel.info.data.water=null;assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
 console.log('Water status card requires a configured sensor and water circulation; temporary unavailable readings retain the configured card.');
+
+const secondaryRemoval=new Component();secondaryRemoval._hass={states:{}};secondaryRemoval.tab='rooms';
+secondaryRemoval.settings={rooms:[{id:'primary',name:'Floor room',thermostat:'climate.floor',activity_entity:'switch.floor',heat_control:'house',heating_zone_id:'zone'}],heating_zones:[{id:'zone',name:'Cooling pump',thermostat:'climate.secondary'}]};
+secondaryRemoval.info={room_fields:[['thermostat','Thermostat','climate'],['activity_entity','Thermostat relay (optional)','switch'],['heat_control','Room heating control','select:house,air_to_air']],source_fields:[],zone_fields:[],data:{rooms:{}}};
+secondaryRemoval.capture=()=>{};const removeZoneButton={dataset:{removeZone:'0'},addEventListener(type,handler){this.click=handler;}};
+secondaryRemoval.shadowRoot.querySelectorAll=selector=>selector==='[data-remove-zone]'?[removeZoneButton]:[];
+secondaryRemoval.render();assert.match(secondaryRemoval.shadowRoot.innerHTML,/data-field="room0.thermostat"/);assert.match(secondaryRemoval.shadowRoot.innerHTML,/data-field="room0.activity_entity"/);
+context.confirm=()=>true;removeZoneButton.click();
+assert.equal(secondaryRemoval.settings.rooms[0].thermostat,'climate.floor');assert.equal(secondaryRemoval.settings.rooms[0].activity_entity,'switch.floor');assert.equal(secondaryRemoval.settings.rooms[0].heat_control,'house');assert.equal(secondaryRemoval.settings.rooms[0].heating_zone_id,'');
+zoneChartPanel.info.data.rooms['room-z'].plan.commands=[];
+assert.match(zoneGroup(zoneChartPanel.priceChart(false),'z-last'),/data-zone-period="plan"/);
+zoneChartPanel.info.data.zones['z-last'].plan.commands=[];
+assert.doesNotMatch(zoneGroup(zoneChartPanel.priceChart(false),'z-last'),/data-zone-period="plan"/);
+console.log('Secondary zone UI preserves primary thermostat controls and removal settings; chart uses the separate zone plan.');
+
+const localizedBadges=new Component();
+localizedBadges.settings={language:'fi',simulation_enabled:true,summer_minimum_temperature:8.5};
+localizedBadges.info={data:{source_status:{prices:true,outdoor:true,water:true},fallback_season:{season:'summer'}}};
+let localizedBadgeHtml=localizedBadges.controlBadges();
+assert.match(localizedBadgeHtml,/Kesäkausi on 15\.5\.–30\.9\./);
+assert.match(localizedBadgeHtml,/vähintään 8,5 °C/);
+assert.match(localizedBadgeHtml,/Talven varalämpötilana käytetään/);
+assert.match(localizedBadgeHtml,/Simulointi on käytössä/);
+assert.match(localizedBadgeHtml,/Sääennusteen tiedot näytetään/);
+assert.doesNotMatch(localizedBadgeHtml,/Summer|winter fallback|available|Simulation is|forecast temperature/);
+assert.equal((localizedBadgeHtml.match(/class="status-info"/g)||[]).length,3);
+assert.equal((localizedBadgeHtml.match(/aria-describedby="status-help-/g)||[]).length,3);
+assert.match(localizedBadgeHtml,/<details class="status-help"><summary/);
+localizedBadges.info.data.source_status.water=false;
+assert.match(localizedBadges.controlBadges(),/Puuttuu tai ei ole käytettävissä:/);
+assert.doesNotMatch(localizedBadges.controlBadges(),/Missing or unusable|Heating water temperature/);
+for(const settings of [{simulation_enabled:false},{simulation_enabled:false,live_control_confirmed:true},{simulation_enabled:true,apply_season_setpoints:true}]){
+ Object.assign(localizedBadges.settings,{live_control_confirmed:false,apply_season_setpoints:false},settings);
+ assert.doesNotMatch(localizedBadges.controlBadges(),/ThermalPilot applies|has not been confirmed|remain simulated/);
+}
+console.log('Status badge help is fully Finnish, with visible info indicators and native tap/keyboard disclosures.');
+
+const reorderedChart=new Component();reorderedChart.historyHours=24;
+reorderedChart.settings={rooms:[{id:'g2',name:'Z garage',is_garage:true},{id:'r',name:'Regular room'},{id:'g1',name:'A garage',is_garage:true}],heating_zones:[{id:'z',name:'Secondary zone',source_type:'air_to_air'}]};
+reorderedChart.info={data:{price_chart:zoneChartPanel.info.data.price_chart,rooms:{}}};reorderedChart.history=[];
+for(const width of [390,1000])for(const history of [false,true]){
+ reorderedChart.priceChartWidth=width;
+ const html=reorderedChart.priceChart(history);
+ const positions=[...html.matchAll(/<foreignObject x="20" y="([\d.]+)"[^>]*><div[^>]*data-user-text title="([^"]+)"/g)].map(match=>({y:Number(match[1]),name:match[2]}));
+ assert.deepEqual(positions.map(row=>row.name),['Regular room','Secondary zone','A garage','Z garage']);
+ for(let index=1;index<positions.length;index++)assert.ok(positions[index].y>positions[index-1].y+20,'Chart groups must not overlap');
+ const chartHeight=Number(html.match(/viewBox="0 0 [\d.]+ ([\d.]+)"/)[1]);
+ assert.ok(chartHeight>positions.at(-1).y+22,'Final garage must fit within chart');
+ assert.ok(html.indexOf('>Heating zones</text>')<html.indexOf('>Garages</text>'));
+}
+statusPanel.render();
+const settingsStyles=statusPanel.shadowRoot.innerHTML;
+assert.equal((settingsStyles.match(/#settings\[data-settings-page="settings"\] \.settings-group>\.grid\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)\}/g)||[]).length,1,'A late desktop rule must not override mobile settings');
+assert.match(settingsStyles,/@media\(max-width:600px\)\{[^}]*\}[^]*?#settings \.grid,#settings \.settings-group>\.grid,#settings\[data-settings-page="settings"\] \.settings-group>\.grid\{grid-template-columns:minmax\(0,1fr\)\}/);
+console.log('Plan/History charts place garages after zones at phone and desktop widths; mobile settings keep a single column.');

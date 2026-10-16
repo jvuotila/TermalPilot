@@ -1,7 +1,7 @@
 """Explicit air-to-air mode control, independent of water heating and valve timing."""
 import asyncio
 from .model import number
-from .config import resolved_rooms, garage_sensor_lists
+from .config import resolved_rooms, zone_rooms, garage_sensor_lists
 
 
 def binary(hass, entity):
@@ -11,7 +11,7 @@ def binary(hass, entity):
 
 
 def zone_temperature(hass, room, settings):
-    members=[room]+[r for r in resolved_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
+    members=[room]+[r for r in resolved_rooms(settings)+zone_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
     values=[]
     for member in members:
         state=hass.states.get(member['temperature_entity'])
@@ -57,7 +57,7 @@ class AirHeatPumpControl:
         target=values[prefix+'heat_target']
         mode='fan_only';reason='Standby';errors=[]
         low=room['garage_minimum'] if garage else settings['minimum']
-        zone_members=[room]+[r for r in resolved_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
+        zone_members=[room]+[r for r in resolved_rooms(settings)+zone_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
         too_cold=any(number(self.hass.states.get(r['temperature_entity']).state)<low for r in zone_members) if temperature is not None else False
         signature=(room['thermostat'],room['temperature_entity'],garage,low,room.get('garage_maximum'),room.get('garage_strategy'))
         old=self.cycles.get(rid,{})
@@ -139,14 +139,15 @@ class AirHeatPumpControl:
         signature=('cool',room['thermostat'],target,room.get('zone_policy','main'))
         old=self.cycles.get(room['id'],{})
         cooling=old.get('cooling',False) if old.get('signature')==signature else bool(state and state.state=='cool')
-        members=[room]+[r for r in resolved_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
+        members=[room]+[r for r in resolved_rooms(settings)+zone_rooms(settings) if r.get('heat_control')=='zone_member' and r['thermostat']==room['thermostat']]
         valid=temperature is not None
         # Protect the coldest linked room even when an average guides the zone.
         too_cold=valid and any(number(self.hass.states.get(r['temperature_entity']).state)<=target for r in members)
         if not enabled or not valid or too_cold:cooling=False
         elif temperature>=target+.5:cooling=True
         self.cycles[room['id']]={'signature':signature,'cooling':cooling,'heating':False}
-        return {'mode':'cool' if cooling else 'fan_only','target':target if cooling else None,
+        standby='off' if not enabled and state and state.state=='off' else 'fan_only'
+        return {'mode':'cool' if cooling else standby,'target':target if cooling else None,
                 'fan':settings.get('air_fan_cool' if cooling else 'air_fan_idle',''),
                 'swing':settings.get('air_swing_cool' if cooling else 'air_swing_idle',''),
                 'reason':'Zone cooling' if cooling else 'Cooling standby' if enabled else 'Seasonal standby',

@@ -148,7 +148,7 @@ def room_electric(room,settings):
 
 
 def price_required(settings):
-    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and r.get('zone_climate_mode')!='cool' and r.get('zone_heating_strategy','tariff')=='tariff' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
+    return any(room_electric(r,settings) and r.get('heat_control')!='zone_member' and r.get('zone_climate_mode')!='cool' and r.get('zone_heating_strategy','tariff')=='tariff' and (not r.get('is_garage') or r.get('garage_strategy','temperature')=='tariff') for r in resolved_rooms(settings)+zone_rooms(settings)) or (not settings.get('rooms') and settings.get('house_heat_source','air_to_water') in ('air_to_water','ground_source','air_to_air','electric_resistance'))
 
 
 def garage_sensor_lists(room):
@@ -168,17 +168,38 @@ def garage_sensor_lists(room):
 
 
 def resolved_rooms(settings):
-    zones={z['id']:z for z in (settings.get('heating_zones') if isinstance(settings.get('heating_zones'),list) else []) if isinstance(z,dict) and 'id' in z}
+    """Zone membership never replaces the room's primary heating controller."""
+    zones={z['id']:z for z in settings.get('heating_zones',[]) if isinstance(z,dict) and 'id' in z}
     rooms=[]
-    for original in (settings.get('rooms') if isinstance(settings.get('rooms'),list) else []):
+    for original in settings.get('rooms',[]):
         if not isinstance(original,dict):continue
         room=garage_sensor_lists(original)
         zone=zones.get(room.get('heating_zone_id'))
         if zone:
-            room.update(zone_fireplace_entity=zone['fireplace_entity'],zone_fireplace_active_state=zone['fireplace_active_state'])
-            if zone.get('source_type','air_to_air')=='air_to_air':room.update(thermostat=zone['thermostat'],heat_control='air_to_air' if zone['main_room_id']==room['id'] else 'zone_member',zone_policy=zone['temperature_policy'],zone_control_enabled=zone.get('heating_enabled',True),zone_climate_mode=zone.get('climate_mode','heat'),zone_cooling_target=zone.get('cooling_target',24.0),zone_heating_strategy=zone.get('heating_strategy','tariff'))
+            room.update(zone_fireplace_entity=zone.get('fireplace_entity',''),zone_fireplace_active_state=zone.get('fireplace_active_state','on'))
+            if zone.get('source_type','air_to_air')=='air_to_air':room['secondary_pump_entity']=zone.get('thermostat','')
         rooms.append(room)
     return rooms
+
+
+def zone_rooms(settings):
+    """Independent virtual controllers for secondary zone pumps and their sensors."""
+    result=[]
+    for zone in settings.get('heating_zones',[]):
+        if zone.get('source_type','air_to_air')!='air_to_air':continue
+        members=[r for r in settings.get('rooms',[]) if r.get('heating_zone_id')==zone['id'] and not r.get('is_garage')]
+        main=next((room for room in members if room['id']==zone.get('main_room_id')),None)
+        if main is None:continue
+        for original in [main]+[r for r in members if r is not main]:
+            room=garage_sensor_lists(original)
+            room.update(id='zone:'+zone['id'] if original is main else 'zone:'+zone['id']+':'+original['id'],
+                        source_room_id=original['id'],name=zone.get('name',''),thermostat=zone.get('thermostat',''),activity_entity='',
+                        heat_control='air_to_air' if original is main else 'zone_member',secondary_zone=True,
+                        zone_policy=zone.get('temperature_policy','main'),zone_control_enabled=zone.get('heating_enabled',True),
+                        zone_climate_mode=zone.get('climate_mode','heat'),zone_cooling_target=zone.get('cooling_target',24),
+                        zone_heating_strategy=zone.get('heating_strategy','tariff'))
+            result.append(room)
+    return result
 
 
 def air_room(room,settings):
@@ -201,13 +222,15 @@ def learning_fingerprint(room,settings):
     effective['water_reference']=WATER_REFERENCE
     room_water=water_distribution(settings) and not effective.get('air_control')
     fingerprint=[effective[k] for k in ('thermostat','temperature_entity','activity_entity','lag_hours','curve_max_hours','curve_min_hours','curve_cold_temp','curve_warm_temp','baseline','water_reference')]+[settings['outdoor_entity'],settings['water_entity'] if room_water else '']
-    if effective.get('air_control'):fingerprint+=['air_to_air',room.get('heating_zone_id','')]
+    if effective.get('air_control'):fingerprint+=['air_to_air',room.get('heating_zone_id','') if room.get('secondary_zone') else '']
     elif settings['house_distribution']!='water_floor':fingerprint+=[settings['house_distribution']]
     return fingerprint
 
 
 def learning_reset_scope(room,old,new):
     if old is None or old==new:return None
+    if not room.get('secondary_zone') and len(old)>12 and len(new)>12 and old[12]==new[12]=='air_to_air' and old[:-1]==new[:-1]:return None
+    if room.get('heating_zone_id') and len(old)>12 and old[12]=='air_to_air' and not room.get('secondary_zone') and len(new)<=12 and old[1]==new[1]:return None
     # Migration from the former air-response seed changes no learned parameters.
     if len(new)>12 and new[12]=='air_to_air' and old[:3]+old[4:]==new[:3]+new[4:]:return None
     stable_indices=(1,4,5,6,7,8,9,10)
@@ -335,12 +358,12 @@ def validate(payload, hass=None):
         except (ValueError, TypeError, AttributeError):
             raise ValueError('Invalid room identifier.') from None
         check(room, ROOM_FIELDS)
-        if not room['name'] or (not room['thermostat'] and not room['heating_zone_id']) or not room['temperature_entity']:
+        if not room['name'] or not room['thermostat'] or not room['temperature_entity']:
             raise ValueError('Each room needs a name, thermostat and temperature sensor.')
-        if room['id'] in ids or (not room['heating_zone_id'] and room['thermostat'] in thermostats):
+        if room['id'] in ids or room['thermostat'] in thermostats:
             raise ValueError('Room identifier or thermostat is already in use.')
         ids.add(room['id'])
-        if not room['heating_zone_id']:thermostats.add(room['thermostat'])
+        thermostats.add(room['thermostat'])
         if room['is_garage'] and room['heating_zone_id']:
             raise ValueError('A garage must have its own heat pump controller.')
         if room['garage_minimum'] >= room['garage_maximum']:
@@ -349,7 +372,7 @@ def validate(payload, hass=None):
             raise ValueError('Door pause delay must be an integer.')
         if not room['is_garage'] and not result['minimum'] <= room['baseline'] <= result['maximum']:
             raise ValueError(f"{room['name']}: normal temperature must be within the allowed temperature range.")
-        if hass is not None and not room['heating_zone_id'] and air_room(room,result):
+        if hass is not None and air_room(room,result):
             state=hass.states.get(room['thermostat'])
             attrs=state.attributes
             if not {'heat','fan_only'}.issubset(attrs.get('hvac_modes',[])) or (room['is_garage'] and 'off' not in attrs.get('hvac_modes',[])):
@@ -382,10 +405,6 @@ def validate(payload, hass=None):
     for room in rooms:
         if room['heating_zone_id'] and room['heating_zone_id'] not in zone_ids:raise ValueError('Selected heating zone was not found.')
         zone=next((z for z in zones if z['id']==room['heating_zone_id']),None)
-        if zone and zone['source_type']=='fireplace':
-            if not room['thermostat']:raise ValueError('A fireplace-zone room still needs its own thermostat for observation or ordinary heating control.')
-            if room['thermostat'] in thermostats:raise ValueError('A thermostat can have only one controller.')
-            thermostats.add(room['thermostat'])
     result['rooms'] = rooms
     if (price_required(result) and not result['price_entity']) or not result['outdoor_entity']:
         raise ValueError('Select required price and outdoor temperature sources.')
