@@ -845,6 +845,7 @@ class ThermalPilotPanel extends HTMLElement {
     const data=this.info?.data||{},settings=this.settings||{};
     const live=settings.simulation_enabled===false&&settings.live_control_confirmed;
     const mode=!electricHeating(settings)?'Comfort planning':live?(settings.heating_enabled===false?'Live control paused':'Live control'):settings.simulation_enabled===false?'Confirmation required':settings.apply_season_setpoints?'Season setpoint control':'Simulation';
+    const operationLabel=`${this.t(data.heating_active===false?'Passive':'Active')}: ${this.t(mode)}`;
     const modeHelp=live?'ThermalPilot applies scheduled thermostat targets while active. Essential data loss returns affected rooms to their seasonal fallback temperature.':settings.simulation_enabled===false?'Live control has not been confirmed. Save and confirm to enable real thermostat control.':settings.apply_season_setpoints?'Active/Passive season setpoints can change real thermostats. Heating schedules remain simulated.':'Simulation is active. ThermalPilot does not control heating.';
     const status=data.source_status;
     const missing=status?Object.entries({prices:'Electricity prices from now',outdoor:'Outdoor temperature',water:'Heating water temperature'}).filter(([key])=>(key!=='water'||status.water_required!==false)&&(key!=='prices'||status.prices_required!==false)&&!status[key]).map(([,name])=>name):[];
@@ -853,7 +854,7 @@ class ThermalPilotPanel extends HTMLElement {
     const season=data.fallback_season?.season;
     const seasonHelp=this.t('Summer is 15.5.–30.9., or a complete day’s minimum forecast temperature at or above {temperature}°C. Summer fallback uses the shared summer setpoint; winter fallback uses each room’s normal target.').replace('{temperature}',String(settings.summer_minimum_temperature??6).replace('.',settings.language==='fi'?',':'.'));
     const badge=(style,label,help,id)=>`<details class="status-help"><summary class="status-pill ${style}" aria-describedby="status-help-${id}"><span data-user-text>${escapeHTML(this.t(label))}</span><svg class="status-info" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M10 9v5"/><circle class="status-info-dot" cx="10" cy="6" r="1"/></svg></summary><span class="status-tooltip" id="status-help-${id}" data-user-text>${escapeHTML(this.t(help))}</span></details>`;
-    return `<div class="status-badges">${badge('mode',mode,modeHelp,'mode')}${badge(!status?'neutral':missing.length?'missing':'active',sourceLabel,sourceHelp,'sources')}${season?badge(season==='summer'?'summer':'winter',season==='summer'?'Summer fallback':'Winter fallback',seasonHelp,'season'):''}</div>`;
+    return `<div class="status-badges">${badge(data.heating_active===false?'paused':'active',operationLabel,modeHelp,'mode')}${badge(!status?'neutral':missing.length?'missing':'active',sourceLabel,sourceHelp,'sources')}${season?badge(season==='summer'?'summer':'winter',season==='summer'?'Summer fallback':'Winter fallback',seasonHelp,'season'):''}</div>`;
   }
   sortRetention(key){
     if(!['drop','hours','speed'].includes(key))return;
@@ -880,7 +881,7 @@ class ThermalPilotPanel extends HTMLElement {
     const quality=this.collectionQuality();const data=this.info.data||{};const rooms=Object.entries(data.rooms||{}).sort((a,b)=>Number(this.isGarageRoom(a[0],a[1]))-Number(this.isGarageRoom(b[0],b[1]))||compareRoomNames(a[1],b[1]));
     return `<section class="status-card"><div class="status-heading"><h2>ThermalPilot status</h2></div>
     <dl class="status-grid">
-      <div class="status-block"><dt>Operation</dt><dd><span class="status-pill ${data.heating_active===false?'paused':'active'}">${data.heating_active===false?'Passive':'Active'}</span></dd>${this.controlBadges()}<small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
+      <div class="status-block"><dt>Operation</dt><dd>${this.controlBadges()}</dd><small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
       <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Outdoor temperature</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('outdoor','#2196f3')}</div>
 ${waterDistribution(this.settings)&&this.settings?.water_entity?`      <div class="status-block status-temperature" title="Recorded temperatures within the electricity price chart period, fitted across the card width"><dt>Heating water temperature</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('water','#16b957')}</div>`:''}
       <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span><span class="status-pill quality quality-${quality.level}" tabindex="0" title="${escapeHTML(quality.detail)}">Data coverage: ${quality.label}</span></dd></div>

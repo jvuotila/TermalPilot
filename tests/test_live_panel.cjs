@@ -10,7 +10,7 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'.
  panel.capture=()=>{};panel.call=async(type,payload)=>{calls.push({type,payload});return {saved:true};};panel.render();
  await submit({preventDefault(){}});assert.equal(calls.length,0);assert.equal(panel.saving,undefined);
  allow=true;await submit({preventDefault(){}});assert.equal(calls.length,1);assert.equal(calls[0].payload.enable_live_control,true);assert.equal(panel.settings.live_control_confirmed,true);
- const badges=panel.controlBadges();assert.match(badges,/>Live control</);assert.doesNotMatch(badges,/Confirmation required/);
+ const badges=panel.controlBadges();assert.match(badges,/>Active: Live control</);assert.doesNotMatch(badges,/Confirmation required/);
  panel.settings.simulation_enabled=true;panel.render();await submit({preventDefault(){}});assert.equal(calls[1].payload.enable_live_control,false);assert.equal(panel.settings.live_control_confirmed,false);
  console.log('Live activation confirmation, cancellation and return-to-simulation tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

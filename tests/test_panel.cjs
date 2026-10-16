@@ -1052,3 +1052,22 @@ const platformIndependentBadges=localizedBadges.controlBadges();
 assert.equal((platformIndependentBadges.match(/<svg class="status-info" viewBox="0 0 20 20" aria-hidden="true" focusable="false">/g)||[]).length,3);
 assert.doesNotMatch(platformIndependentBadges,/ⓘ/);
 console.log('Status info icons use fixed SVG geometry instead of platform-dependent font glyphs.');
+
+const operationModes=new Component();operationModes.info={data:{heating_active:true}};
+for(const [settings,label] of [
+ [{simulation_enabled:true},'Active: Simulation'],
+ [{simulation_enabled:false,live_control_confirmed:true},'Active: Live control'],
+ [{simulation_enabled:false},'Active: Confirmation required'],
+ [{simulation_enabled:true,apply_season_setpoints:true},'Active: Season setpoint control']
+]){
+ operationModes.settings={rooms:[],...settings};
+ assert.ok(operationModes.controlBadges().includes(label));
+}
+operationModes.settings={language:'fi',simulation_enabled:true,rooms:[]};
+assert.match(operationModes.controlBadges(),/Aktiivinen: Simulointi/);
+operationModes.info.data.heating_active=false;
+assert.match(operationModes.controlBadges(),/Passiivinen: Simulointi/);
+operationModes.settings.language='en';
+assert.match(operationModes.controlBadges(),/Passive: Simulation/);
+assert.doesNotMatch(statusPanel.overview(),/<dd><span class="status-pill active">Active<\/span><\/dd>/);
+console.log('Operation status combines activity and translated control mode in one badge.');
