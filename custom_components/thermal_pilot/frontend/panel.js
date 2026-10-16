@@ -1138,9 +1138,9 @@ details{scroll-margin-block:16px}
 .status-pill.winter{background:#3498db24;color:#1b4f72;border-left:3px solid #3498db}
 .status-pill.summer{background:#82e0aa33;color:#186a3b;border-left:3px solid #2ecc71}
 .status-pill.active{background:#2ecc7126;color:var(--primary-text-color,#166534);border-left:3px solid #229954}
-.status-help{position:relative}
+.status-help{position:relative;display:block;align-self:flex-start;border:0;padding:0;margin:0}
 .status-help::details-content{content-visibility:visible}
-.status-help>summary{align-items:center;gap:6px;list-style:none;cursor:pointer}
+.status-help>summary{align-items:center;gap:6px;list-style:none;cursor:pointer;margin:0;font-weight:normal}
 .status-help>summary::-webkit-details-marker{display:none}
 .status-help>summary:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:2px}
 .status-info{font-size:14px;opacity:.75}

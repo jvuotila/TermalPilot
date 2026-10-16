@@ -1042,3 +1042,8 @@ const settingsStyles=statusPanel.shadowRoot.innerHTML;
 assert.equal((settingsStyles.match(/#settings\[data-settings-page="settings"\] \.settings-group>\.grid\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)\}/g)||[]).length,1,'A late desktop rule must not override mobile settings');
 assert.match(settingsStyles,/@media\(max-width:600px\)\{[^}]*\}[^]*?#settings \.grid,#settings \.settings-group>\.grid,#settings\[data-settings-page="settings"\] \.settings-group>\.grid\{grid-template-columns:minmax\(0,1fr\)\}/);
 console.log('Plan/History charts place garages after zones at phone and desktop widths; mobile settings keep a single column.');
+
+statusPanel.render();
+assert.match(statusPanel.shadowRoot.innerHTML,/\.status-help\{[^}]*border:0;padding:0;margin:0\}/,'Tooltip disclosures must reset generic details spacing and dividers');
+assert.match(statusPanel.shadowRoot.innerHTML,/\.status-help>summary\{[^}]*margin:0;font-weight:normal\}/,'Tooltip badges must reset generic summary spacing and weight');
+console.log('Status tooltip badges reset generic disclosure styles to preserve compact layout.');
