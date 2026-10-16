@@ -9,7 +9,9 @@ Replace files in `docs/screenshots/` using these stable names:
 
 | File | View |
 | --- | --- |
-| electricity-and-heating.png | Electricity prices, suggested heating and actual relay history |
+| electricity-and-heating.png | Plan: hourly weather, electricity prices, heating, cooling and striped suggestions |
+| electricity-and-heating-history.png | History: recorded and suggested heating, zone activity and garages |
+| room-heat-retention.png | Sortable heat-retention estimates with numeric alignment and cooling-speed badges |
 | room-plan.png | Expanded room on Plan |
 | room-history.png | Expanded room on History, including saved forecast accuracy |
 | integration-settings.png | ThermalPilot settings |

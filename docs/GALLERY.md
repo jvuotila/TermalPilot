@@ -4,7 +4,7 @@ Examples from the offline preview and a configured Home Assistant installation.
 Room names, selected sensors, activity and values are illustrative, not preset
 defaults or measured performance claims.
 
-![Electricity prices with suggested heating windows and observed thermostat activity](screenshots/electricity-and-heating.png)
+![Hourly weather, electricity prices, recorded heating and cooling, and striped heating suggestions](screenshots/electricity-and-heating.png)
 
 <details>
 <summary>Heat retention, room plans and history</summary>
@@ -19,7 +19,7 @@ defaults or measured performance claims.
 
 ### Heating history
 
-![Recorded room heating, garage activity and zone heating and cooling timelines](screenshots/electricity-and-heating-history.png)
+![Recorded heating and cooling alongside suggested heating, grouped into rooms, heating zones and garages](screenshots/electricity-and-heating-history.png)
 
 ### Room history
 
