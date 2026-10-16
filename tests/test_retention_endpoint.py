@@ -49,14 +49,14 @@ class CardRegistrationTests(unittest.IsolatedAsyncioTestCase):
         async def register_paths(paths):events.append(('paths',paths))
         frontend=types.SimpleNamespace(add_extra_js_url=lambda hass,url:events.append(('module',url)))
         namespace={'DOMAIN':'thermal_pilot','VERSION':'test-version','Path':Path,'__file__':str(SOURCE),
-                   'StaticPathConfig':lambda *args:args,'frontend':frontend,
+                   'StaticPathConfig':lambda *args:args,'frontend':frontend,'BackupView':lambda hass: 'backup-view',
                    'websocket_api':types.SimpleNamespace(async_register_command=lambda hass,handler:None)}
         for name in ('ws_get','ws_retention','ws_plan_chart','ws_save','ws_history','ws_reset'):namespace[name]=object()
         exec(compile(ast.Module(body=[setup],type_ignores=[]),str(SOURCE),'exec'),namespace)
-        hass=types.SimpleNamespace(data={},http=types.SimpleNamespace(async_register_static_paths=register_paths))
+        hass=types.SimpleNamespace(data={},http=types.SimpleNamespace(async_register_static_paths=register_paths,register_view=lambda view:events.append(('view',view))))
         await namespace['async_setup_entry'](hass,None)
         await namespace['async_setup_entry'](hass,None)
-        self.assertEqual([event[0] for event in events],['paths','module','module'])
+        self.assertEqual([event[0] for event in events],['paths','module','module','view'])
         self.assertIn('/thermal_pilot/heat-retention-card.js',[path[0] for path in events[0][1]])
         self.assertIn('/thermal_pilot/localization.js',[path[0] for path in events[0][1]])
         self.assertIn('/thermal_pilot/languages',[path[0] for path in events[0][1]])

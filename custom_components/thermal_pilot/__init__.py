@@ -12,6 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, VERSION, PLATFORMS, DEFAULTS, ROOM_DEFAULTS, ZONE_DEFAULTS
 from .config import validate, stored_settings, confirm_control_settings, SOURCE_FIELDS, ROOM_FIELDS, ZONE_FIELDS
 from .coordinator import PilotCoordinator
+from .backup_http import BackupView
 
 
 async def async_setup_entry(hass, entry):
@@ -31,6 +32,7 @@ async def async_setup_entry(hass, entry):
             websocket_api.async_register_command(hass, handler)
         frontend.add_extra_js_url(hass, f'/thermal_pilot/heat-retention-card.js?v={VERSION}')
         frontend.add_extra_js_url(hass, f'/thermal_pilot/plan-chart-card.js?v={VERSION}')
+        hass.http.register_view(BackupView(hass))
         domain['_registered'] = True
     coordinator = PilotCoordinator(hass, entry)
     entry.async_on_unload(coordinator.stop)
@@ -49,9 +51,10 @@ async def async_setup_entry(hass, entry):
 
 async def _options_updated(hass, entry):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    coordinator.cancel_command_timer()
-    coordinator.settings = stored_settings(entry.data, entry.options)
-    coordinator.listen_sources()
+    async with coordinator.backup_lock:
+        coordinator.cancel_command_timer()
+        coordinator.settings = stored_settings(entry.data, entry.options)
+        coordinator.listen_sources()
     await coordinator.async_request_refresh()
     # Re-create entities when rooms change; entities derive stable IDs from room UUIDs.
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -160,18 +163,19 @@ async def ws_plan_chart(hass, connection, msg):
 async def ws_save(hass, connection, msg):
     if (c := get_coordinator(hass, connection, msg)) is None:
         return
-    try:
-        settings = validate(msg['settings'], hass)
-        settings = confirm_control_settings(settings,c.settings,msg.get('enable_live_control',False))
-    except ValueError as error:
-        connection.send_error(msg['id'], 'invalid_settings', str(error))
-        return
-    changes=c.learning_changes(settings)
-    if changes and not msg.get('confirm_learning_reset',False):
-        connection.send_result(msg['id'],{'saved':False,'requires_learning_confirmation':True,'learning_changes':changes})
-        return
-    hass.config_entries.async_update_entry(c.entry, options=settings)
-    connection.send_result(msg['id'], {'saved':True})
+    async with c.backup_lock:
+        try:
+            settings = validate(msg['settings'], hass)
+            settings = confirm_control_settings(settings,c.settings,msg.get('enable_live_control',False))
+        except ValueError as error:
+            connection.send_error(msg['id'], 'invalid_settings', str(error))
+            return
+        changes=c.learning_changes(settings)
+        if changes and not msg.get('confirm_learning_reset',False):
+            connection.send_result(msg['id'],{'saved':False,'requires_learning_confirmation':True,'learning_changes':changes})
+            return
+        hass.config_entries.async_update_entry(c.entry, options=settings)
+        connection.send_result(msg['id'], {'saved':True})
 
 
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/history', vol.Required('entry_id'):str, vol.Optional('hours',default=48):vol.All(vol.Coerce(int),vol.Range(min=1,max=2160))})
@@ -190,7 +194,8 @@ async def ws_history(hass, connection, msg):
 @websocket_api.async_response
 async def ws_reset(hass, connection, msg):
     if (c := get_coordinator(hass, connection, msg)) is not None:
-        c.models.pop(msg['room_id'], None)
-        c.previous.pop(msg['room_id'], None)
+        async with c.backup_lock:
+            c.models.pop(msg['room_id'], None)
+            c.previous.pop(msg['room_id'], None)
         await c.async_request_refresh()
         connection.send_result(msg['id'], {'reset':True})

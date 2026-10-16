@@ -15,3 +15,13 @@ vm.createContext(context);vm.runInContext(readFrontendSource(path.join(__dirname
  panel.settings.simulation_enabled=true;panel.render();await submit({preventDefault(){}});assert.equal(calls[1].payload.enable_live_control,false);assert.equal(panel.settings.live_control_confirmed,false);
  console.log('Live activation confirmation, cancellation and return-to-simulation tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+ const panel=new Component();panel.settings={rooms:[],language:'fi'};panel.info={settings:panel.settings,source_fields:[]};panel.capture=()=>{};panel.render=()=>{};let requests=0,loaded=0;
+ panel._panel={config:{entry_id:'entry'}};panel._hass={fetchWithAuth:async(url,options)=>{requests++;assert.equal(url,'/api/thermal_pilot/backup/entry');assert.equal(options.method,'POST');assert.equal(options.headers['X-ThermalPilot-Confirm'],'replace');return {ok:true,json:async()=>({restored:true})};}};
+ panel.load=async()=>{loaded++;};allow=false;await panel.transferBackup({name:'backup.zip'});assert.equal(requests,0);
+ allow=true;await panel.transferBackup({name:'backup.zip'});assert.equal(requests,1);assert.equal(loaded,1);assert.equal(panel.backupBusy,false);assert.match(panel.backupMessage,/Simulation is enabled/);
+ const controls=panel.backupControls();assert.match(controls,/Varmuuskopioi/);assert.match(controls,/Palauta/);assert.match(controls,/aria-describedby="backup-export-help"/);assert.match(controls,/id="backup-import-help" class="setting-tooltip" role="tooltip"/);assert.doesNotMatch(controls,/<small>/);assert.match(controls,/id="backup-file"[^>]*hidden/);
+ panel._hass.fetchWithAuth=async()=>({ok:false,json:async()=>({error:'Invalid or damaged ThermalPilot backup.'})});await panel.transferBackup({name:'bad.zip'});assert.equal(loaded,1);assert.match(panel.backupMessage,/vioittunut/);assert.equal(panel.backupBusy,false);
+ console.log('Backup import requires confirmation, uses authenticated transfer, reloads after success and reports failures.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

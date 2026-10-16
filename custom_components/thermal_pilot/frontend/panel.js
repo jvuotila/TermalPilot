@@ -419,8 +419,31 @@ class ThermalPilotPanel extends HTMLElement {
     const fields=new Map(this.info.source_fields.map(field=>[field[0],field]));
     return groups.map(([title,keys])=>{
       const available=keys.map(key=>fields.get(key)).filter(Boolean);
-      return available.length?`<div class="settings-group" ${title==='Integration settings'?'data-integration-group':''} ${title==='Electricity price settings'?`data-electric-group ${electricHeating(this.settings)?'':'hidden'}`:title==='Air-to-air heat pump settings'?`data-air-group ${this.settings.rooms.some(r=>!r.is_garage&&r.heat_control==='air_to_air')||(this.settings.heating_zones||[]).some(z=>z.source_type!=='fireplace')||this.settings.house_heat_source==='air_to_air'?'':'hidden'}`:title==='Water heating'?`data-water-group ${waterDistribution(this.settings)?'':'hidden'}`:''}><h3>${escapeHTML(title)}</h3>${title==='Miscellaneous'?'<p>Warn when room temperature readings stay unchanged or unavailable.</p>':''}<div class="grid">${available.map(field=>this.field(field,this.settings,'source')).join('')}</div></div>`:'';
+      return available.length?`<div class="settings-group" ${title==='Integration settings'?'data-integration-group':''} ${title==='Electricity price settings'?`data-electric-group ${electricHeating(this.settings)?'':'hidden'}`:title==='Air-to-air heat pump settings'?`data-air-group ${this.settings.rooms.some(r=>!r.is_garage&&r.heat_control==='air_to_air')||(this.settings.heating_zones||[]).some(z=>z.source_type!=='fireplace')||this.settings.house_heat_source==='air_to_air'?'':'hidden'}`:title==='Water heating'?`data-water-group ${waterDistribution(this.settings)?'':'hidden'}`:''}><h3>${escapeHTML(title)}</h3>${title==='Miscellaneous'?'<p>Warn when room temperature readings stay unchanged or unavailable.</p>':''}<div class="grid">${available.map(field=>this.field(field,this.settings,'source')).join('')}</div>${title==='Miscellaneous'?this.backupControls():''}</div>`:'';
     }).join('');
+  }
+  backupControls(){
+    const help=(id,label,text)=>`<span class="setting-help"><button type="button" class="setting-info" aria-label="${escapeHTML(this.t(label))}" aria-describedby="${id}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle class="info-dot" cx="12" cy="7" r="1"/></svg></button><span id="${id}" class="setting-tooltip" role="tooltip">${escapeHTML(this.t(text))}</span></span>`;
+    return `<div class="backup-controls" style="margin-top:20px"><h4>${escapeHTML(this.t('Backup and restore'))}</h4><div style="display:flex;flex-wrap:wrap;gap:16px"><span style="display:inline-flex;align-items:center"><button type="button" id="backup-export" ${this.backupBusy?'disabled':''}>${escapeHTML(this.t('Backup'))}</button>${help('backup-export-help','Backup','Export saved settings, learned models, all retained history, forecasts and season archives in one ZIP file. Unsaved edits are not included.')}</span><span style="display:inline-flex;align-items:center"><button type="button" id="backup-import" ${this.backupBusy?'disabled':''}>${escapeHTML(this.t('Restore'))}</button>${help('backup-import-help','Restore','Import replaces this integration’s settings and data and starts in simulation mode. Check entity references before enabling control. The file is not encrypted; keep it private.')}</span><input id="backup-file" type="file" accept=".zip,application/zip" hidden></div>${this.backupMessage?`<p role="status">${escapeHTML(this.t(this.backupMessage))}</p>`:'<span role="status"></span>'}</div>`;
+  }
+  async transferBackup(file=null){
+    if(this.backupBusy)return;
+    if(file&&!confirm(this.t('Replace all ThermalPilot settings, learning and history with this backup? Unsaved edits will be discarded. Control will remain in simulation mode.')))return;
+    this.capture();this.backupBusy=true;this.backupMessage=file?'Importing backup…':'Preparing backup…';this.render();
+    try{
+      if(!this._hass?.fetchWithAuth)throw new Error(this.t('Backup is available in Home Assistant.'));
+      const options=file?{method:'POST',headers:{'Content-Type':'application/zip','X-ThermalPilot-Confirm':'replace'},body:file}:{method:'GET'};
+      const response=await this._hass.fetchWithAuth(`/api/thermal_pilot/backup/${encodeURIComponent(this.entry)}`,options);
+      if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||response.statusText);}
+      if(file){
+        await response.json();await this.load();this.backupMessage='Backup imported. Simulation is enabled. Review settings and entity references before enabling control.';
+      }else{
+        const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+        link.href=url;link.download=`ThermalPilot-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`;link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        this.backupMessage='Backup exported.';
+      }
+    }catch(error){this.backupMessage=this.t('Backup failed:')+' '+this.t(error.message||String(error));}
+    finally{this.backupBusy=false;this.render();}
   }
   roomSettingsFields(r,index){
     const visible=this.info.room_fields.filter(f=>f[0].startsWith('garage_')?r.is_garage:f[0]==='baseline'?!r.is_garage:f[0]==='fireplace_reduction'?!r.is_garage:['heat_control','thermostat','activity_entity'].includes(f[0])?(!r.is_garage||f[0]==='thermostat'):f[0]==='heating_zone_id'?false:true);
@@ -1362,7 +1385,7 @@ details{scroll-margin-block:16px}
     });
     settingsForm?.addEventListener('change',event=>{this.updateSourceReadings();if(event?.target?.hasAttribute?.('data-zone-member')){this.capture(true);clearSaveMessage();this.render();return;}if(['is_garage','heat_control','thermostat','heating_zone_id','fireplace_entity','source_type','climate_mode'].some(key=>event?.target?.dataset?.field?.endsWith('.'+key))){this.capture();const field=event.target.dataset.field;const room=field.startsWith('room')?this.settings.rooms[Number(field.split('.')[0].slice(4))]:null;if(room?.is_garage&&['is_garage','thermostat'].some(key=>field.endsWith('.'+key))){const modes=this._hass.states[room.thermostat]?.attributes?.fan_modes||[];for(const [key,mode] of [['garage_fan_heat','high'],['garage_fan_idle','low'],['garage_fan_presence','medium']])if(!room[key]&&modes.includes(mode))room[key]=mode;}this.render();return;}if(event?.target?.dataset?.field==='source.fireplace_entity'){this.capture();this.render();return;}if(event?.target?.dataset?.field==='source.house_heat_source'){this.capture();this.render();return;}if(event?.target?.dataset?.field==='source.language'){this.capture();this.render();return;}if(event?.target?.dataset?.field==='source.house_distribution'){this.shadowRoot.querySelectorAll('[data-water-group]').forEach(group=>group.hidden=!waterDistribution({house_distribution:event.target.value}));}clearSaveMessage();this.updateUnsavedNotice();if(event?.target?.dataset?.field?.endsWith('.solar_direction')){const exposure=event.target.closest('.room-card')?.querySelector('[data-solar-exposure]');if(exposure)exposure.hidden=event.target.value==='disabled';}});
     settingsForm?.addEventListener('submit',async e=>{
-      e.preventDefault();if(this.saving)return;this.capture();
+      e.preventDefault();if(this.saving||this.backupBusy)return;this.capture();
       const enableLive=electricHeating(this.settings)&&this.settings.simulation_enabled===false&&!this.info.settings?.live_control_confirmed;
       if(enableLive&&this.settings.rooms.some(r=>r.is_garage||r.heat_control==='air_to_air'||r.heating_zone_id)&&!confirm(this.t('Air-to-air heat pump control changes HVAC modes, fan modes and any selected swing mode. Simulation sends no heat pump commands. Enable live control?')))return;
       if(enableLive&&!confirm(this.t('Enable real thermostat control? If another automation controls these thermostats, disable it first. ThermalPilot will apply its scheduled targets, even while the model is still learning. Missing essential data returns affected rooms to their seasonal fallback temperature.')))return;
@@ -1386,6 +1409,9 @@ details{scroll-margin-block:16px}
       catch(error){this.message=`Settings were not saved: ${error.message||String(error)}`;this.messageLevel='error';this.saveConfirmation=false;}
       finally{this.saving=false;this.render();}
     });
+    this.shadowRoot.querySelector('#backup-export')?.addEventListener('click',()=>this.transferBackup());
+    this.shadowRoot.querySelector('#backup-import')?.addEventListener('click',()=>this.shadowRoot.querySelector('#backup-file')?.click());
+    this.shadowRoot.querySelector('#backup-file')?.addEventListener('change',event=>{const file=event.target.files?.[0];if(file)this.transferBackup(file);});
     const disclosureTab=this.tab;
     this.shadowRoot.querySelectorAll('[data-room-accordion]').forEach(details=>details.addEventListener('toggle',()=>{this.roomDisclosureState.set(`${disclosureTab}:${details.dataset.roomAccordion}`,details.open);}));
     this.shadowRoot.querySelectorAll('[data-forecast-hours]').forEach(select=>select.addEventListener('change',event=>{this.forecastHours=Number(event.target.value);this.render();}));

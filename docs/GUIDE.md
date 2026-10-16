@@ -165,3 +165,22 @@ learning to restart. Review the named-room warning before confirming such change
 Keep Home Assistant backups, including its storage files.
 
 For equations and planner limitations, see [Model assumptions](MODEL.md).
+
+## Backup and restore
+
+Open **Settings → Miscellaneous → Backup and restore**. **Backup** downloads
+one ZIP with saved settings, room/zone identifiers, learned models, all retained
+observations, saved forecasts, collection metadata and season archives. Save pending
+settings first. This file contains private entity references and is not encrypted.
+
+**Restore** replaces this integration's settings and data after confirmation.
+Export the current data first if you want to keep it. The archive is validated before
+replacement; unsupported or damaged archives are rejected. Import starts in simulation
+mode with seasonal device writes disabled. Check entity references, especially when
+moving to another Home Assistant installation, before enabling control again. Learned
+parameters are kept; transient thermal response and old device ownership are reset.
+
+This backs up ThermalPilot's own data, including retained history rather than already
+discarded raw observations. It does not include Home Assistant's recorder, entities,
+credentials, dashboards or other integrations. Use a Home Assistant backup for those.
+The current archive format accepts ZIP files up to 256 MiB.

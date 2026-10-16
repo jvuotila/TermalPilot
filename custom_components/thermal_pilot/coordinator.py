@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from copy import deepcopy
 import logging
+import asyncio
 from zoneinfo import ZoneInfo
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -21,6 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 class PilotCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(minutes=5))
+        self.backup_lock = asyncio.Lock()
         self.entry = entry
         self.settings = stored_settings(entry.data, entry.options)
         self.store = Store(hass, 1, f'{DOMAIN}.{entry.entry_id}')
@@ -103,6 +105,10 @@ class PilotCoordinator(DataUpdateCoordinator):
             self._command_timer = async_track_point_in_utc_time(self.hass,self.update_command_state,min(future))
 
     async def update_command_state(self, now):
+        async with self.backup_lock:
+            await self._update_command_state(now)
+
+    async def _update_command_state(self, now):
         """Apply offset transitions without waiting for the regular planning refresh."""
         data = deepcopy(self.data or {})
         for room in [*data.get('rooms',{}).values(),*data.get('zones',{}).values()]:
@@ -352,6 +358,10 @@ class PilotCoordinator(DataUpdateCoordinator):
         return None
 
     async def _async_update_data(self):
+        async with self.backup_lock:
+            return await self._update_data()
+
+    async def _update_data(self):
         self.cancel_command_timer()
         now = dt_util.utcnow()
         plan_settings = deepcopy(self.settings)
