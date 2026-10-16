@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Постоянната температура е същата или по-добра; затова не зелено.",
     " The benchmark is unavailable, so the rating is not green.": " Базата липсва; затова не зелено.",
     "Similar heating:": "Подобно отопление:",
-    "Rooms and zones": "Стаи и зони"
+    "Rooms and zones": "Стаи и зони",
+    "Weather forecast": "Прогноза за времето",
+    "Hourly": "По часове",
+    "Weather detail": "Изглед за времето",
+    "Fit width": "Побиране по ширина",
+    "Every hour (scroll)": "Всеки час (превъртане)",
+    "Show weather forecast": "Показване на прогнозата",
+    "Show electricity prices": "Показване на цените на тока"
   },
   "legacy": {},
   "cardMessages": {

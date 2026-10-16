@@ -625,7 +625,19 @@
     "{prefix}{name}: heat pump heating setpoint is outside device limits.": "{prefix}{name}: heat pump heating setpoint is outside device limits.",
     "About {setting}": "About {setting}",
     "Initial thresholds should be reached in less than a day at recent observation rates.": "Initial thresholds should be reached in less than a day at recent observation rates.",
-    "Initial thresholds should be reached in about {days} days at recent observation rates.": "Initial thresholds should be reached in about {days} days at recent observation rates."
+    "Initial thresholds should be reached in about {days} days at recent observation rates.": "Initial thresholds should be reached in about {days} days at recent observation rates.",
+    "Weather forecast": "Weather forecast",
+    "Hourly": "Hourly",
+    "Weather detail": "Weather detail",
+    "Fit width": "Fit width",
+    "Every hour (scroll)": "Every hour (scroll)",
+    "Show weather forecast": "Show weather forecast",
+    "Show electricity prices": "Show electricity prices",
+    "Weather condition unavailable": "Weather condition unavailable",
+    "Hail": "Hail",
+    "Lightning": "Lightning",
+    "Lightning and rain": "Lightning and rain",
+    "Snow and rain": "Snow and rain"
   },
   "legacy": {},
   "cardMessages": {

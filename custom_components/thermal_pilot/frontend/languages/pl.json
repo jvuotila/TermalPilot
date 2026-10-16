@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Stała temperatura była równie dobra lub lepsza; stąd brak zieleni.",
     " The benchmark is unavailable, so the rating is not green.": " Brak odniesienia; stąd brak zieleni.",
     "Similar heating:": "Podobne grzanie:",
-    "Rooms and zones": "Pomieszczenia i strefy"
+    "Rooms and zones": "Pomieszczenia i strefy",
+    "Weather forecast": "Prognoza pogody",
+    "Hourly": "Co godzinę",
+    "Weather detail": "Widok pogody",
+    "Fit width": "Dopasuj do szerokości",
+    "Every hour (scroll)": "Każda godzina (przewijanie)",
+    "Show weather forecast": "Pokaż prognozę pogody",
+    "Show electricity prices": "Pokaż ceny energii"
   },
   "legacy": {},
   "cardMessages": {

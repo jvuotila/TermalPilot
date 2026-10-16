@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Σταθερή θερμοκρασία ίση ή καλύτερη· άρα όχι πράσινο.",
     " The benchmark is unavailable, so the rating is not green.": " Αναφορά λείπει· άρα όχι πράσινο.",
     "Similar heating:": "Παρόμοια θέρμανση:",
-    "Rooms and zones": "Δωμάτια και ζώνες"
+    "Rooms and zones": "Δωμάτια και ζώνες",
+    "Weather forecast": "Πρόγνωση καιρού",
+    "Hourly": "Ανά ώρα",
+    "Weather detail": "Προβολή καιρού",
+    "Fit width": "Προσαρμογή στο πλάτος",
+    "Every hour (scroll)": "Κάθε ώρα (κύλιση)",
+    "Show weather forecast": "Εμφάνιση πρόγνωσης καιρού",
+    "Show electricity prices": "Εμφάνιση τιμών ρεύματος"
   },
   "legacy": {},
   "cardMessages": {

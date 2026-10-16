@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Állandó hőmérséklet ugyanilyen vagy jobb; ezért nem zöld.",
     " The benchmark is unavailable, so the rating is not green.": " Alapérték hiányzik; ezért nem zöld.",
     "Similar heating:": "Hasonló fűtés:",
-    "Rooms and zones": "Helyiségek és zónák"
+    "Rooms and zones": "Helyiségek és zónák",
+    "Weather forecast": "Időjárás-előrejelzés",
+    "Hourly": "Óránként",
+    "Weather detail": "Időjárás nézet",
+    "Fit width": "Szélességhez igazítás",
+    "Every hour (scroll)": "Minden óra (görgetés)",
+    "Show weather forecast": "Időjárás-előrejelzés megjelenítése",
+    "Show electricity prices": "Áramárak megjelenítése"
   },
   "legacy": {},
   "cardMessages": {

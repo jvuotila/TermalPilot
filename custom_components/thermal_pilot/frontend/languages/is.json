@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Óbreyttur hiti jafngóður eða betri; því ekki grænt.",
     " The benchmark is unavailable, so the rating is not green.": " Viðmið vantar; því ekki grænt.",
     "Similar heating:": "Svipuð hitun:",
-    "Rooms and zones": "Herbergi og svæði"
+    "Rooms and zones": "Herbergi og svæði",
+    "Weather forecast": "Veðurspá",
+    "Hourly": "Á klukkustund",
+    "Weather detail": "Veðursýn",
+    "Fit width": "Aðlaga að breidd",
+    "Every hour (scroll)": "Hver klukkustund (fletta)",
+    "Show weather forecast": "Sýna veðurspá",
+    "Show electricity prices": "Sýna raforkuverð"
   },
   "legacy": {},
   "cardMessages": {

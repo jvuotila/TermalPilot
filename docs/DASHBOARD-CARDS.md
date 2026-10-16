@@ -38,7 +38,7 @@ energy-efficiency ratings.
 
 Add **ThermalPilot heating plan** from the dashboard card picker. The integration
 loads it automatically. The card shows the Plan chart's legend, electricity
-prices, room timelines, garages and heating zones. Explanatory text above and
+prices, hourly weather, room timelines, garages and heating zones. Explanatory text above and
 below the chart is omitted. Its optional title is blank by default, and it uses
 the integration's language unless a card language is selected. Hover, focus or tap a chart bar to see details.
 The chart refreshes every minute and adapts to the card width.
@@ -46,6 +46,8 @@ The chart refreshes every minute and adapts to the card width.
 ```yaml
 type: custom:thermal-pilot-plan-chart-card
 title: Heating plan  # Optional
+show_weather: true
+show_prices: true
 ```
 
 If multiple ThermalPilot integrations are loaded, choose one in the visual
@@ -53,3 +55,10 @@ editor, or specify its `entry_id` in YAML. This card only displays information;
 it does not change heating settings or control devices. The optional `language`
 setting accepts `auto` (use the integration language) or a supported language
 code such as `en` or `fi`.
+
+Use the editor’s **Show weather forecast** and **Show electricity prices** switches
+to show either chart, both, or just heating timelines. Both default to enabled.
+Weather appears only when the configured weather source provides an hourly
+forecast; daily forecasts are not expanded into invented hourly readings.
+**Fit width** reduces weather-label density on narrow cards. **Every hour (scroll)**
+shows all available hours on a horizontally scrolling shared time axis.

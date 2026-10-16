@@ -118,7 +118,7 @@ def ws_retention(hass, connection, msg):
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/plan_chart', vol.Optional('entry_id'):str})
 @websocket_api.async_response
 async def ws_plan_chart(hass, connection, msg):
-    """Read-only chart snapshot; exclude settings, forecasts and model internals."""
+    """Read-only chart snapshot; expose chart weather, exclude private settings and room-model internals."""
     coordinators={key:value for key,value in hass.data.get(DOMAIN,{}).items() if isinstance(value,PilotCoordinator)}
     entries=[{'entry_id':key,'title':getattr(value.entry,'title','ThermalPilot')} for key,value in coordinators.items()]
     entry_id=msg.get('entry_id') or (entries[0]['entry_id'] if len(entries)==1 else None)
@@ -149,7 +149,7 @@ async def ws_plan_chart(hass, connection, msg):
         'settings':{'language':settings.get('language','en'),'house_heat_source':settings.get('house_heat_source'),
                     'rooms':[subset(room,room_keys) for room in settings.get('rooms',[])],
                     'heating_zones':[subset(zone,zone_keys) for zone in settings.get('heating_zones',[])]},
-        'data':{'rooms':chart_rooms,'zones':chart_zones,'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
+        'data':{'rooms':chart_rooms,'zones':chart_zones,'weather_forecast':[subset(row,('datetime','temperature','condition')) for row in data.get('weather_forecast',[])],'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
         'history':[subset(row,('room_id','time','activity','suggested_heat','pump_mode','pump_basis','pump_entity',
                                'zone_id','zone_mode','zone_basis','zone_entity')) for row in rows]})
 

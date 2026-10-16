@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Temperatura konstante njësoj ose më mirë; prandaj jo jeshile.",
     " The benchmark is unavailable, so the rating is not green.": " Referenca mungon; prandaj jo jeshile.",
     "Similar heating:": "Ngrohje e ngjashme:",
-    "Rooms and zones": "Dhomat dhe zonat"
+    "Rooms and zones": "Dhomat dhe zonat",
+    "Weather forecast": "Parashikimi i motit",
+    "Hourly": "Çdo orë",
+    "Weather detail": "Pamja e motit",
+    "Fit width": "Përshtat sipas gjerësisë",
+    "Every hour (scroll)": "Çdo orë (lëviz)",
+    "Show weather forecast": "Shfaq parashikimin e motit",
+    "Show electricity prices": "Shfaq çmimet e energjisë"
   },
   "legacy": {},
   "cardMessages": {

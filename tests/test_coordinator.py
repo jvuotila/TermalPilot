@@ -45,6 +45,37 @@ class Hass:
     async def async_add_executor_job(self,fn,*args):return fn(*args)
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_hourly_weather_display_filters_normalizes_and_orders_real_rows(self):
+        self.c.settings['weather_entity']='weather.home'
+        self.hass.states['weather.home']=State('cloudy',{'temperature_unit':'°F'})
+        self.c.forecast_type='hourly'
+        later=now+timedelta(hours=1)
+        self.c.forecast=[{'datetime':later.isoformat(),'temperature':68,'condition':'<unsafe>'},
+                         {'datetime':now.isoformat(),'temperature':50,'condition':'cloudy'},
+                         {'datetime':now.isoformat(),'temperature':51.8,'condition':'rainy'},
+                         {'datetime':(now-timedelta(hours=2)).isoformat(),'temperature':50},
+                         {'datetime':(now+timedelta(days=8)).isoformat(),'temperature':50},
+                         {'datetime':'invalid','temperature':50},
+                         {'datetime':later.isoformat(),'temperature':'nan'}]
+        rows=self.c.weather_chart_forecast(now)
+        self.assertEqual(rows,[{'datetime':now.isoformat(),'temperature':11,'condition':'rainy'},
+                               {'datetime':later.isoformat(),'temperature':20,'condition':''}])
+        self.c.forecast_type='daily';self.assertEqual(self.c.weather_chart_forecast(now),[])
+        self.c.forecast_type='twice_daily';self.assertEqual(self.c.weather_chart_forecast(now),[])
+        self.c.forecast_type='hourly';self.hass.states['weather.home'].attributes['temperature_unit']='unsupported'
+        self.assertEqual(self.c.weather_chart_forecast(now),[])
+
+    async def test_weather_display_is_in_active_and_passive_snapshots_without_extra_requests(self):
+        self.c.settings['weather_entity']='weather.home'
+        self.hass.states['weather.home']=State('cloudy',{'temperature_unit':'°C'})
+        self.c.forecast_type='hourly';self.c.forecast_entity='weather.home';self.c.forecast_updated=now
+        self.c.forecast=[{'datetime':now.isoformat(),'temperature':12.1,'condition':'cloudy'}]
+        for active in [True,False]:
+            self.c.settings['heating_enabled']=active
+            data=await self.c._async_update_data()
+            self.assertEqual(data['weather_forecast'],self.c.forecast)
+        self.assertFalse(any(call.args[:2]==('weather','get_forecasts') for call in self.hass.services.async_call.await_args_list))
+
     async def test_non_electric_sources_observe_without_prices_plans_or_control(self):
         self.c.settings.update(price_entity='',price_forecast_entity='',simulation_enabled=False,live_control_confirmed=True,apply_season_setpoints=True)
         self.hass.states.pop('sensor.price')

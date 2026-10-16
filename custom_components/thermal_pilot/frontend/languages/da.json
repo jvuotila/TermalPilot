@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Konstant temperatur var lige så god eller bedre; derfor ikke grønt.",
     " The benchmark is unavailable, so the rating is not green.": " Referencen mangler; derfor ikke grønt.",
     "Similar heating:": "Lignende varme:",
-    "Rooms and zones": "Rum og zoner"
+    "Rooms and zones": "Rum og zoner",
+    "Weather forecast": "Vejrudsigt",
+    "Hourly": "Timevis",
+    "Weather detail": "Vejrvisning",
+    "Fit width": "Tilpas til bredden",
+    "Every hour (scroll)": "Hver time (rul)",
+    "Show weather forecast": "Vis vejrudsigt",
+    "Show electricity prices": "Vis elpriser"
   },
   "legacy": {},
   "cardMessages": {

@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Constante temperatuur even goed of beter; daarom geen groen.",
     " The benchmark is unavailable, so the rating is not green.": " Referentie ontbreekt; daarom geen groen.",
     "Similar heating:": "Vergelijkbare verwarming:",
-    "Rooms and zones": "Kamers en zones"
+    "Rooms and zones": "Kamers en zones",
+    "Weather forecast": "Weersverwachting",
+    "Hourly": "Elk uur",
+    "Weather detail": "Weerweergave",
+    "Fit width": "Aan breedte aanpassen",
+    "Every hour (scroll)": "Elk uur (scrollen)",
+    "Show weather forecast": "Weersverwachting tonen",
+    "Show electricity prices": "Elektriciteitsprijzen tonen"
   },
   "legacy": {},
   "cardMessages": {

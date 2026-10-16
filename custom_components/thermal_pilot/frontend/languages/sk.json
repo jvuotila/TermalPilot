@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Stála teplota rovnaká či lepšia; preto nie zelená.",
     " The benchmark is unavailable, so the rating is not green.": " Referencia chýba; preto nie zelená.",
     "Similar heating:": "Podobné kúrenie:",
-    "Rooms and zones": "Miestnosti a zóny"
+    "Rooms and zones": "Miestnosti a zóny",
+    "Weather forecast": "Predpoveď počasia",
+    "Hourly": "Po hodinách",
+    "Weather detail": "Zobrazenie počasia",
+    "Fit width": "Prispôsobiť šírke",
+    "Every hour (scroll)": "Každá hodina (posúvať)",
+    "Show weather forecast": "Zobraziť predpoveď počasia",
+    "Show electricity prices": "Zobraziť ceny elektriny"
   },
   "legacy": {},
   "cardMessages": {

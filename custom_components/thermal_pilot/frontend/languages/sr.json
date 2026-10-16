@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Стална температура иста или боља; зато није зелено.",
     " The benchmark is unavailable, so the rating is not green.": " Основа недостаје; зато није зелено.",
     "Similar heating:": "Слично грејање:",
-    "Rooms and zones": "Собе и зоне"
+    "Rooms and zones": "Собе и зоне",
+    "Weather forecast": "Временска прогноза",
+    "Hourly": "По сатима",
+    "Weather detail": "Приказ времена",
+    "Fit width": "Прилагоди ширини",
+    "Every hour (scroll)": "Сваки сат (померање)",
+    "Show weather forecast": "Прикажи временску прогнозу",
+    "Show electricity prices": "Прикажи цене струје"
   },
   "legacy": {},
   "cardMessages": {

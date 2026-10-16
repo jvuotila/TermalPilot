@@ -313,6 +313,32 @@ class PilotCoordinator(DataUpdateCoordinator):
         self.forecast_entity = entity
         return self.forecast
 
+    def weather_chart_forecast(self, now):
+        """Expose real hourly forecast rows for display, independently of planning."""
+        if self.forecast_type != 'hourly':
+            return []
+        state = self.hass.states.get(self.settings.get('weather_entity'))
+        unit = str(state.attributes.get('temperature_unit','°C') if state else '°C').lower()
+        if unit not in ('°c','c','celsius','°f','f','fahrenheit','k','kelvin'):
+            return []
+        conditions = {'clear-night','cloudy','exceptional','fog','hail','lightning',
+                      'lightning-rainy','partlycloudy','pouring','rainy','snowy',
+                      'snowy-rainy','sunny','windy','windy-variant'}
+        rows = {}
+        for row in self.forecast:
+            date = stamp(row.get('datetime'))
+            temperature = number(row.get('temperature'))
+            if date is None or temperature is None or not now-timedelta(hours=1) < date <= now+timedelta(days=7):
+                continue
+            if unit in ('°f','f','fahrenheit'):
+                temperature = (temperature-32)*5/9
+            elif unit in ('k','kelvin'):
+                temperature -= 273.15
+            condition = row.get('condition')
+            rows[date] = {'datetime':date.isoformat(),'temperature':round(temperature,2),
+                          'condition':condition if isinstance(condition,str) and condition in conditions else ''}
+        return [rows[date] for date in sorted(rows)][:168]
+
     def committed_session(self, rid, now):
         """Keep a published session once its advance opening time has arrived."""
         previous_data=getattr(self,'data',None) or {}
@@ -362,7 +388,7 @@ class PilotCoordinator(DataUpdateCoordinator):
             self.store.async_delay_save(self.storage_data,20)
             data = {'updated':now.isoformat(),'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'],'heating_active':False,
                 'collection':self.season,'zones':{},'collection_evidence':self.collection_evidence(),'warnings':['ThermalPilot is passive. Planning, collection and learning are stopped.']+setpoint_errors,
-                'rooms':{},'outdoor':outdoor,'water':None,
+                'rooms':{},'outdoor':outdoor,'water':None,'weather_forecast':self.weather_chart_forecast(now),
                 'season_summaries':await self.hass.async_add_executor_job(self.history_db.summaries),
                 'history_info':await self.hass.async_add_executor_job(self.history_db.size)}
             self._plan_settings = plan_settings
@@ -589,7 +615,7 @@ class PilotCoordinator(DataUpdateCoordinator):
         history_info = await self.hass.async_add_executor_job(self.history_db.size)
         data = {'season_summaries':archives,'history_info':history_info, 'updated':now.isoformat(), 'simulation_only':not self.live_enabled() and not self.settings['apply_season_setpoints'], 'warnings':warnings,
                 'heating_active':True, 'collection':self.season, 'outdoor':outdoor, 'water':water, 
-                'rooms':room_data,'price_chart':chart_prices,'price_outlook':price_outlook,'wind':wind_status,
+                'rooms':room_data,'price_chart':chart_prices,'weather_forecast':self.weather_chart_forecast(now),'price_outlook':price_outlook,'wind':wind_status,
                 'zones':zone_data,'collection_evidence':self.collection_evidence(),
                 'source_status':{'prices':bool(slots),'prices_required':scheduling,'outdoor':outdoor is not None,'water':water is not None or not uses_water,'water_required':False},
                 'fallback_season':self.fallback_summary()}

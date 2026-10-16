@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Temperatura constantă egală sau mai bună; deci fără verde.",
     " The benchmark is unavailable, so the rating is not green.": " Referința lipsește; fără verde.",
     "Similar heating:": "Încălzire similară:",
-    "Rooms and zones": "Camere și zone"
+    "Rooms and zones": "Camere și zone",
+    "Weather forecast": "Prognoză meteo",
+    "Hourly": "Pe ore",
+    "Weather detail": "Afișare meteo",
+    "Fit width": "Potrivește la lățime",
+    "Every hour (scroll)": "Fiecare oră (derulare)",
+    "Show weather forecast": "Arată prognoza meteo",
+    "Show electricity prices": "Arată prețurile electricității"
   },
   "legacy": {},
   "cardMessages": {

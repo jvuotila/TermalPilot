@@ -1120,3 +1120,25 @@ const finnishTemperatureCards=finnishHelpPanel.overview();
 assert.equal((finnishTemperatureCards.match(/title="Sähkön hintakaavion ajanjaksolta tallennetut lämpötilat, sovitettuna kortin leveyteen\."/g)||[]).length,2);
 assert.doesNotMatch(finnishTemperatureCards,/Recorded temperatures within the electricity price chart period/);
 console.log('Outdoor and heating-water temperature tooltips use the complete Finnish catalog message directly.');
+
+const forecastChart=new Component(),forecastNow=Date.now(),forecastHour=3600000;
+forecastChart.settings={language:'fi',rooms:[{id:'r',name:'Room'}],heating_zones:[]};
+forecastChart.info={data:{rooms:{},price_chart:[{start:new Date(forecastNow-forecastHour).toISOString(),end:new Date(forecastNow+24*forecastHour).toISOString(),price:12}],weather_forecast:Array.from({length:24},(_,hour)=>({datetime:new Date(forecastNow+hour*forecastHour).toISOString(),temperature:12.1-hour*.1,condition:'cloudy'}))}};
+forecastChart.statusHistory=[];
+for(const width of [390,1200]){
+ forecastChart.priceChartWidth=width;forecastChart.weatherHourly=false;
+ let html=forecastChart.priceChart(false);
+ assert.match(html,/data-weather-timeline="true"/);assert.match(html,/Sääennuste/);assert.match(html,/Pilvistä/);assert.match(html,/12,1 °C/);
+ assert.ok(html.indexOf('data-weather-timeline=')<html.indexOf('Electricity price:'));
+ const fitted=(html.match(/data-weather-hour=/g)||[]).length;assert.ok(fitted<24);
+ const plot=html.match(/<line x1="([\d.]+)" x2="([\d.]+)"/),first=html.match(/data-weather-hour="([\d.]+)"[^]*?<rect x="([\d.]+)"/),range=html.match(/data-range-start="(\d+)" data-range-end="(\d+)"/);
+ const expected=Number(plot[1])+(Number(first[1])-Number(range[1]))/(Number(range[2])-Number(range[1]))*(Number(plot[2])-Number(plot[1]));
+ assert.ok(Math.abs(Number(first[2])+23-expected)<.001,'Weather uses the price chart time mapping');
+ forecastChart.weatherHourly=true;html=forecastChart.priceChart(false);
+ assert.equal((html.match(/data-weather-hour=/g)||[]).length,24);
+ assert.match(html,/min-width:\d+px/);
+ assert.doesNotMatch(forecastChart.priceChart(true),/data-weather-timeline|data-weather-density/);
+}
+forecastChart.info.data.weather_forecast=[];
+assert.doesNotMatch(forecastChart.priceChart(false),/data-weather-timeline|data-weather-density/);
+console.log('Plan weather uses real timestamps on the price axis, localized details, responsive spacing and hourly scrolling; absent forecasts and History stay unchanged.');

@@ -46,3 +46,19 @@ for(const [cardUrl,panelUrl] of [
 }
 assert.doesNotMatch(moduleSource,/import '\.\/panel\.js';/);
 console.log('Dashboard and sidebar share the same versioned panel dependency, preventing cached first-registration conflicts.');
+
+const weatherCard=new Card();weatherCard.info=structuredClone(response);weatherCard.settings=structuredClone(response.settings);
+weatherCard.info.data.weather_forecast=Array.from({length:12},(_,hour)=>({datetime:new Date(now+hour*3600000).toISOString(),temperature:12.1,condition:'cloudy'}));
+for(const weather of [false,true])for(const prices of [false,true]){
+ weatherCard._config={show_weather:weather,show_prices:prices};
+ const html=weatherCard.priceChart();
+ assert.equal(html.includes('data-weather-timeline='),weather);
+ assert.equal(html.includes('data-chart-detail="Electricity price:'),prices);
+ assert.ok(html.includes('Kitchen'),'Heating timeline remains visible in every combination');
+}
+for(const key of ['show_weather','show_prices'])assert.throws(()=>weatherCard.setConfig({[key]:'false'}),/must be a boolean/);
+const weatherEditor=new Editor();weatherEditor.setConfig({show_weather:false,show_prices:true});
+assert.match(weatherEditor.shadowRoot.innerHTML,/data-show-weather/);assert.match(weatherEditor.shadowRoot.innerHTML,/data-show-prices checked/);
+weatherEditor.setConfig({show_weather:true,show_prices:false});assert.match(weatherEditor.shadowRoot.innerHTML,/data-show-weather checked/);
+assert.doesNotMatch(weatherEditor.shadowRoot.innerHTML,/data-show-prices checked/);
+console.log('Plan card independently configures weather and electricity prices; all four combinations preserve heating timelines and editor state.');

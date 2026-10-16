@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Muutumatu temperatuur oli sama hea või parem; seepärast pole roheline.",
     " The benchmark is unavailable, so the rating is not green.": " Võrdlus puudub; seepärast pole roheline.",
     "Similar heating:": "Sarnane küte:",
-    "Rooms and zones": "Ruumid ja tsoonid"
+    "Rooms and zones": "Ruumid ja tsoonid",
+    "Weather forecast": "Ilmaprognoos",
+    "Hourly": "Tunniti",
+    "Weather detail": "Ilmavaade",
+    "Fit width": "Mahuta laiusesse",
+    "Every hour (scroll)": "Iga tund (keri)",
+    "Show weather forecast": "Näita ilmaprognoosi",
+    "Show electricity prices": "Näita elektrihindu"
   },
   "legacy": {},
   "cardMessages": {

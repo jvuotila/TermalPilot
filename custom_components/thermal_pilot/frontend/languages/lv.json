@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Nemainīga temperatūra bija tikpat laba vai labāka; tāpēc nav zaļa.",
     " The benchmark is unavailable, so the rating is not green.": " Atsauces nav; tāpēc nav zaļa.",
     "Similar heating:": "Līdzīga apkure:",
-    "Rooms and zones": "Telpas un zonas"
+    "Rooms and zones": "Telpas un zonas",
+    "Weather forecast": "Laika prognoze",
+    "Hourly": "Pa stundām",
+    "Weather detail": "Laikapstākļu skats",
+    "Fit width": "Pielāgot platumam",
+    "Every hour (scroll)": "Katra stunda (ritināt)",
+    "Show weather forecast": "Rādīt laika prognozi",
+    "Show electricity prices": "Rādīt elektrības cenas"
   },
   "legacy": {},
   "cardMessages": {

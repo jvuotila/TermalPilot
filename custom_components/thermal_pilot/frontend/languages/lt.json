@@ -412,7 +412,14 @@
     " Assuming no temperature change performed equally well or better, so the rating is not green.": " Pastovi temperatūra buvo tokia pati ar geresnė; todėl ne žalia.",
     " The benchmark is unavailable, so the rating is not green.": " Atskaitos nėra; todėl ne žalia.",
     "Similar heating:": "Panašus šildymas:",
-    "Rooms and zones": "Kambariai ir zonos"
+    "Rooms and zones": "Kambariai ir zonos",
+    "Weather forecast": "Orų prognozė",
+    "Hourly": "Kas valandą",
+    "Weather detail": "Orų rodinys",
+    "Fit width": "Pritaikyti prie pločio",
+    "Every hour (scroll)": "Kiekviena valanda (slinkti)",
+    "Show weather forecast": "Rodyti orų prognozę",
+    "Show electricity prices": "Rodyti elektros kainas"
   },
   "legacy": {},
   "cardMessages": {
