@@ -55,7 +55,7 @@ const sample={language:'fi',entries:[{entry_id:'one',title:'Home'}],rooms:[room(
  const panelContext={HTMLElement:class{},customElements:{get:()=>true},location:{pathname:''}};vm.createContext(panelContext);vm.runInContext(fs.readFileSync(path.join(__dirname,'../custom_components/thermal_pilot/frontend/panel.js'),'utf8'),panelContext);
  for(const reference of [null,2.12])for(const hours of [.5,1,2,4,8,12])for(const updated of [true,false]){
   const value={hours_per_degree:hours,reference_hours:reference,updated};const expected=vm.runInContext('retentionRating('+JSON.stringify(value)+').level',panelContext);
-  const html=card.cell('cooling_speed',{heat_retention:value},1);assert.match(html,new RegExp('rating '+expected+'"'));
+  const html=card.cell('cooling_speed',{heat_retention:value},1);assert.match(html,/<svg class="status-info"/);assert.match(html,/tabindex="0"/);assert.match(html,new RegExp('rating '+expected+'"'));
  }
  assert.equal(context.customCards.length,1);vm.runInContext(src,context);assert.equal(context.customCards.length,1);
  console.log('Dashboard card passed: columns, sorting, garage grouping, integration language, escaping, read-only polling, cleanup, response races, editor and badge parity.');

@@ -982,10 +982,10 @@ for(const settings of [
  {house_heat_source:'air_to_water',house_distribution:'water_floor',water_entity:''},
  {house_heat_source:'electric_resistance',house_distribution:'electric_floor',water_entity:'sensor.old_water'},
  {house_heat_source:'air_to_air',house_distribution:'warm_air',water_entity:'sensor.old_water'},
-]){waterStatusPanel.settings={rooms:[],...settings};assert.doesNotMatch(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);}
+]){waterStatusPanel.settings={rooms:[],...settings};assert.doesNotMatch(waterStatusPanel.overview(),/<dt>Heating water temperature [^]*?<\/dt>/);}
 waterStatusPanel.settings={rooms:[],house_distribution:'water_floor',water_entity:'sensor.heating_water'};
-assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
-waterStatusPanel.info.data.water=null;assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature<\/dt>/);
+assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature [^]*?<\/dt>/);
+waterStatusPanel.info.data.water=null;assert.match(waterStatusPanel.overview(),/<dt>Heating water temperature [^]*?<\/dt>/);
 console.log('Water status card requires a configured sensor and water circulation; temporary unavailable readings retain the configured card.');
 
 const secondaryRemoval=new Component();secondaryRemoval._hass={states:{}};secondaryRemoval.tab='rooms';
@@ -1071,3 +1071,25 @@ operationModes.settings.language='en';
 assert.match(operationModes.controlBadges(),/Passive: Simulation/);
 assert.doesNotMatch(statusPanel.overview(),/<dd><span class="status-pill active">Active<\/span><\/dd>/);
 console.log('Operation status combines activity and translated control mode in one badge.');
+
+for(const room of [{learning_progress:{percent:50}},{learning_progress:{percent:100}},forecastBadgeRoom]){
+ const html=initialBadgePanel.learningBadge(room);
+ assert.match(html,/<svg class="status-info"/);
+ assert.match(html,/tabindex="0"/);
+ assert.match(html,/title="/);
+}
+const helpOverview=statusPanel.overview();
+assert.match(helpOverview,/Data coverage: [^<]+<svg class="status-info"/);
+assert.match(helpOverview,/<dt>Outdoor temperature <svg class="status-info"/);
+assert.match(previewPanel.heatRetentionView(),/data-retention-rating="[^"]+" tabindex="0" title="[^"]*">[^]*?<svg class="status-info"/);
+console.log('Forecast, initial-data, coverage, temperature and retention explanations have visible SVG indicators.');
+
+for(const history of [false,true]){
+ const html=finnishNotesPanel.priceChart(history);
+ assert.match(html,/<details class="retention-help chart-help"><summary>/);
+ assert.match(html,/<summary>Tietoa kaaviosta<\/summary><small data-chart-notes/);
+ assert.doesNotMatch(html,/<details class="retention-help chart-help"[^>]*open/);
+ assert.match(html,/<small data-chart-notes[^>]*>[^]*?<\/small><\/details>/);
+}
+assert.doesNotMatch(finnishNotesPanel.priceChart(false,true),/chart-help|data-chart-notes/);
+console.log('Plan and History chart explanations are collapsed behind a localized accordion matching heat-retention help; dashboard card stays compact.');
