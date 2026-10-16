@@ -108,5 +108,7 @@ Both support an optional title and language override.
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). Commercial use is not licensed; versions
-through v0.1.40 retain their original MIT terms. Experimental software, provided
-without warranty. Use at your own risk.
+through v0.1.40 retain their original MIT terms.
+
+ThermalPilot is experimental software, provided without warranty. Energy savings
+are not guaranteed.
