@@ -22,10 +22,10 @@ identified example data. Manually supplied captures are supported when automated
 capture is unavailable. Changes to labels, spacing, colors or controls require
 refreshing the relevant image; backend-only changes do not.
 
-Check the README in a Markdown preview: the main image should load immediately,
-and the two expandable sections should reveal the remaining images. Verify that
+Check the README and [screenshot gallery](GALLERY.md) in a Markdown preview.
+The README shows the main chart; the gallery contains the remaining images. Verify that
 labels are readable and the screenshot agrees with the current UI. Include the
 updated image files in the same commit as the UI change whenever possible.
 
-Current captures were supplied by Juho Vuotila on 13 October 2026 for version
-0.9.2. Settings and room names in the images are examples, not defaults.
+Settings, room names and values in screenshots are examples, not defaults.
+Keep the gallery links current when adding or replacing captures.
