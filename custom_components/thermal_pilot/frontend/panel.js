@@ -852,7 +852,7 @@ class ThermalPilotPanel extends HTMLElement {
     const sourceHelp=!electricHeating(settings)?'Comfort planning uses room temperature, outdoor temperature and observed heating demand. Electricity prices are not required; no heating schedules or thermostat commands are generated.':!status?'Source checks are available while ThermalPilot is active.':missing.length?`${this.t('Missing or unusable:')} ${missing.map(name=>this.t(name)).join(', ')}.`:`Electricity prices from now and outdoor temperature${status.water_required===false?'':' and heating water temperature'} are available. Weather forecast details are reported separately below.`;
     const season=data.fallback_season?.season;
     const seasonHelp=this.t('Summer is 15.5.–30.9., or a complete day’s minimum forecast temperature at or above {temperature}°C. Summer fallback uses the shared summer setpoint; winter fallback uses each room’s normal target.').replace('{temperature}',String(settings.summer_minimum_temperature??6).replace('.',settings.language==='fi'?',':'.'));
-    const badge=(style,label,help,id)=>`<details class="status-help"><summary class="status-pill ${style}" aria-describedby="status-help-${id}"><span data-user-text>${escapeHTML(this.t(label))}</span><span class="status-info" aria-hidden="true">ⓘ</span></summary><span class="status-tooltip" id="status-help-${id}" data-user-text>${escapeHTML(this.t(help))}</span></details>`;
+    const badge=(style,label,help,id)=>`<details class="status-help"><summary class="status-pill ${style}" aria-describedby="status-help-${id}"><span data-user-text>${escapeHTML(this.t(label))}</span><svg class="status-info" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M10 9v5"/><circle class="status-info-dot" cx="10" cy="6" r="1"/></svg></summary><span class="status-tooltip" id="status-help-${id}" data-user-text>${escapeHTML(this.t(help))}</span></details>`;
     return `<div class="status-badges">${badge('mode',mode,modeHelp,'mode')}${badge(!status?'neutral':missing.length?'missing':'active',sourceLabel,sourceHelp,'sources')}${season?badge(season==='summer'?'summer':'winter',season==='summer'?'Summer fallback':'Winter fallback',seasonHelp,'season'):''}</div>`;
   }
   sortRetention(key){
@@ -1143,7 +1143,8 @@ details{scroll-margin-block:16px}
 .status-help>summary{align-items:center;gap:6px;list-style:none;cursor:pointer;margin:0;font-weight:normal}
 .status-help>summary::-webkit-details-marker{display:none}
 .status-help>summary:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:2px}
-.status-info{font-size:14px;opacity:.75}
+.status-info{display:block;width:14px;height:14px;flex:0 0 14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;opacity:.8}
+.status-info-dot{fill:currentColor;stroke:none}
 .status-tooltip{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:40;width:280px;max-width:calc(100vw - 48px);padding:12px;border-radius:8px;background:var(--primary-text-color,#213547);color:var(--card-background-color,white);font-size:13px;line-height:1.45;box-shadow:0 3px 12px #0003}
 .status-help[open]>.status-tooltip,.status-help:hover>.status-tooltip,.status-help:focus-within>.status-tooltip{display:block}
 @media(max-width:600px){.status-tooltip{position:fixed;left:16px;right:16px;top:auto;bottom:calc(24px + env(safe-area-inset-bottom));width:auto;max-width:none;max-height:45vh;overflow:auto}}

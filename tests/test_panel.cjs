@@ -1047,3 +1047,8 @@ statusPanel.render();
 assert.match(statusPanel.shadowRoot.innerHTML,/\.status-help\{[^}]*border:0;padding:0;margin:0\}/,'Tooltip disclosures must reset generic details spacing and dividers');
 assert.match(statusPanel.shadowRoot.innerHTML,/\.status-help>summary\{[^}]*margin:0;font-weight:normal\}/,'Tooltip badges must reset generic summary spacing and weight');
 console.log('Status tooltip badges reset generic disclosure styles to preserve compact layout.');
+
+const platformIndependentBadges=localizedBadges.controlBadges();
+assert.equal((platformIndependentBadges.match(/<svg class="status-info" viewBox="0 0 20 20" aria-hidden="true" focusable="false">/g)||[]).length,3);
+assert.doesNotMatch(platformIndependentBadges,/ⓘ/);
+console.log('Status info icons use fixed SVG geometry instead of platform-dependent font glyphs.');
