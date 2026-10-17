@@ -976,3 +976,26 @@ class GarageCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retained['loss'],.008)
         self.assertEqual(retained['samples'],120)
         self.assertEqual(self.c.config_fingerprint[rid][0],'climate.room')
+
+class ChartTemperatureTests(unittest.IsolatedAsyncioTestCase):
+    async def test_chart_uses_current_sensors_and_the_control_zone_temperature_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hass=Hass(directory)
+            hass.states.update({'sensor.room':State('20.7'),'sensor.second':State('18.2'),'sensor.garage':State('7.5')})
+            first={**ROOM_DEFAULTS,'id':'first','name':'Kitchen','thermostat':'climate.room','temperature_entity':'sensor.room','heating_zone_id':'zone'}
+            second={**ROOM_DEFAULTS,'id':'second','name':'Bedroom','thermostat':'climate.second','temperature_entity':'sensor.second','heating_zone_id':'zone'}
+            garage={**ROOM_DEFAULTS,'id':'garage','name':'Garage','thermostat':'climate.garage','temperature_entity':'sensor.garage','is_garage':True}
+            from thermal_pilot.const import ZONE_DEFAULTS
+            zone={**ZONE_DEFAULTS,'id':'zone','name':'Heat pump','thermostat':'climate.zone','main_room_id':'first','temperature_policy':'main','climate_mode':'cool','heating_enabled':False}
+            entry=types.SimpleNamespace(entry_id='chart',data={**DEFAULTS,'rooms':[first,second,garage],'heating_zones':[zone],'heating_enabled':False},options={})
+            coordinator=PilotCoordinator(hass,entry)
+            self.assertEqual(coordinator.chart_temperatures()['rooms'],{'first':20.7,'second':18.2,'garage':7.5})
+            for policy,expected in [('main',20.7),('average',19.45),('coldest',18.2)]:
+                coordinator.settings['heating_zones'][0]['temperature_policy']=policy
+                self.assertAlmostEqual(coordinator.chart_temperatures()['zones']['zone'],expected)
+            coordinator.settings['heating_zones'][0].update(temperature_policy='main',main_room_id='second')
+            self.assertEqual(coordinator.chart_temperatures()['zones']['zone'],18.2)
+            hass.states['sensor.room']=State('unavailable')
+            self.assertIsNone(coordinator.chart_temperatures()['rooms']['first'])
+            self.assertIsNone(coordinator.chart_temperatures()['zones']['zone'])
+            self.assertEqual(coordinator.chart_temperatures()['rooms']['garage'],7.5)

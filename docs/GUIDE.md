@@ -130,8 +130,8 @@ alone do not validate heating capacity or timing. Useful validation can take
 weeks or months, particularly in mild weather.
 
 Plan shows hourly weather above electricity prices on the same time axis when
-your selected weather source supports hourly forecasts. The default view fits
-the available width; choose **Every hour (scroll)** for all hourly details.
+your selected weather source supports hourly forecasts. The weather timeline always fits
+the available width, with fewer labels on narrow screens.
 Missing forecast periods stay empty.
 
 Plan/History chart explanations are under **About this chart**. Click or tap bars

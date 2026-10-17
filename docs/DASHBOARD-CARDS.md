@@ -60,5 +60,5 @@ Use the editor’s **Show weather forecast** and **Show electricity prices** swi
 to show either chart, both, or just heating timelines. Both default to enabled.
 Weather appears only when the configured weather source provides an hourly
 forecast; daily forecasts are not expanded into invented hourly readings.
-**Fit width** reduces weather-label density on narrow cards. **Every hour (scroll)**
-shows all available hours on a horizontally scrolling shared time axis.
+The weather timeline always fits the card width and reduces weather-label density
+on narrow cards.

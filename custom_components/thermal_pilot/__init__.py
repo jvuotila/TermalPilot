@@ -90,7 +90,7 @@ def ws_get(hass, connection, msg):
             'suggested':registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_heat'),
             'actual':room['activity_entity'] or registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_activity'),
         } for room in c.settings['rooms']}
-        connection.send_result(msg['id'], {'settings':c.settings, 'data':c.data, 'room_entities':room_entities,
+        connection.send_result(msg['id'], {'settings':c.settings, 'data':{**(c.data or {}),'chart_temperatures':c.chart_temperatures()}, 'room_entities':room_entities,
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS, 'zone_defaults':ZONE_DEFAULTS, 'zone_fields':ZONE_FIELDS})
 
 
@@ -152,7 +152,7 @@ async def ws_plan_chart(hass, connection, msg):
         'settings':{'language':settings.get('language','en'),'house_heat_source':settings.get('house_heat_source'),
                     'rooms':[subset(room,room_keys) for room in settings.get('rooms',[])],
                     'heating_zones':[subset(zone,zone_keys) for zone in settings.get('heating_zones',[])]},
-        'data':{'rooms':chart_rooms,'zones':chart_zones,'weather_forecast':[subset(row,('datetime','temperature','condition')) for row in data.get('weather_forecast',[])],'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
+        'data':{'rooms':chart_rooms,'zones':chart_zones,'chart_temperatures':coordinator.chart_temperatures(),'weather_forecast':[subset(row,('datetime','temperature','condition')) for row in data.get('weather_forecast',[])],'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
         'history':[subset(row,('room_id','time','activity','suggested_heat','pump_mode','pump_basis','pump_entity',
                                'zone_id','zone_mode','zone_basis','zone_entity')) for row in rows]})
 

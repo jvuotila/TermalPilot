@@ -948,7 +948,7 @@ const allNameWidths=Array.from(longerNames.matchAll(/<foreignObject[^>]*width="(
 assert.ok(allNameWidths.every(width=>width===longNameWidth));
 nameWidthPanel.settings.heating_zones[0].name='Very long zone name '.repeat(30);
 assert.ok(nameWidth(nameWidthPanel.priceChart(false))<=400);
-nameWidthPanel.priceChartWidth=400;assert.equal(nameWidth(nameWidthPanel.priceChart(false)),360);
+nameWidthPanel.priceChartWidth=400;assert.equal(nameWidth(nameWidthPanel.priceChart(false)),275);
 console.log('Chart name column adapts to longest room or zone name, stays aligned, caps width and preserves compact layout.');
 const compactPlanPanel=new Component();compactPlanPanel.settings=structuredClone(previewPanel.settings);compactPlanPanel.info=structuredClone(previewPanel.info);
 for(const room of Object.values(compactPlanPanel.info.data.rooms))room.learning_progress={initial_complete:true,percent:100};
@@ -1135,13 +1135,14 @@ for(const width of [390,1200]){
  const expected=Number(plot[1])+(Number(first[1])-Number(range[1]))/(Number(range[2])-Number(range[1]))*(Number(plot[2])-Number(plot[1]));
  assert.ok(Math.abs(Number(first[2])+23-expected)<.001,'Weather uses the price chart time mapping');
  forecastChart.weatherHourly=true;html=forecastChart.priceChart(false);
- assert.equal((html.match(/data-weather-hour=/g)||[]).length,24);
- assert.match(html,/min-width:\d+px/);
+ assert.equal((html.match(/data-weather-hour=/g)||[]).length,fitted);
+ assert.match(html,/width:100%;min-width:0/);
+ assert.doesNotMatch(html,/data-weather-density|weather-density/);
  assert.doesNotMatch(forecastChart.priceChart(true),/data-weather-timeline|data-weather-density/);
 }
 forecastChart.info.data.weather_forecast=[];
 assert.doesNotMatch(forecastChart.priceChart(false),/data-weather-timeline|data-weather-density/);
-console.log('Plan weather uses real timestamps on the price axis, localized details, responsive spacing and hourly scrolling; absent forecasts and History stay unchanged.');
+console.log('Plan weather uses real timestamps on the price axis, localized details, responsive fit-width spacing; absent forecasts and History stay unchanged.');
 
 const desktopStatus=new Component();desktopStatus.settings={language:'fi',simulation_enabled:true,rooms:[],house_distribution:'water_floor',water_entity:'sensor.water'};
 desktopStatus.info={source_fields:[],room_fields:[],zone_fields:[],data:{rooms:{},outdoor:0,water:33,updated:'2026-10-16T12:00:00Z',source_status:{prices:true,outdoor:true,water:true},fallback_season:{season:'winter'},history_info:{rows:123,bytes:1048576,started_at:0},warnings:['Missing essential input.']}};
@@ -1195,3 +1196,19 @@ console.log('Heating is red, suggestions dark red and last in the legend; coolin
 // Suggestions retain a non-color distinction in the calmer shared chart.
 assert.match(finnishNotesPanel.priceChart(false), /<pattern id="suggested-heating-stripes"/);
 assert.match(finnishNotesPanel.priceChart(false), /fill="url\(#suggested-heating-stripes\)"/);
+
+{
+ const currentChart=new Component();currentChart.settings={language:'fi',house_heat_source:'air_to_water',rooms:[{id:'kitchen',name:'Keittiö'},{id:'bedroom',name:'Makuuhuone'},{id:'garage',name:'Autotalli',is_garage:true}],heating_zones:[{id:'pump',name:'ILP'}]};
+ currentChart.chartVisibility=()=>({weather:false,prices:false});
+ currentChart.info={data:{rooms:{kitchen:{temperature:99},bedroom:{temperature:99}},chart_temperatures:{rooms:{kitchen:20.7,bedroom:null,garage:7.5},zones:{pump:19.4}}}};
+ const chart=currentChart.priceChart(false);
+ assert.match(chart,/>20,7 °C<\/text>/);assert.match(chart,/>19,4 °C<\/text>/);assert.match(chart,/>7,5 °C<\/text>/);
+ assert.match(chart,/>Keittiö<\/div>/);assert.doesNotMatch(chart,/>Activity<\/text>/);
+ const temperatureMarks=[...chart.matchAll(/<text data-current-temperature="[^"]+"[^>]*x="([^"]+)"[^>]*text-anchor="end"/g)];assert.equal(temperatureMarks.length,3);assert.equal(new Set(temperatureMarks.map(mark=>mark[1])).size,1);
+ assert.match(chart,/>Makuuhuone<\/div>/);assert.doesNotMatch(chart,/99[,.]0 °C/);
+ assert.doesNotMatch(currentChart.priceChart(true),/data-current-temperature/);
+ assert.match(currentChart.priceChart(false,true),/>20,7 °C<\/text>/);
+ currentChart.settings.language='en';assert.match(currentChart.priceChart(false),/>20\.7 °C<\/text>/);
+ currentChart.priceChartWidth=390;assert.match(currentChart.priceChart(false),/>20\.7 °C<\/text>/);
+ console.log('Plan labels show localized current room/zone temperatures, hide missing values, and leave History labels unchanged.');
+}

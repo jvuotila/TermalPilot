@@ -139,6 +139,15 @@ class PilotCoordinator(DataUpdateCoordinator):
         await self.hass.async_add_executor_job(self.history_db.initialize)
         self.config_fingerprint = saved.get('fingerprints', {})
 
+    def chart_temperatures(self):
+        """Current sensor values even when planning is passive; zone policy matches control."""
+        rooms={room['id']:self.value(room['temperature_entity']) for room in self.settings['rooms']}
+        zones={zone['id']:None for zone in self.settings.get('heating_zones',[])}
+        for room in zone_rooms(self.settings):
+            if room['id']=='zone:'+room['heating_zone_id']:
+                zones[room['heating_zone_id']]=zone_temperature(self.hass,room,self.settings)[0]
+        return {'rooms':rooms,'zones':zones}
+
     def collection_evidence(self):
         """Use the least-observed configured room for house-wide coverage."""
         models = [self.models.get(room['id'], {}) for room in resolved_rooms(self.settings)]

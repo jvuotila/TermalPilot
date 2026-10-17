@@ -6,6 +6,7 @@ import unittest
 
 SOURCE=Path(__file__).resolve().parents[1]/'custom_components/thermal_pilot/__init__.py'
 class Coordinator:
+    def chart_temperatures(self):return {'rooms':{'room':20.7},'zones':{'zone':19.2}}
     def __init__(self,name='Home'):
         self.entry=types.SimpleNamespace(title=name)
         self.settings={'language':'fi','rooms':[{'id':'room','name':'Garage','is_garage':True,'thermostat':'climate.private'}], 'secret':'not public'}
@@ -85,7 +86,7 @@ class PlanChartEndpointTests(unittest.IsolatedAsyncioTestCase):
         result=self.connection.result
         self.assertEqual(result['settings']['language'],'fi')
         self.assertNotIn('secret',result['settings']);self.assertNotIn('thermostat',result['settings']['heating_zones'][0])
-        self.assertNotIn('model',result['data']['rooms']['room'])
+        self.assertNotIn('model',result['data']['rooms']['room']);self.assertEqual(result['data']['chart_temperatures'],{'rooms':{'room':20.7},'zones':{'zone':19.2}})
         self.assertEqual(result['data']['rooms']['room']['plan'],{'commands':[{'time':'later','action':'raise'}],'slots':[{'end':'end'}]})
         self.assertEqual(result['data']['zones']['zone']['plan']['commands'],[{'time':'zone-later','action':'raise'}])
         self.assertEqual(result['history'][0],{'room_id':'room','time':1,'pump_mode':'heat'})
