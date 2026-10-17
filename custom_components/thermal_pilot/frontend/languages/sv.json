@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Säkerhetskopiera",
-    "Restore": "Återställ"
+    "Restore": "Återställ",
+    "Zones": "Zoner",
+    "Zone (optional)": "Zon (valfritt)",
+    "Zone temperature": "Zontemperatur",
+    "New zone": "Ny zon",
+    "Add zone": "Lägg till zon",
+    "Remove zone": "Ta bort zon",
+    "Shared zone": "Gemensam zon",
+    "Zone source": "Zonens värme- eller kylkälla",
+    "Heating zones": "Zoner",
+    "Heating zone (optional)": "Zon (valfritt)",
+    "Heating zone temperature": "Zontemperatur",
+    "New heating zone": "Ny zon",
+    "Add heating zone": "Lägg till zon",
+    "Remove heating zone": "Ta bort zon",
+    "Shared heating zone": "Gemensam zon",
+    "Zone heat source": "Zonens värme- eller kylkälla",
+    "Zone name": "Zonnamn",
+    "Zone heat pump": "Zonens värmepump",
+    "No rooms linked. Zone control is inactive.": "Inga rum är anslutna. Zonstyrningen är inaktiv.",
+    "No rooms linked. This zone does not control heating.": "Inga rum är anslutna. Zonstyrningen är inaktiv."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Första uppskattning",
     "hours": "timmar",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zoner"
   }
 }

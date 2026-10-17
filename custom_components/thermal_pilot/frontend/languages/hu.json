@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Biztonsági mentés",
-    "Restore": "Visszaállítás"
+    "Restore": "Visszaállítás",
+    "Zones": "Zónák",
+    "Zone (optional)": "Zóna (opcionális)",
+    "Zone temperature": "Zónahőmérséklet",
+    "New zone": "Új zóna",
+    "Add zone": "Zóna hozzáadása",
+    "Remove zone": "Zóna eltávolítása",
+    "Shared zone": "Közös zóna",
+    "Zone source": "A zóna fűtési vagy hűtési forrása",
+    "Heating zones": "Zónák",
+    "Heating zone (optional)": "Zóna (opcionális)",
+    "Heating zone temperature": "Zónahőmérséklet",
+    "New heating zone": "Új zóna",
+    "Add heating zone": "Zóna hozzáadása",
+    "Remove heating zone": "Zóna eltávolítása",
+    "Shared heating zone": "Közös zóna",
+    "Zone heat source": "A zóna fűtési vagy hűtési forrása",
+    "Zone name": "Zóna neve",
+    "Zone heat pump": "A zóna hőszivattyúja",
+    "No rooms linked. Zone control is inactive.": "Nincsenek társított helyiségek. A zónavezérlés inaktív.",
+    "No rooms linked. This zone does not control heating.": "Nincsenek társított helyiségek. A zónavezérlés inaktív."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Kezdeti becslés",
     "hours": "óra",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zónák"
   }
 }

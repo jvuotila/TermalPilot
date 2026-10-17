@@ -29,6 +29,13 @@ function runtime(fetch){
    assert.ok(catalog[section]);assert.ok(Object.values(catalog[section]).every(value=>typeof value==='string'));
   }
  }
+ const zoneWords={en:'Zones',fi:'Vyöhykkeet',sv:'Zoner',nb:'Soner',da:'Zoner',de:'Zonen',pt:'Zonas',es:'Zonas',fr:'Zones',et:'Tsoonid',lv:'Zonas',lt:'Zonos',pl:'Strefy',it:'Zone',nl:'Zones',is:'Svæði',ro:'Zone',cs:'Zóny',sk:'Zóny',bg:'Зони',sr:'Зоне',hr:'Zone',el:'Ζώνες',sq:'Zonat',hu:'Zónák'};
+ const zoneRuntime=runtime(async url=>{const code=new URL(url).pathname.split('/').at(-1).replace('.json','');return {ok:true,json:async()=>catalogs[code]};});
+ for(const [code,word] of Object.entries(zoneWords)){
+  await zoneRuntime.load(code);assert.equal(zoneRuntime.translateText('Zones',code),word);assert.equal(zoneRuntime.cardText('Zones',code),word);
+  assert.equal(catalogs[code].messages['Heating zones'],word);
+  for(const key of ['Zone (optional)','Zone temperature','New zone','Add zone','Remove zone','Shared zone','Zone source','Zone name','Zone heat pump','No rooms linked. Zone control is inactive.'])assert.ok(catalogs[code].messages[key],code+': '+key);
+ }
  const broken=runtime(async()=>({ok:false,status:404}));
  await broken.load('fi');assert.equal(broken.ready('fi'),true);assert.equal(broken.translateText('History','fi'),'History');
  assert.equal(broken.cardText('Room','fi'),'Room','Missing catalog falls back without blocking the card');

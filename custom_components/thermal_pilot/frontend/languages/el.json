@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Αντίγραφο ασφαλείας",
-    "Restore": "Επαναφορά"
+    "Restore": "Επαναφορά",
+    "Zones": "Ζώνες",
+    "Zone (optional)": "Ζώνη (προαιρετική)",
+    "Zone temperature": "Θερμοκρασία ζώνης",
+    "New zone": "Νέα ζώνη",
+    "Add zone": "Προσθήκη ζώνης",
+    "Remove zone": "Αφαίρεση ζώνης",
+    "Shared zone": "Κοινόχρηστη ζώνη",
+    "Zone source": "Πηγή θέρμανσης ή ψύξης της ζώνης",
+    "Heating zones": "Ζώνες",
+    "Heating zone (optional)": "Ζώνη (προαιρετική)",
+    "Heating zone temperature": "Θερμοκρασία ζώνης",
+    "New heating zone": "Νέα ζώνη",
+    "Add heating zone": "Προσθήκη ζώνης",
+    "Remove heating zone": "Αφαίρεση ζώνης",
+    "Shared heating zone": "Κοινόχρηστη ζώνη",
+    "Zone heat source": "Πηγή θέρμανσης ή ψύξης της ζώνης",
+    "Zone name": "Όνομα ζώνης",
+    "Zone heat pump": "Αντλία θερμότητας ζώνης",
+    "No rooms linked. Zone control is inactive.": "Δεν έχουν συνδεθεί δωμάτια. Ο έλεγχος της ζώνης είναι ανενεργός.",
+    "No rooms linked. This zone does not control heating.": "Δεν έχουν συνδεθεί δωμάτια. Ο έλεγχος της ζώνης είναι ανενεργός."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Αρχική εκτίμηση",
     "hours": "ώρες",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Ζώνες"
   }
 }

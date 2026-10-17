@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Dublēt",
-    "Restore": "Atjaunot"
+    "Restore": "Atjaunot",
+    "Zones": "Zonas",
+    "Zone (optional)": "Zona (neobligāta)",
+    "Zone temperature": "Zonas temperatūra",
+    "New zone": "Jauna zona",
+    "Add zone": "Pievienot zonu",
+    "Remove zone": "Noņemt zonu",
+    "Shared zone": "Koplietota zona",
+    "Zone source": "Zonas apkures vai dzesēšanas avots",
+    "Heating zones": "Zonas",
+    "Heating zone (optional)": "Zona (neobligāta)",
+    "Heating zone temperature": "Zonas temperatūra",
+    "New heating zone": "Jauna zona",
+    "Add heating zone": "Pievienot zonu",
+    "Remove heating zone": "Noņemt zonu",
+    "Shared heating zone": "Koplietota zona",
+    "Zone heat source": "Zonas apkures vai dzesēšanas avots",
+    "Zone name": "Zonas nosaukums",
+    "Zone heat pump": "Zonas siltumsūknis",
+    "No rooms linked. Zone control is inactive.": "Nav piesaistītu telpu. Zonas vadība ir neaktīva.",
+    "No rooms linked. This zone does not control heating.": "Nav piesaistītu telpu. Zonas vadība ir neaktīva."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Sākotnējā aplēse",
     "hours": "stundas",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zonas"
   }
 }

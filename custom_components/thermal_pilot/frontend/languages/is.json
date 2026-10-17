@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Afrita",
-    "Restore": "Endurheimta"
+    "Restore": "Endurheimta",
+    "Zones": "Svæði",
+    "Zone (optional)": "Svæði (valfrjálst)",
+    "Zone temperature": "Hitastig svæðis",
+    "New zone": "Nýtt svæði",
+    "Add zone": "Bæta við svæði",
+    "Remove zone": "Fjarlægja svæði",
+    "Shared zone": "Sameiginlegt svæði",
+    "Zone source": "Hitunar- eða kæligjafi svæðis",
+    "Heating zones": "Svæði",
+    "Heating zone (optional)": "Svæði (valfrjálst)",
+    "Heating zone temperature": "Hitastig svæðis",
+    "New heating zone": "Nýtt svæði",
+    "Add heating zone": "Bæta við svæði",
+    "Remove heating zone": "Fjarlægja svæði",
+    "Shared heating zone": "Sameiginlegt svæði",
+    "Zone heat source": "Hitunar- eða kæligjafi svæðis",
+    "Zone name": "Heiti svæðis",
+    "Zone heat pump": "Varmadæla svæðis",
+    "No rooms linked. Zone control is inactive.": "Engin herbergi tengd. Stýring svæðis er óvirk.",
+    "No rooms linked. This zone does not control heating.": "Engin herbergi tengd. Stýring svæðis er óvirk."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Upphafsmat",
     "hours": "klst",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Svæði"
   }
 }

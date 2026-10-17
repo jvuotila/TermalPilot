@@ -75,9 +75,9 @@ check their settings before enabling control. Failed writes are reported and
 retried. State confirmation relies on what Home Assistant reports and does not
 prove that hardware delivered heat.
 
-## Secondary heating zones
+## Secondary zones
 
-A heating zone links configured rooms to an additional air-to-air heat pump or
+A zone links configured rooms to an additional air-to-air heat pump or
 observed fireplace. It does not replace their primary heating system. Each room
 keeps its own thermostat, relay, plan and learned primary model.
 

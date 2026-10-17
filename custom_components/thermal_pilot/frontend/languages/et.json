@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Varunda",
-    "Restore": "Taasta"
+    "Restore": "Taasta",
+    "Zones": "Tsoonid",
+    "Zone (optional)": "Tsoon (valikuline)",
+    "Zone temperature": "Tsooni temperatuur",
+    "New zone": "Uus tsoon",
+    "Add zone": "Lisa tsoon",
+    "Remove zone": "Eemalda tsoon",
+    "Shared zone": "Ühine tsoon",
+    "Zone source": "Tsooni kütte- või jahutusallikas",
+    "Heating zones": "Tsoonid",
+    "Heating zone (optional)": "Tsoon (valikuline)",
+    "Heating zone temperature": "Tsooni temperatuur",
+    "New heating zone": "Uus tsoon",
+    "Add heating zone": "Lisa tsoon",
+    "Remove heating zone": "Eemalda tsoon",
+    "Shared heating zone": "Ühine tsoon",
+    "Zone heat source": "Tsooni kütte- või jahutusallikas",
+    "Zone name": "Tsooni nimi",
+    "Zone heat pump": "Tsooni soojuspump",
+    "No rooms linked. Zone control is inactive.": "Ühtegi ruumi pole seotud. Tsooni juhtimine pole aktiivne.",
+    "No rooms linked. This zone does not control heating.": "Ühtegi ruumi pole seotud. Tsooni juhtimine pole aktiivne."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Esialgne hinnang",
     "hours": "tundi",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Tsoonid"
   }
 }

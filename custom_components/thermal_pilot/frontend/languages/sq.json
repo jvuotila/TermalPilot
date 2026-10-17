@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Krijo kopje rezervë",
-    "Restore": "Rikthe"
+    "Restore": "Rikthe",
+    "Zones": "Zonat",
+    "Zone (optional)": "Zonë (opsionale)",
+    "Zone temperature": "Temperatura e zonës",
+    "New zone": "Zonë e re",
+    "Add zone": "Shto zonë",
+    "Remove zone": "Hiq zonën",
+    "Shared zone": "Zonë e përbashkët",
+    "Zone source": "Burimi i ngrohjes ose ftohjes së zonës",
+    "Heating zones": "Zonat",
+    "Heating zone (optional)": "Zonë (opsionale)",
+    "Heating zone temperature": "Temperatura e zonës",
+    "New heating zone": "Zonë e re",
+    "Add heating zone": "Shto zonë",
+    "Remove heating zone": "Hiq zonën",
+    "Shared heating zone": "Zonë e përbashkët",
+    "Zone heat source": "Burimi i ngrohjes ose ftohjes së zonës",
+    "Zone name": "Emri i zonës",
+    "Zone heat pump": "Pompa e nxehtësisë e zonës",
+    "No rooms linked. Zone control is inactive.": "Nuk ka dhoma të lidhura. Kontrolli i zonës është joaktiv.",
+    "No rooms linked. This zone does not control heating.": "Nuk ka dhoma të lidhura. Kontrolli i zonës është joaktiv."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Vlerësimi fillestar",
     "hours": "orë",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zonat"
   }
 }

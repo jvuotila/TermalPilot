@@ -64,7 +64,7 @@ def normalize_settings(raw):
         raise ValueError('Invalid backup settings.')
     zones=raw.get('heating_zones',[])
     if not isinstance(zones,list):
-        raise ValueError('Invalid heating zone settings.')
+        raise ValueError('Invalid zone settings.')
     value=safe_missing_fields(raw,SOURCE_FIELDS)
     for key,items,fields in (('rooms',raw['rooms'],ROOM_FIELDS),('heating_zones',zones,ZONE_FIELDS)):
         if any(not isinstance(item,dict) or not item.get('id') for item in items):

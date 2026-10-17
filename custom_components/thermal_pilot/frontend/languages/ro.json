@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Creează copie",
-    "Restore": "Restaurează"
+    "Restore": "Restaurează",
+    "Zones": "Zone",
+    "Zone (optional)": "Zonă (opțională)",
+    "Zone temperature": "Temperatura zonei",
+    "New zone": "Zonă nouă",
+    "Add zone": "Adaugă zonă",
+    "Remove zone": "Elimină zona",
+    "Shared zone": "Zonă comună",
+    "Zone source": "Sursa de încălzire sau răcire a zonei",
+    "Heating zones": "Zone",
+    "Heating zone (optional)": "Zonă (opțională)",
+    "Heating zone temperature": "Temperatura zonei",
+    "New heating zone": "Zonă nouă",
+    "Add heating zone": "Adaugă zonă",
+    "Remove heating zone": "Elimină zona",
+    "Shared heating zone": "Zonă comună",
+    "Zone heat source": "Sursa de încălzire sau răcire a zonei",
+    "Zone name": "Numele zonei",
+    "Zone heat pump": "Pompa de căldură a zonei",
+    "No rooms linked. Zone control is inactive.": "Nu sunt camere asociate. Controlul zonei este inactiv.",
+    "No rooms linked. This zone does not control heating.": "Nu sunt camere asociate. Controlul zonei este inactiv."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Estimare inițială",
     "hours": "ore",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zone"
   }
 }

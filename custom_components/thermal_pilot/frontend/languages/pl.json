@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Utwórz kopię",
-    "Restore": "Przywróć"
+    "Restore": "Przywróć",
+    "Zones": "Strefy",
+    "Zone (optional)": "Strefa (opcjonalna)",
+    "Zone temperature": "Temperatura strefy",
+    "New zone": "Nowa strefa",
+    "Add zone": "Dodaj strefę",
+    "Remove zone": "Usuń strefę",
+    "Shared zone": "Wspólna strefa",
+    "Zone source": "Źródło ogrzewania lub chłodzenia strefy",
+    "Heating zones": "Strefy",
+    "Heating zone (optional)": "Strefa (opcjonalna)",
+    "Heating zone temperature": "Temperatura strefy",
+    "New heating zone": "Nowa strefa",
+    "Add heating zone": "Dodaj strefę",
+    "Remove heating zone": "Usuń strefę",
+    "Shared heating zone": "Wspólna strefa",
+    "Zone heat source": "Źródło ogrzewania lub chłodzenia strefy",
+    "Zone name": "Nazwa strefy",
+    "Zone heat pump": "Pompa ciepła strefy",
+    "No rooms linked. Zone control is inactive.": "Brak przypisanych pomieszczeń. Sterowanie strefą jest nieaktywne.",
+    "No rooms linked. This zone does not control heating.": "Brak przypisanych pomieszczeń. Sterowanie strefą jest nieaktywne."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Wstępne oszacowanie",
     "hours": "godzin",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Strefy"
   }
 }

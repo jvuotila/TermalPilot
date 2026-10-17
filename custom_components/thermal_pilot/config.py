@@ -51,7 +51,7 @@ ROOM_FIELDS = [
  ('thermostat', 'Thermostat', 'climate'),
  ('temperature_entity', 'Room temperature sensor', 'sensor', {'kind': 'temperature'}),
  ('activity_entity', 'Thermostat relay (optional)', 'switch', {'kind': 'relay'}),
- ('heating_zone_id', 'Heating zone (optional)', 'text'),
+ ('heating_zone_id', 'Zone (optional)', 'text'),
  ('heat_control', 'Room heating control', 'select:house,air_to_air'),
  ('baseline', 'Target temperature (°C)', 'number', 5, 30, 0.1),
  ('garage_construction','Construction type','select:unknown,timber_frame,masonry,lightweight_metal'),
@@ -76,9 +76,9 @@ ROOM_FIELDS = [
 
 ZONE_FIELDS = [
  ('name', 'Zone name', 'text'),
- ('source_type', 'Zone heat source', 'select:air_to_air,fireplace'),
+ ('source_type', 'Zone source', 'select:air_to_air,fireplace'),
  ('thermostat', 'Zone heat pump', 'climate'),
- ('temperature_policy', 'Heating zone temperature', 'select:main,average,coldest'),
+ ('temperature_policy', 'Zone temperature', 'select:main,average,coldest'),
  ('fireplace_entity', 'Zone fireplace sensor (optional)', 'sensor,binary_sensor', {'kind': 'activity'}),
  ('fireplace_active_state', 'Fireplace active when', 'text'),
  ('main_room_id', 'Main room', 'text'),
@@ -326,16 +326,16 @@ def validate(payload, hass=None):
     if not isinstance(result['rooms'], list) or len(result['rooms']) > 30:
         raise ValueError('A maximum of 30 rooms is supported.')
     zones=[];zone_ids=set()
-    if not isinstance(result['heating_zones'],list) or len(result['heating_zones'])>30:raise ValueError('A maximum of 30 heating zones is supported.')
+    if not isinstance(result['heating_zones'],list) or len(result['heating_zones'])>30:raise ValueError('A maximum of 30 zones is supported.')
     for raw in result['heating_zones']:
-        if not isinstance(raw,dict):raise ValueError('Invalid heating zone.')
+        if not isinstance(raw,dict):raise ValueError('Invalid zone.')
         zone={**ZONE_DEFAULTS,**{k:v for k,v in raw.items() if k in ZONE_DEFAULTS},'id':raw.get('id') or str(uuid4())}
         try:
             from uuid import UUID
             UUID(zone['id'])
-        except (ValueError,TypeError,AttributeError):raise ValueError('Invalid heating zone identifier.') from None
+        except (ValueError,TypeError,AttributeError):raise ValueError('Invalid zone identifier.') from None
         check(zone,ZONE_FIELDS)
-        if not zone['name'] or (zone['source_type']=='air_to_air' and not zone['thermostat']) or (zone['source_type']=='fireplace' and not zone['fireplace_entity']) or zone['id'] in zone_ids:raise ValueError('Each heating zone needs a unique identifier, name and selected heat source.')
+        if not zone['name'] or (zone['source_type']=='air_to_air' and not zone['thermostat']) or (zone['source_type']=='fireplace' and not zone['fireplace_entity']) or zone['id'] in zone_ids:raise ValueError('Each zone needs a unique identifier, name and selected heat source.')
         if hass is not None and zone['fireplace_entity']:
             state=hass.states.get(zone['fireplace_entity']);options=state.attributes.get('options')
             allowed=['on','off'] if zone['fireplace_entity'].startswith('binary_sensor.') else options if isinstance(options,list) else None
@@ -393,7 +393,7 @@ def validate(payload, hass=None):
         members=[r for r in rooms if r['heating_zone_id']==zone['id']]
         if (members and zone['main_room_id'] not in {r['id'] for r in members}) or (not members and zone['main_room_id']):
             raise ValueError('Each zone needs linked rooms and a main room selected from them.')
-        if zone['thermostat'] in thermostats:raise ValueError('A heat pump can have only one controller or heating zone.')
+        if zone['thermostat'] in thermostats:raise ValueError('A heat pump can have only one controller or zone.')
         thermostats.add(zone['thermostat'])
         if hass is not None and zone['heating_enabled']:
             state=hass.states.get(zone['thermostat']);attrs=state.attributes
@@ -403,7 +403,7 @@ def validate(payload, hass=None):
             for key,attribute in [('air_fan_heat','fan_modes'),('air_fan_idle','fan_modes'),('air_swing','swing_modes'),('air_swing_idle','swing_modes'),('air_fan_cool','fan_modes'),('air_swing_cool','swing_modes')]:
                 if result[key] and result[key] not in attrs.get(attribute,[]):raise ValueError('Shared air-to-air mode is not supported by every selected heat pump.')
     for room in rooms:
-        if room['heating_zone_id'] and room['heating_zone_id'] not in zone_ids:raise ValueError('Selected heating zone was not found.')
+        if room['heating_zone_id'] and room['heating_zone_id'] not in zone_ids:raise ValueError('Selected zone was not found.')
         zone=next((z for z in zones if z['id']==room['heating_zone_id']),None)
     result['rooms'] = rooms
     if (price_required(result) and not result['price_entity']) or not result['outdoor_entity']:

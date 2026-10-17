@@ -19,7 +19,7 @@ defaults or measured performance claims.
 
 ### Heating history
 
-![Recorded heating and cooling alongside suggested heating, grouped into rooms, heating zones and garages](screenshots/electricity-and-heating-history.png)
+![Recorded heating and cooling alongside suggested heating, grouped into rooms, zones and garages](screenshots/electricity-and-heating-history.png)
 
 ### Room history
 
@@ -46,7 +46,7 @@ defaults or measured performance claims.
 
 ![Room settings with an expanded room and the architectural floor-plan background](screenshots/rooms-settings.png)
 
-### Heating zones
+### Zones
 
 ![Heating-zone configuration with heat pump, room membership and tariff strategy](screenshots/heating-zones-settings.png)
 

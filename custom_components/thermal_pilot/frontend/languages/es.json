@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Crear copia",
-    "Restore": "Restaurar"
+    "Restore": "Restaurar",
+    "Zones": "Zonas",
+    "Zone (optional)": "Zona (opcional)",
+    "Zone temperature": "Temperatura de la zona",
+    "New zone": "Nueva zona",
+    "Add zone": "Añadir zona",
+    "Remove zone": "Eliminar zona",
+    "Shared zone": "Zona compartida",
+    "Zone source": "Fuente de calefacción o refrigeración de la zona",
+    "Heating zones": "Zonas",
+    "Heating zone (optional)": "Zona (opcional)",
+    "Heating zone temperature": "Temperatura de la zona",
+    "New heating zone": "Nueva zona",
+    "Add heating zone": "Añadir zona",
+    "Remove heating zone": "Eliminar zona",
+    "Shared heating zone": "Zona compartida",
+    "Zone heat source": "Fuente de calefacción o refrigeración de la zona",
+    "Zone name": "Nombre de la zona",
+    "Zone heat pump": "Bomba de calor de la zona",
+    "No rooms linked. Zone control is inactive.": "No hay habitaciones vinculadas. El control de la zona está inactivo.",
+    "No rooms linked. This zone does not control heating.": "No hay habitaciones vinculadas. El control de la zona está inactivo."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Estimación inicial",
     "hours": "horas",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zonas"
   }
 }

@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Архивирай",
-    "Restore": "Възстанови"
+    "Restore": "Възстанови",
+    "Zones": "Зони",
+    "Zone (optional)": "Зона (незадължителна)",
+    "Zone temperature": "Температура на зоната",
+    "New zone": "Нова зона",
+    "Add zone": "Добавяне на зона",
+    "Remove zone": "Премахване на зона",
+    "Shared zone": "Споделена зона",
+    "Zone source": "Източник за отопление или охлаждане на зоната",
+    "Heating zones": "Зони",
+    "Heating zone (optional)": "Зона (незадължителна)",
+    "Heating zone temperature": "Температура на зоната",
+    "New heating zone": "Нова зона",
+    "Add heating zone": "Добавяне на зона",
+    "Remove heating zone": "Премахване на зона",
+    "Shared heating zone": "Споделена зона",
+    "Zone heat source": "Източник за отопление или охлаждане на зоната",
+    "Zone name": "Име на зоната",
+    "Zone heat pump": "Термопомпа на зоната",
+    "No rooms linked. Zone control is inactive.": "Няма свързани стаи. Управлението на зоната е неактивно.",
+    "No rooms linked. This zone does not control heating.": "Няма свързани стаи. Управлението на зоната е неактивно."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Начална оценка",
     "hours": "часа",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Зони"
   }
 }

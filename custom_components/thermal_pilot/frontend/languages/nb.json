@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Sikkerhetskopier",
-    "Restore": "Gjenopprett"
+    "Restore": "Gjenopprett",
+    "Zones": "Soner",
+    "Zone (optional)": "Sone (valgfritt)",
+    "Zone temperature": "Sonetemperatur",
+    "New zone": "Ny sone",
+    "Add zone": "Legg til sone",
+    "Remove zone": "Fjern sone",
+    "Shared zone": "Felles sone",
+    "Zone source": "Sonens varme- eller kjølekilde",
+    "Heating zones": "Soner",
+    "Heating zone (optional)": "Sone (valgfritt)",
+    "Heating zone temperature": "Sonetemperatur",
+    "New heating zone": "Ny sone",
+    "Add heating zone": "Legg til sone",
+    "Remove heating zone": "Fjern sone",
+    "Shared heating zone": "Felles sone",
+    "Zone heat source": "Sonens varme- eller kjølekilde",
+    "Zone name": "Sonenavn",
+    "Zone heat pump": "Sonens varmepumpe",
+    "No rooms linked. Zone control is inactive.": "Ingen rom er tilknyttet. Sonestyringen er inaktiv.",
+    "No rooms linked. This zone does not control heating.": "Ingen rom er tilknyttet. Sonestyringen er inaktiv."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Første anslag",
     "hours": "timer",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Soner"
   }
 }

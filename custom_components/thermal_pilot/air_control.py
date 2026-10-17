@@ -100,9 +100,9 @@ class AirHeatPumpControl:
                 reason='Garage temperature cycle' if heating else 'Standby'
         else:
             if too_warm:
-                heating=False;reason='Heating zone upper limit reached'
+                heating=False;reason='Zone upper limit reached'
             elif too_cold:
-                heating=True;reason='Heating zone below lower limit'
+                heating=True;reason='Zone below lower limit'
             elif planned is None and not (room.get('heating_zone_id') and room.get('zone_heating_strategy')=='temperature'):
                 # Missing price data falls back to room comfort, independently of tariffs.
                 heating=temperature<room['baseline'];reason='Room comfort fallback'

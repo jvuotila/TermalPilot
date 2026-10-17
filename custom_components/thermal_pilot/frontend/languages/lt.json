@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Kurti kopiją",
-    "Restore": "Atkurti"
+    "Restore": "Atkurti",
+    "Zones": "Zonos",
+    "Zone (optional)": "Zona (neprivaloma)",
+    "Zone temperature": "Zonos temperatūra",
+    "New zone": "Nauja zona",
+    "Add zone": "Pridėti zoną",
+    "Remove zone": "Pašalinti zoną",
+    "Shared zone": "Bendra zona",
+    "Zone source": "Zonos šildymo arba vėsinimo šaltinis",
+    "Heating zones": "Zonos",
+    "Heating zone (optional)": "Zona (neprivaloma)",
+    "Heating zone temperature": "Zonos temperatūra",
+    "New heating zone": "Nauja zona",
+    "Add heating zone": "Pridėti zoną",
+    "Remove heating zone": "Pašalinti zoną",
+    "Shared heating zone": "Bendra zona",
+    "Zone heat source": "Zonos šildymo arba vėsinimo šaltinis",
+    "Zone name": "Zonos pavadinimas",
+    "Zone heat pump": "Zonos šilumos siurblys",
+    "No rooms linked. Zone control is inactive.": "Nėra susietų kambarių. Zonos valdymas neaktyvus.",
+    "No rooms linked. This zone does not control heating.": "Nėra susietų kambarių. Zonos valdymas neaktyvus."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Pradinis įvertis",
     "hours": "valandų",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zonos"
   }
 }

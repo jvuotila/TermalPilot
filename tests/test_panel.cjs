@@ -703,17 +703,17 @@ console.log('Accordion scrolling passed: opening below viewport, visible content
 
 const zonePanel=new Component();zonePanel._hass={states:{'climate.pump':{entity_id:'climate.pump',state:'fan_only',attributes:{fan_modes:['low','medium','high'],swing_modes:['off','vertical','both']}},'climate.other':{entity_id:'climate.other',state:'heat',attributes:{fan_modes:['low','high'],swing_modes:['off']}}}};
 zonePanel.settings={rooms:[{id:'g',name:'Garage',thermostat:'climate.pump',is_garage:true,garage_minimum:5,garage_maximum:9,garage_swing:'both'},{id:'room',name:'Room',thermostat:'climate.pump',heat_control:'air_to_air',heating_zone_id:'zone'}],heating_zones:[{id:'zone',name:'House pump',thermostat:'climate.pump',source_type:'air_to_air',main_room_id:'room',temperature_policy:'average'}],air_swing:''};
-zonePanel.info={source_fields:[['air_swing','Heating swing mode','text']],room_fields:[['name','Room name','text'],['is_garage','Garage','bool'],['heating_zone_id','Heating zone (optional)','text'],['thermostat','Thermostat','climate'],['baseline','Target temperature (°C)','number',5,30],['garage_minimum','Garage lower temperature limit (°C)','number',-5,25],['garage_maximum','Garage upper temperature limit (°C)','number',-5,30],['garage_swing','Garage heating swing mode','text']],zone_fields:[['name','Zone name','text'],['thermostat','Zone heat pump','climate'],['main_room_id','Main room','text'],['temperature_policy','Heating zone temperature','select:main,average,coldest']],data:{rooms:{}}};
+zonePanel.info={source_fields:[['air_swing','Heating swing mode','text']],room_fields:[['name','Room name','text'],['is_garage','Garage','bool'],['heating_zone_id','Zone (optional)','text'],['thermostat','Thermostat','climate'],['baseline','Target temperature (°C)','number',5,30],['garage_minimum','Garage lower temperature limit (°C)','number',-5,25],['garage_maximum','Garage upper temperature limit (°C)','number',-5,30],['garage_swing','Garage heating swing mode','text']],zone_fields:[['name','Zone name','text'],['thermostat','Zone heat pump','climate'],['main_room_id','Main room','text'],['temperature_policy','Zone temperature','select:main,average,coldest']],data:{rooms:{}}};
 const zoneHTML=zonePanel.settingsView();
-assert.match(zoneHTML,/<h2>Heating zones<\/h2>/);assert.match(zoneHTML,/data-field="zone0.main_room_id"/);assert.match(zoneHTML,/data-field="room0.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room0.baseline"/);assert.doesNotMatch(zoneHTML,/data-field="room1.garage_minimum"/);assert.match(zoneHTML,/data-field="room1.thermostat"/);
+assert.match(zoneHTML,/<h2>Zones<\/h2>/);assert.match(zoneHTML,/data-field="zone0.main_room_id"/);assert.match(zoneHTML,/data-field="room0.garage_minimum"/);assert.doesNotMatch(zoneHTML,/data-field="room0.baseline"/);assert.doesNotMatch(zoneHTML,/data-field="room1.garage_minimum"/);assert.match(zoneHTML,/data-field="room1.thermostat"/);
 assert.match(zoneHTML,/5–9 °C/);
 const swingHTML=zonePanel.field(['garage_swing','Garage heating swing mode','text'],zonePanel.settings.rooms[0],'room0');
 assert.match(swingHTML,/<select/);assert.match(swingHTML,/value="vertical"/);assert.match(swingHTML,/value="both" selected/);assert.match(swingHTML,/Leave unchanged/);assert.doesNotMatch(swingHTML,/<input/);
 zonePanel.settings.rooms.push({id:'other',thermostat:'climate.other',heat_control:'air_to_air'});
 const commonSwing=zonePanel.field(['air_swing','Heating swing mode','text'],zonePanel.settings,'source');assert.match(commonSwing,/value="off"/);assert.doesNotMatch(commonSwing,/value="vertical"/);
-const policyHTML=zonePanel.field(['temperature_policy','Heating zone temperature','select:main,average,coldest'],zonePanel.settings.heating_zones[0],'zone0');
+const policyHTML=zonePanel.field(['temperature_policy','Zone temperature','select:main,average,coldest'],zonePanel.settings.heating_zones[0],'zone0');
 for(const label of ['Main room sensor','Average of room sensors','Coldest room sensor'])assert.ok(policyHTML.includes(label));
-zonePanel.settings.language='fi';assert.equal(zonePanel.t('Heating zones'),'Lämmitysvyöhykkeet');assert.equal(zonePanel.t('Garage heating strategy'),'Autotallin lämmitystapa');assert.equal(zonePanel.t('Fan only'),'Vain puhallus');
+zonePanel.settings.language='fi';assert.equal(zonePanel.t('Zones'),'Vyöhykkeet');assert.equal(zonePanel.t('Garage heating strategy'),'Autotallin lämmitystapa');assert.equal(zonePanel.t('Fan only'),'Vain puhallus');
 console.log('Garage/zone UI passed: conditional limits, linked room controllers, capability-derived swing selections, shared capability intersection, three temperature policies and Finnish labels.');
 
 zonePanel.settings.rooms[0].garage_door_entities=Array.from({length:5},(_,i)=>`binary_sensor.door_${i}`);
@@ -739,7 +739,7 @@ const newZonePanel=new Component();let addZoneClick;const newZoneDetails={open:f
 newZonePanel.tab='rooms';newZonePanel.settings={rooms:[],heating_zones:[]};newZonePanel.info={source_fields:[],room_fields:[],zone_fields:[],zone_defaults:{name:'',thermostat:''}};newZonePanel._hass={states:{}};
 newZonePanel.shadowRoot.querySelector=selector=>selector==='#add-zone'?{addEventListener:(_,fn)=>addZoneClick=fn}:selector.startsWith('[data-settings-disclosure=')?newZoneDetails:null;
 newZonePanel.render();addZoneClick();assert.equal(newZonePanel.settings.heating_zones.length,1);assert.equal(newZoneDetails.open,true);
-console.log('Adding a heating zone opens the new accordion immediately.');
+console.log('Adding a zone opens the new accordion immediately.');
 
 const memberPanel=new Component();memberPanel.tab='rooms';memberPanel._hass={states:{}};
 memberPanel.settings={rooms:[{id:'a',name:'Living room',temperature_entity:'sensor.a',heating_zone_id:''},{id:'b',name:'Study',temperature_entity:'sensor.b',heating_zone_id:'other'},{id:'g',name:'Garage',temperature_entity:'sensor.g',is_garage:true}],heating_zones:[{id:'z',name:'Main zone',main_room_id:''},{id:'other',name:'Other zone',main_room_id:'b'}]};
@@ -781,7 +781,7 @@ emptyAirPanel.info={source_fields:[['air_fan_heat','Heating fan speed','text']],
 assert.match(emptyAirPanel.settingsView(),/data-air-group hidden/);
 assert.doesNotMatch(emptyAirPanel.settingsView(),/Heating response is learned automatically/);
 let emptyFan=emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source');
-assert.match(emptyFan,/data-field="source.air_fan_heat" disabled/);assert.match(emptyFan,/Select a heat pump in a room or heating zone first/);
+assert.match(emptyFan,/data-field="source.air_fan_heat" disabled/);assert.match(emptyFan,/Select a heat pump in a room or zone first/);
 emptyAirPanel.settings.rooms.push({id:'house',is_garage:false,heat_control:'air_to_air',thermostat:'climate.house'});
 assert.doesNotMatch(emptyAirPanel.settingsView(),/data-air-group hidden/);
 emptyFan=emptyAirPanel.field(emptyAirPanel.info.source_fields[0],emptyAirPanel.settings,'source');assert.match(emptyFan,/does not report options/);
@@ -860,7 +860,7 @@ const combinedZoneChart=zoneChartPanel.priceChart(true),combinedZone=zoneGroup(c
 const zoneHeatY=combinedZone.match(/data-zone-period="heat"[^>]* y="([^"]+)"/)[1],zoneCoolY=combinedZone.match(/data-zone-period="cool"[^>]* y="([^"]+)"/)[1];
 assert.equal(zoneHeatY,zoneCoolY);
 assert.match(combinedZoneChart,/style="font-size:18px;font-weight:600">Rooms<\/text>/);
-assert.match(combinedZoneChart,/style="font-size:18px;font-weight:600">Heating zones<\/text>/);
+assert.match(combinedZoneChart,/style="font-size:18px;font-weight:600">Zones<\/text>/);
 console.log('Chart section headings and shared heating/cooling zone lane passed.');
 const unifiedZone=zoneGroup(zoneChartPanel.priceChart(false),'z-last');
 const unifiedHeatY=unifiedZone.match(/data-zone-period="heat"[^>]* y="([^"]+)"/)[1],unifiedPlanY=unifiedZone.match(/data-zone-period="plan"[^>]* y="([^"]+)"/)[1];
@@ -1036,7 +1036,7 @@ for(const width of [390,1000])for(const history of [false,true]){
  for(let index=1;index<positions.length;index++)assert.ok(positions[index].y>positions[index-1].y+20,'Chart groups must not overlap');
  const chartHeight=Number(html.match(/viewBox="0 0 [\d.]+ ([\d.]+)"/)[1]);
  assert.ok(chartHeight>positions.at(-1).y+22,'Final garage must fit within chart');
- assert.ok(html.indexOf('>Heating zones</text>')<html.indexOf('>Garages</text>'));
+ assert.ok(html.indexOf('>Zones</text>')<html.indexOf('>Garages</text>'));
 }
 statusPanel.render();
 const settingsStyles=statusPanel.shadowRoot.innerHTML;

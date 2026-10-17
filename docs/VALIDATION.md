@@ -175,7 +175,7 @@ off; dynamic door/presence lists; legacy sensor migration; any-sensor presence f
 advertised fan/swing capabilities; staged mode transitions and countercommands;
 permission checks between writes; simulation and live-control release; mixed
 floor/air learning inputs; unchanged floor-room fingerprints; and one controller
-per shared heating zone. Zone temperature policies include main, mean and coldest
+per shared zone. Zone temperature policies include main, mean and coldest
 readings, with any-room upper-limit guards. These are not hardware tests.
 
 Delayed-acknowledgement service doubles now cover power-on, mode, temperature,

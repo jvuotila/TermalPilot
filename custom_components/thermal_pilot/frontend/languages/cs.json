@@ -442,7 +442,27 @@
     "Backup export failed.": "Backup export failed.",
     "Backup import failed. Check the Home Assistant log.": "Backup import failed. Check the Home Assistant log.",
     "Backup": "Zálohovat",
-    "Restore": "Obnovit"
+    "Restore": "Obnovit",
+    "Zones": "Zóny",
+    "Zone (optional)": "Zóna (volitelná)",
+    "Zone temperature": "Teplota zóny",
+    "New zone": "Nová zóna",
+    "Add zone": "Přidat zónu",
+    "Remove zone": "Odebrat zónu",
+    "Shared zone": "Společná zóna",
+    "Zone source": "Zdroj vytápění nebo chlazení zóny",
+    "Heating zones": "Zóny",
+    "Heating zone (optional)": "Zóna (volitelná)",
+    "Heating zone temperature": "Teplota zóny",
+    "New heating zone": "Nová zóna",
+    "Add heating zone": "Přidat zónu",
+    "Remove heating zone": "Odebrat zónu",
+    "Shared heating zone": "Společná zóna",
+    "Zone heat source": "Zdroj vytápění nebo chlazení zóny",
+    "Zone name": "Název zóny",
+    "Zone heat pump": "Tepelné čerpadlo zóny",
+    "No rooms linked. Zone control is inactive.": "Nejsou přiřazeny žádné místnosti. Řízení zóny je neaktivní.",
+    "No rooms linked. This zone does not control heating.": "Nejsou přiřazeny žádné místnosti. Řízení zóny je neaktivní."
   },
   "legacy": {},
   "cardMessages": {
@@ -461,6 +481,7 @@
     "Initial estimate": "Počáteční odhad",
     "hours": "hodin",
     "Not an energy-efficiency or insulation class.": "Not an energy-efficiency or insulation class.",
-    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters."
+    "Waiting for learned heat-loss parameters.": "Waiting for learned heat-loss parameters.",
+    "Zones": "Zóny"
   }
 }

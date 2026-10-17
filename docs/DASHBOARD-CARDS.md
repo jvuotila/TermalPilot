@@ -38,7 +38,7 @@ energy-efficiency ratings.
 
 Add **ThermalPilot heating plan** from the dashboard card picker. The integration
 loads it automatically. The card shows the Plan chart's legend, electricity
-prices, hourly weather, room timelines, garages and heating zones. Explanatory text above and
+prices, hourly weather, room timelines, garages and zones. Explanatory text above and
 below the chart is omitted. Its optional title is blank by default, and it uses
 the integration's language unless a card language is selected. Hover, focus or tap a chart bar to see details.
 The chart refreshes every minute and adapts to the card width.
