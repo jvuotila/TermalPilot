@@ -795,14 +795,7 @@ class ThermalPilotPanel extends HTMLElement {
       box.style.left=Math.max(8,Math.min(x+12,window.innerWidth-bounds.width-8))+'px';
       box.style.top=Math.max(8,Math.min(y+16,window.innerHeight-bounds.height-8))+'px';
     };
-    const openTemperature=event=>{
-      const mark=event.target.closest?.('[data-temperature-history-entity]');
-      const entity=mark?.dataset?.temperatureHistoryEntity;
-      if(!entity)return false;
-      event.preventDefault();event.stopPropagation();hide();
-      this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:entity},bubbles:true,composed:true}));
-      return true;
-    };
+    const openTemperature=event=>{const opened=this.openTemperatureHistory(event);if(opened)hide();return opened;};
     viewport.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')show(event);});
     viewport.addEventListener('pointerleave',hide);
     viewport.addEventListener('focusin',show);
@@ -810,6 +803,23 @@ class ThermalPilotPanel extends HTMLElement {
     viewport.addEventListener('click',event=>{if(openTemperature(event))return;const box=tooltip(),mark=event.target.closest?.('[data-chart-detail]');if(box&&!box.hidden&&mark&&box.textContent===mark.dataset.chartDetail)hide();else show(event);});
     viewport.addEventListener('scroll',hide);
     viewport.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){openTemperature(event);}else if(event.key==='Escape')hide();});
+  }
+  openTemperatureHistory(event){
+    const entity=event.target.closest?.('[data-temperature-history-entity]')?.dataset?.temperatureHistoryEntity;
+    if(!entity)return false;
+    event.preventDefault();event.stopPropagation();
+    this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:entity},bubbles:true,composed:true}));
+    return true;
+  }
+  statusTemperatureAction(value,entity,label){
+    if(!entity||value==null||!Number.isFinite(Number(value)))return '';
+    return ` data-temperature-history-entity="${escapeHTML(entity)}" role="button" tabindex="0" aria-label="${escapeHTML(this.t('History')+': '+this.t(label))}" style="cursor:pointer"`;
+  }
+  bindStatusTemperatures(){
+    this.shadowRoot.querySelectorAll('.compact-status [data-temperature-history-entity],.status-grid [data-temperature-history-entity]').forEach(value=>{
+      value.addEventListener('click',event=>this.openTemperatureHistory(event));
+      value.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')this.openTemperatureHistory(event);});
+    });
   }
   statusSparkline(key,color){
     const values=new Map();
@@ -882,9 +892,9 @@ class ThermalPilotPanel extends HTMLElement {
     const data=this.info.data,quality=this.collectionQuality(),language=this.settings?.language||'en';
     const temp=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value))?Number(value).toLocaleString(language,{maximumFractionDigits:1}):'—';
     const water=waterDistribution(this.settings)&&this.settings.water_entity;
-    const metric=(label,value)=>`<div class="compact-metric"><span>${escapeHTML(this.t(label))}</span><strong>${temp(value)}<small> °C</small></strong></div>`;
+    const metric=(label,value,entity)=>`<div class="compact-metric"><span>${escapeHTML(this.t(label))}</span><strong${this.statusTemperatureAction(value,entity,label)}>${temp(value)}<small> °C</small></strong></div>`;
     const started=data.history_info?.started_at;
-    return `<aside class="compact-status${water?'':' compact-no-water'}" aria-label="${escapeHTML(this.t('ThermalPilot status'))}"><div class="compact-badges"><span class="compact-label">${escapeHTML(this.t('Operation'))}</span>${this.controlBadges('header-status-help')}</div>${metric('Outdoor temperature',data.outdoor)}${water?metric('Heating water temperature',data.water):''}<div class="compact-secondary"><span class="compact-label">${escapeHTML(this.t('Data collection'))}</span><span class="status-pill quality quality-${quality.level}" tabindex="0" title="${escapeHTML(quality.detail)}">${escapeHTML(this.t('Data coverage: '+quality.label))}${tooltipInfoIcon}</span><details class="compact-extra" id="status-details" ${this.statusDetailsOpen?'open':''}><summary>${escapeHTML(this.t('Details'))} <span>· ${escapeHTML(data.updated?new Date(data.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—')}</span></summary><div class="compact-extra-body"><h3>${escapeHTML(this.t('ThermalPilot status'))}</h3><dl><dt>${escapeHTML(this.t('Stored history'))}</dt><dd>${Number(data.history_info?.rows||0).toLocaleString(language)} ${escapeHTML(this.t('samples'))} · ${((data.history_info?.bytes||0)/1048576).toFixed(1)} MiB</dd><dt>${escapeHTML(this.t('Last update'))}</dt><dd>${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><dt>${escapeHTML(this.t('Collection started:'))}</dt><dd>${escapeHTML(started!=null?dateLabel(started*1000):this.t('No observations yet'))}</dd></dl><p>${escapeHTML(this.t(data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'))}</p></div></details></div></aside>`;
+    return `<aside class="compact-status${water?'':' compact-no-water'}" aria-label="${escapeHTML(this.t('ThermalPilot status'))}"><div class="compact-badges"><span class="compact-label">${escapeHTML(this.t('Operation'))}</span>${this.controlBadges('header-status-help')}</div>${metric('Outdoor temperature',data.outdoor,this.settings?.outdoor_entity)}${water?metric('Heating water temperature',data.water,this.settings?.water_entity):''}<div class="compact-secondary"><span class="compact-label">${escapeHTML(this.t('Data collection'))}</span><span class="status-pill quality quality-${quality.level}" tabindex="0" title="${escapeHTML(quality.detail)}">${escapeHTML(this.t('Data coverage: '+quality.label))}${tooltipInfoIcon}</span><details class="compact-extra" id="status-details" ${this.statusDetailsOpen?'open':''}><summary>${escapeHTML(this.t('Details'))} <span>· ${escapeHTML(data.updated?new Date(data.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—')}</span></summary><div class="compact-extra-body"><h3>${escapeHTML(this.t('ThermalPilot status'))}</h3><dl><dt>${escapeHTML(this.t('Stored history'))}</dt><dd>${Number(data.history_info?.rows||0).toLocaleString(language)} ${escapeHTML(this.t('samples'))} · ${((data.history_info?.bytes||0)/1048576).toFixed(1)} MiB</dd><dt>${escapeHTML(this.t('Last update'))}</dt><dd>${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><dt>${escapeHTML(this.t('Collection started:'))}</dt><dd>${escapeHTML(started!=null?dateLabel(started*1000):this.t('No observations yet'))}</dd></dl><p>${escapeHTML(this.t(data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'))}</p></div></details></div></aside>`;
   }
   controlBadges(prefix='status-help'){
     const data=this.info?.data||{},settings=this.settings||{};
@@ -927,8 +937,8 @@ class ThermalPilotPanel extends HTMLElement {
     return `<section class="status-card"><div class="status-heading"><h2>ThermalPilot status</h2></div>
     <dl class="status-grid">
       <div class="status-block"><dt>Operation</dt><dd>${this.controlBadges()}</dd><small>${data.heating_active===false?'Observation and learning are stopped.':'Observation and learning are enabled.'}</small></div>
-      <div class="status-block status-temperature" tabindex="0" title="${escapeHTML(this.t('Recorded temperatures within the electricity price chart period, fitted across the card width'))}"><dt>Outdoor temperature ${tooltipInfoIcon}</dt><dd>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('outdoor','#2196f3')}</div>
-${waterDistribution(this.settings)&&this.settings?.water_entity?`      <div class="status-block status-temperature" tabindex="0" title="${escapeHTML(this.t('Recorded temperatures within the electricity price chart period, fitted across the card width'))}"><dt>Heating water temperature ${tooltipInfoIcon}</dt><dd>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('water','#16b957')}</div>`:''}
+      <div class="status-block status-temperature" tabindex="0" title="${escapeHTML(this.t('Recorded temperatures within the electricity price chart period, fitted across the card width'))}"><dt>Outdoor temperature ${tooltipInfoIcon}</dt><dd${this.statusTemperatureAction(data.outdoor,this.settings?.outdoor_entity,'Outdoor temperature')}>${escapeHTML(data.outdoor??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('outdoor','#2196f3')}</div>
+${waterDistribution(this.settings)&&this.settings?.water_entity?`      <div class="status-block status-temperature" tabindex="0" title="${escapeHTML(this.t('Recorded temperatures within the electricity price chart period, fitted across the card width'))}"><dt>Heating water temperature ${tooltipInfoIcon}</dt><dd${this.statusTemperatureAction(data.water,this.settings?.water_entity,'Heating water temperature')}>${escapeHTML(data.water??'—')}<span class="status-unit"> °C</span></dd>${this.statusSparkline('water','#16b957')}</div>`:''}
       <div class="status-block"><dt>Data collection</dt><dd><span class="status-pill ${data.collection?.collecting?'active':'paused'}">${data.collection?.collecting?'Active':'Paused'}</span><span class="status-pill quality quality-${quality.level}" tabindex="0" title="${escapeHTML(quality.detail)}">${escapeHTML(this.t('Data coverage: '+quality.label))}${tooltipInfoIcon}</span></dd></div>
       <div class="status-block"><dt>Stored history</dt><dd>${escapeHTML(Number(data.history_info?.rows??0).toLocaleString())}<span class="status-unit"> samples</span></dd><small class="collection-date">Collection started: ${data.history_info?.started_at!=null?escapeHTML(dateLabel(data.history_info.started_at*1000)):'No observations yet'}</small><small>Local database: ${((data.history_info?.bytes??0)/1048576).toFixed(1)} MiB</small></div>
       <div class="status-block"><dt>Last update</dt><dd class="status-time">${escapeHTML(data.updated?timeLabel(data.updated):'—')}</dd><small>Latest calculation and observation.</small></div>
@@ -1173,6 +1183,7 @@ details{scroll-margin-block:16px}
 .status-heading button{margin:0}
 .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:0}
 .status-block{min-width:0;padding:14px;border:1px solid #91a5ad;border-radius:10px;background:var(--card-background-color,white);box-shadow:0 2px 6px #0000000a,0 1px 2px #00000008}
+[data-temperature-history-entity]:focus-visible{outline:2px solid var(--primary-color,#087c85);outline-offset:3px;border-radius:2px}
 .status-temperature{position:relative;overflow:hidden;padding-bottom:54px}
 .status-temperature>dt,.status-temperature>dd,.status-temperature>small{position:relative;z-index:1}
 .status-temperature .status-sparkline{position:absolute;bottom:0;left:0;width:100%;height:46px;max-height:none;pointer-events:none}
@@ -1360,6 +1371,7 @@ details{scroll-margin-block:16px}
     this.shadowRoot.querySelector('#dismiss-save-error')?.addEventListener('click',()=>{this.message='';this.saveConfirmation=false;this.shadowRoot.querySelector('.save-error')?.remove();});
     this.shadowRoot.querySelector('.save-error')?.focus?.({preventScroll:true});
     this.shadowRoot.querySelector('#ha-menu')?.addEventListener('click',()=>this.openSidebar());
+    this.bindStatusTemperatures();
     const statusDetails=this.shadowRoot.querySelector('#status-details');statusDetails?.addEventListener('toggle',()=>{this.statusDetailsOpen=statusDetails.open;});
     const retention=this.shadowRoot.querySelector('#retention-accordion');if(retention)retention.addEventListener('toggle',()=>{this.retentionOpen=retention.open;});
     const retentionHelp=this.shadowRoot.querySelector('#retention-help');retentionHelp?.addEventListener('toggle',()=>{this.retentionHelpOpen=retentionHelp.open;});

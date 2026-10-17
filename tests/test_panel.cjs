@@ -1253,3 +1253,21 @@ assert.match(forecastChart.priceChart(false),/<text x="[\d.]+" y="12" text-ancho
 
 assert.doesNotMatch(forecastChart.priceChart(false),/Today and tomorrow · past thermostat activity/);
 assert.doesNotMatch(forecastChart.priceChart(true),/Selected period:.*recorded activity, plus today and tomorrow/);
+
+{
+ const status=new Component();status.settings={language:'en',outdoor_entity:'sensor.garden',water_entity:'sensor.flow',house_distribution:'water',house_heat_source:'air_to_water',rooms:[]};
+ status.info={data:{outdoor:3,water:27}};
+ const markup=status.compactStatusView();
+ assert.match(markup,/<strong data-temperature-history-entity="sensor.garden" role="button" tabindex="0"[^>]*cursor:pointer/);
+ assert.match(markup,/<strong data-temperature-history-entity="sensor.flow" role="button" tabindex="0"/);
+ assert.equal(status.statusTemperatureAction(null,'sensor.garden','Outdoor temperature'),'');
+ assert.equal(status.statusTemperatureAction(3,'','Outdoor temperature'),'');
+ const handlers={},events=[];status.dispatchEvent=event=>events.push(event);
+ status.shadowRoot.querySelectorAll=selector=>{assert.match(selector,/compact-status/);assert.match(selector,/status-grid/);return [{addEventListener:(name,fn)=>handlers[name]=fn}];};
+ status.bindStatusTemperatures();
+ const event={target:{closest:()=>({dataset:{temperatureHistoryEntity:'sensor.flow'}})},preventDefault(){},stopPropagation(){}};
+ handlers.click(event);handlers.keydown({...event,key:'Enter'});handlers.keydown({...event,key:' '});handlers.keydown({...event,key:'Tab'});
+ assert.equal(events.length,3);
+ for(const fired of events){assert.equal(fired.type,'hass-more-info');assert.equal(fired.detail.entityId,'sensor.flow');assert.equal(fired.bubbles,true);assert.equal(fired.composed,true);}
+ console.log('Header temperatures open native HA history with pointer and keyboard actions; missing readings stay inactive.');
+}
