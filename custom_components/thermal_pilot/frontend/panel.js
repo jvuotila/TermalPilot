@@ -580,11 +580,14 @@ class ThermalPilotPanel extends HTMLElement {
   const garageRooms=[...(this.settings?.rooms||[])].filter(isGarage).sort(compareRoomNames);
   const rooms=[...ordinaryRooms,...garageRooms];
   const zones=[...(this.settings?.heating_zones||[])].sort(compareRoomNames);
+  const chartReading=(item,zone=false)=>{
+   const readings=this.info.data?.chart_temperatures?.[zone?'zones':'rooms'];
+   return readings&&Object.hasOwn(readings,item.id)?readings[item.id]:this.info.data?.[zone?'zones':'rooms']?.[item.id]?.temperature;
+  };
+  const validTemperature=value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value));
   const currentTemperature=(item,zone=false)=>{
    if(history)return '';
-   const readings=this.info.data?.chart_temperatures?.[zone?'zones':'rooms'];
-   const value=readings&&Object.hasOwn(readings,item.id)?readings[item.id]:this.info.data?.[zone?'zones':'rooms']?.[item.id]?.temperature;
-   if(value===null||value===undefined||value===''||!Number.isFinite(Number(value)))return '';
+   const value=chartReading(item,zone);if(!validTemperature(value))return '';
    const temperature=new Intl.NumberFormat(this.settings.language||'en',{minimumFractionDigits:1,maximumFractionDigits:1}).format(Number(value));
    return `${temperature} °C`;
   };
@@ -625,7 +628,10 @@ class ThermalPilotPanel extends HTMLElement {
   const y=price=>top+height-(price-min)/(max-min)*height;
   const temperatureLabel=(item,y,zone=false)=>{
    const value=currentTemperature(item,zone);
-   return value?`<text data-current-temperature="${escapeHTML(item.id)}" data-user-text x="${compact?viewWidth-20:left-12}" y="${y+(compact?14:11)}" text-anchor="end" fill="#526b75" style="font-size:13px;font-variant-numeric:tabular-nums">${escapeHTML(value)}</text>`:'';
+   const target=this.info.data?.chart_temperatures?.targets?.[zone?'zones':'rooms']?.[item.id];
+   const measured=chartReading(item,zone);
+   const color=validTemperature(target)&&validTemperature(measured)?Number(measured)<Number(target)?'#3498DB':Number(measured)>Number(target)?'#EC7063':'#526b75':'#526b75';
+   return value?`<text data-current-temperature="${escapeHTML(item.id)}" data-user-text x="${compact?viewWidth-20:left-12}" y="${y+(compact?14:11)}" text-anchor="end" fill="${color}" style="fill:${color};font-size:13px;font-variant-numeric:tabular-nums">${escapeHTML(value)}</text>`:'';
   };
   const detailAttributes=text=>`data-chart-detail="${escapeHTML(text)}" tabindex="0" role="img" aria-label="${escapeHTML(text)}"`;
   const bars=values.map(v=>`<rect ${detailAttributes(`Electricity price: ${v.price.toFixed(2)} c/kWh\nStart: ${timeLabel(v.time)}\nEnd: ${timeLabel(v.end)}`)} x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"></rect>`).join('');

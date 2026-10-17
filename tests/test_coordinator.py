@@ -999,3 +999,13 @@ class ChartTemperatureTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(coordinator.chart_temperatures()['rooms']['first'])
             self.assertIsNone(coordinator.chart_temperatures()['zones']['zone'])
             self.assertEqual(coordinator.chart_temperatures()['rooms']['garage'],7.5)
+            hass.states.update({'climate.room':State('heat',{'temperature':21}),
+                                'climate.second':State('heat',{'temperature':19}),
+                                'climate.zone':State('cool',{'temperature':24}),
+                                'climate.garage':State('off',{'temperature':7.5})})
+            self.assertEqual(coordinator.chart_temperatures()['targets'],{'rooms':{'first':21,'second':19,'garage':7.5},'zones':{'zone':24}})
+            hass.states['climate.zone']=State('unavailable',{'temperature':24})
+            self.assertIsNone(coordinator.chart_temperatures()['targets']['zones']['zone'])
+            hass.states['climate.room']=State('heat',{})
+            self.assertIsNone(coordinator.chart_temperatures()['targets']['rooms']['first'])
+

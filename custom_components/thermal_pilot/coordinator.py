@@ -146,7 +146,12 @@ class PilotCoordinator(DataUpdateCoordinator):
         for room in zone_rooms(self.settings):
             if room['id']=='zone:'+room['heating_zone_id']:
                 zones[room['heating_zone_id']]=zone_temperature(self.hass,room,self.settings)[0]
-        return {'rooms':rooms,'zones':zones}
+        def target(entity):
+            state=self.hass.states.get(entity) if entity else None
+            return number(state.attributes.get('temperature')) if state and state.state not in ('unknown','unavailable') else None
+        targets={'rooms':{room['id']:target(room.get('thermostat')) for room in self.settings['rooms']},
+                 'zones':{zone['id']:target(zone.get('thermostat')) for zone in self.settings.get('heating_zones',[])}}
+        return {'rooms':rooms,'zones':zones,'targets':targets}
 
     def collection_evidence(self):
         """Use the least-observed configured room for house-wide coverage."""

@@ -189,3 +189,5 @@ Older backups are migrated before restore. Missing optional sensors and new cont
 stay unconfigured or disabled; required planning limits use safe defaults. Room/zone
 identifiers and links are preserved. See [backup compatibility](BACKUP-COMPATIBILITY.md)
 for the migration and regression-test policy.
+
+On the Plan chart, current room and zone temperatures are blue below the actual thermostat target, red above it, and neutral when equal or when no target is available. These are the same blue/red colors as cooling/heating activity. The comparison uses the device target, including during simulation, rather than the proposed heating plan. History does not show current-temperature labels.
