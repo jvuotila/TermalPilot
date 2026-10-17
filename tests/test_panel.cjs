@@ -293,7 +293,7 @@ pricePanel.history=[];assert.match(pricePanel.priceChart(true),/Total electricit
 console.log('History chart uses known past source prices without old observation prices, and labels quarter-hour boundaries.');
 
 pricePanel.history=[{room_id:'r0',time:priceTime/1000-86400,price:99,activity:1,suggested_heat:1}];
-const focusedHistory=pricePanel.priceChart(true);assert.match(focusedHistory,/Selected period: 48 hours/);assert.match(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
+const focusedHistory=pricePanel.priceChart(true);assert.doesNotMatch(focusedHistory,/Selected period: 48 hours/);assert.match(focusedHistory,/99.00 c\/kWh/);assert.doesNotMatch(focusedHistory,/Price color thresholds/);assert.match(focusedHistory,/Now<\/text>/);assert.match(focusedHistory,/Total electricity price/);
 console.log('History chart includes selected past days and omits the numeric color key.');
 
 const statusPanel=new Component();statusPanel.settings={rooms:[],heating_enabled:true,water_entity:'sensor.heating_water'};statusPanel.info={data:{rooms:{},history_info:{started_at:1791590400}}};const statusOrder=statusPanel.overview();const order=['Operation','Outdoor temperature','Heating water temperature','Data collection','Stored history','Last update'];for(let i=1;i<order.length;i++)assert(statusOrder.indexOf('<dt>'+order[i-1])<statusOrder.indexOf('<dt>'+order[i]));assert.doesNotMatch(statusOrder,/toggle-active/);assert.match(statusOrder,/Collection started:/);
@@ -385,7 +385,7 @@ periodPanel.historyHours=24;
 const todayTomorrow=periodPanel.priceChart(true);
 assert.ok(Number(todayTomorrow.match(/data-range-end="(\d+)"/)[1])>=tomorrowEnd.getTime());
 assert.ok(Number(todayTomorrow.match(/data-range-start="(\d+)"/)[1])<=periodNow-24*3600000);
-assert.match(todayTomorrow,/today and tomorrow when prices are published/);
+assert.match(todayTomorrow,/Today and tomorrow are included when prices are published/);
 periodPanel.historyHours=168;
 const extended=periodPanel.priceChart(true);
 assert.ok(Number(extended.match(/data-range-start="(\d+)"/)[1])<=periodNow-168*3600000);
@@ -1217,3 +1217,39 @@ assert.match(finnishNotesPanel.priceChart(false), /fill="url\(#suggested-heating
  currentChart.priceChartWidth=390;assert.match(currentChart.priceChart(false),/>20\.7 °C<\/text>/);
  console.log('Plan labels show localized current room/zone temperatures, hide missing values, and leave History labels unchanged.');
 }
+
+{
+ const historyPanel=new Component();historyPanel.settings={language:'en',house_heat_source:'air_to_water',rooms:[{id:'room',name:'Room'}],heating_zones:[]};historyPanel.chartVisibility=()=>({weather:false,prices:false});
+ historyPanel.info={data:{chart_temperatures:{rooms:{room:20.7}},temperature_history_entities:{rooms:{room:'sensor.actual_room'},zones:{}}}};
+ assert.match(historyPanel.priceChart(false),/data-temperature-history-entity="sensor.actual_room" role="button" tabindex="0"/);
+ assert.match(historyPanel.priceChart(false),/cursor:pointer/);
+ assert.doesNotMatch(historyPanel.priceChart(false),/text-decoration:underline|text-decoration-style:dotted/);
+ assert.doesNotMatch(historyPanel.priceChart(true),/data-temperature-history-entity/);
+ const handlers={},tip={hidden:true},events=[];const viewport={querySelector:()=>tip,addEventListener:(name,fn)=>{handlers[name]=fn;}};
+ context.CustomEvent=class{constructor(type,options){this.type=type;Object.assign(this,options);}};
+ historyPanel.dispatchEvent=event=>events.push(event);historyPanel.bindChartDetails(viewport);
+ let prevented=0;const event={target:{closest:selector=>selector==='[data-temperature-history-entity]'?{dataset:{temperatureHistoryEntity:'sensor.actual_room'}}:null},preventDefault(){prevented++;},stopPropagation(){}};
+ handlers.click(event);handlers.keydown({...event,key:'Enter'});handlers.keydown({...event,key:' '});
+ assert.equal(events.length,3);assert.equal(prevented,3);
+ for(const fired of events){assert.equal(fired.type,'hass-more-info');assert.equal(fired.detail.entityId,'sensor.actual_room');assert.equal(fired.bubbles,true);assert.equal(fired.composed,true);}
+ historyPanel.info.data.temperature_history_entities={rooms:{},zones:{}};assert.doesNotMatch(historyPanel.priceChart(false),/data-temperature-history-entity/);
+ console.log('Plan temperature actions open the native HA sensor dialog by click or keyboard and survive delegated SVG sizing.');
+}
+
+{
+ const days=new Component();days.settings={rooms:[{id:'day-room',name:'Room'}],heating_zones:[],language:'en'};days.priceChartWidth=1200;
+ const start=new Date(2026,9,24,12),end=new Date(2026,9,27,12);
+ days.info={data:{rooms:{},price_chart:[{start:start.toISOString(),end:end.toISOString(),price:10}],weather_forecast:[]}};
+ const output=days.priceChart(false);
+ const marks=[...output.matchAll(/data-day-boundary="(\d+)" x1="([\d.]+)" x2="([\d.]+)"[^>]*pointer-events="none"/g)];
+ assert.equal(marks.length,3);
+ const range=output.match(/data-range-start="(\d+)" data-range-end="(\d+)"/),plot=output.match(/<line x1="([\d.]+)" x2="([\d.]+)"/);
+ for(const mark of marks){const time=Number(mark[1]),date=new Date(time);assert.equal(date.getHours(),0);assert.equal(date.getMinutes(),0);assert.equal(mark[2],mark[3]);const expected=Number(plot[1])+(time-Number(range[1]))/(Number(range[2])-Number(range[1]))*(Number(plot[2])-Number(plot[1]));assert.ok(Math.abs(Number(mark[2])-expected)<.001);}
+ days.chartVisibility=()=>({weather:false,prices:false});assert.match(days.priceChart(false,true),/data-day-boundary/);
+ console.log('Midnight separators share the chart time mapping and remain non-interactive, including charts without prices.');
+}
+
+assert.match(forecastChart.priceChart(false),/<text x="[\d.]+" y="12" text-anchor="middle"[^>]*>Now<\/text>/);
+
+assert.doesNotMatch(forecastChart.priceChart(false),/Today and tomorrow · past thermostat activity/);
+assert.doesNotMatch(forecastChart.priceChart(true),/Selected period:.*recorded activity, plus today and tomorrow/);

@@ -191,3 +191,5 @@ identifiers and links are preserved. See [backup compatibility](BACKUP-COMPATIBI
 for the migration and regression-test policy.
 
 On the Plan chart, current room and zone temperatures are blue below the actual thermostat target, red above it, and neutral when equal or when no target is available. These are the same blue/red colors as cooling/heating activity. The comparison uses the device target, including during simulation, rather than the proposed heating plan. History does not show current-temperature labels.
+
+Click or tap a Plan temperature (or focus it and press Enter/Space) to open Home Assistant’s native sensor information/history dialog. Room and garage values open their configured temperature sensor. Main-room zones open the selected main room sensor. Average/coldest zones use a recorder-visible ThermalPilot zone temperature sensor, whose history starts accumulating after installation of this feature. Recorder exclusions/retention still apply. The standalone offline preview cannot open Home Assistant dialogs.

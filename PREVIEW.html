@@ -707,7 +707,7 @@ class ThermalPilotPanel extends HTMLElement {
    values=[...unique.values()].sort((a,b)=>a.time-b.time);
   }
   const open=this.priceAccordionState?.[history?'history':'overview']!==false;
-  const heading=dashboard?'':`<details class="observation-accordion" id="price-accordion" ${open?'open':''}><summary><h2 style="margin:0">Electricity prices and heating</h2></summary><div style="padding-top:16px">`;
+  const heading=dashboard?'':`<details class="observation-accordion" id="price-accordion" ${open?'open':''}><summary><h2 style="margin:0">Electricity prices and heating</h2></summary><div style="padding-top:0">`;
   if(!history&&visibility.prices&&!values.length&&!zones.length&&!garageRooms.length&&!(this.info.data?.weather_forecast||[]).length)return `<section class="price-card">${heading}<p>${history?'No past electricity prices are available yet. History uses recorded prices and known past intervals from the published price list.':'No usable electricity price list is available.'}</p>${dashboard?'':'</div></details>'}</section>`;
   const start=history?historyStart:Math.floor((published[0]?.time??values[0]?.time??(now-86400000))/900000)*900000;
   const end=history?historyEnd:Math.ceil((published.at(-1)?.end??Math.max(values.at(-1)?.end??(now+86400000),now))/900000)*900000;
@@ -727,8 +727,10 @@ class ThermalPilotPanel extends HTMLElement {
    const value=currentTemperature(item,zone);
    const target=this.info.data?.chart_temperatures?.targets?.[zone?'zones':'rooms']?.[item.id];
    const measured=chartReading(item,zone);
+   const entity=this.info.data?.temperature_history_entities?.[zone?'zones':'rooms']?.[item.id];
+   const historyAction=entity?` data-temperature-history-entity="${escapeHTML(entity)}" role="button" tabindex="0" aria-label="${escapeHTML(this.t('History')+': '+item.name+' '+value)}"`:'';
    const color=validTemperature(target)&&validTemperature(measured)?Number(measured)<Number(target)?'#3498DB':Number(measured)>Number(target)?'#EC7063':'#526b75':'#526b75';
-   return value?`<text data-current-temperature="${escapeHTML(item.id)}" data-user-text x="${compact?viewWidth-20:left-12}" y="${y+(compact?14:11)}" text-anchor="end" fill="${color}" style="fill:${color};font-size:13px;font-variant-numeric:tabular-nums">${escapeHTML(value)}</text>`:'';
+   return value?`<text data-current-temperature="${escapeHTML(item.id)}"${historyAction} data-user-text x="${compact?viewWidth-20:left-12}" y="${y+(compact?14:11)}" text-anchor="end" fill="${color}" style="fill:${color};font-size:13px;font-variant-numeric:tabular-nums;${entity?'cursor:pointer':''}">${escapeHTML(value)}</text>`:'';
   };
   const detailAttributes=text=>`data-chart-detail="${escapeHTML(text)}" tabindex="0" role="img" aria-label="${escapeHTML(text)}"`;
   const bars=values.map(v=>`<rect ${detailAttributes(`Electricity price: ${v.price.toFixed(2)} c/kWh\nStart: ${timeLabel(v.time)}\nEnd: ${timeLabel(v.end)}`)} x="${x(v.time)}" y="${Math.min(y(v.price),y(0))}" width="${Math.max(1,(v.end-v.time)/span*width-.5)}" height="${Math.max(1,Math.abs(y(0)-y(v.price)))}" rx="1" fill="${priceColor(v.price)}"></rect>`).join('');
@@ -843,7 +845,12 @@ class ThermalPilotPanel extends HTMLElement {
   }).join('');
   const weather=this.weatherTimeline({rows:weatherRows,start,end,left,width,now,detailAttributes});
   chartHeight=garageRooms.length?garageStart+roomHeights.slice(ordinaryRooms.length).reduce((sum,height)=>sum+height,0)+26:zones.length?zoneY+18:roomTop+ordinaryHeight+26;
-  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}${dashboard?'':`<p style="margin:0;color:#526b75">${history?`Selected period: ${this.historyHours} hours · recorded activity, plus today and tomorrow when prices are published`:'Today and tomorrow · past thermostat activity and future heating suggestions'}</p>`}<div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px">${visibility.prices?`<span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#88ad91,#c3b577,#cc936c,#c9796b,#ac605c)"></b> Total electricity price (c/kWh)</span>`:''}<span data-heating-legend><b style="color:#EC7063">■</b> ${escapeHTML(this.t('Heating'))}</span>${zones.length||rooms.some(room=>isGarage(room)||room.heat_control==='air_to_air'||this.info.data?.rooms?.[room.id]?.air_control||this.settings.house_heat_source==='air_to_air')?`<span data-cooling-legend><b style="color:#3498DB">■</b> ${escapeHTML(this.t("Cooling"))}</span>`:''}<span data-suggested-heating-legend><b style="display:inline-block;width:24px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#F39C12 0 4px,#f6bf65 4px 6px)"></b> Suggested heating window</span></div>${history&&!values.length?'<p>No electricity prices are available for this period. Recorded thermostat activity is shown below.</p>':''}<div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg data-range-start="${start}" data-range-end="${end}" viewBox="0 0 ${viewWidth} ${chartHeight+weather.height}" role="img" aria-label="Electricity prices with heating timelines for rooms and zones" style="width:100%;min-width:0;height:${chartHeight+weather.height}px;max-height:none;display:block"><defs><pattern id="suggested-heating-stripes" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><rect width="8" height="8" fill="#F39C12"/><rect width="2" height="8" fill="#f6bf65"/></pattern></defs>${weather.svg}<g transform="translate(0 ${weather.height})">${visibility.prices?`<text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}`:labelRow(25)}${ordinaryRooms.length?`<text x="20" y="${roomTop-20}" fill="#253f49" style="font-size:18px;font-weight:600">${escapeHTML(this.t('Rooms'))}</text>`:''}${lanes.slice(0,ordinaryRooms.length).join('')}${zoneHeading}${zoneLanes}${garageHeading}${lanes.slice(ordinaryRooms.length).join('')}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)+5}" y="12" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</g></svg><div class="chart-tooltip" role="tooltip" hidden></div></div>${dashboard?'':`<details class="retention-help chart-help"><summary>${escapeHTML(this.t('About this chart'))}</summary><small data-chart-notes style="display:block;margin-top:10px;color:#526b75">${["All room timelines share the price chart’s time axis.",...(zones.length?["Zone rows show recorded heating and cooling only; off and standby periods stay empty. Plan adds suggested heating only for tariff-optimized zones."]:[]),...(history?["The selected period controls past history. Today and tomorrow are included when prices are published. Recorded activity is shown before now; future suggestions follow the current plan. Price gaps stay empty."]:[]),"Times align to 15-minute boundaries; wider views show fewer labels. Hover, focus or tap a price bar or heating period for details."].map(note=>escapeHTML(this.t(note))).join(' ')}</small></details>`}${dashboard?'':'</div></details>'}</section>`;
+  const dayBoundaries=[];
+  const nextDay=new Date(start);nextDay.setHours(0,0,0,0);nextDay.setDate(nextDay.getDate()+1);
+  // Calendar-day stepping preserves local midnight across 23/25-hour DST days.
+  while(nextDay.getTime()<end){dayBoundaries.push(nextDay.getTime());nextDay.setDate(nextDay.getDate()+1);}
+  const dayLines=dayBoundaries.map(time=>`<line data-day-boundary="${time}" x1="${x(time)}" x2="${x(time)}" y1="${weather.height?8:top}" y2="${weather.height+chartHeight-26}" stroke="#829aa3" stroke-opacity="0.55" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`).join('');
+  return `<section class="price-card" style="background:#edf4fa;margin-bottom:24px">${heading}<div style="display:flex;flex-wrap:wrap;gap:18px;margin:16px 0;font-size:13px">${visibility.prices?`<span><b style="display:inline-block;width:24px;height:10px;border-radius:3px;background:linear-gradient(to right,#88ad91,#c3b577,#cc936c,#c9796b,#ac605c)"></b> Total electricity price (c/kWh)</span>`:''}<span data-heating-legend><b style="color:#EC7063">■</b> ${escapeHTML(this.t('Heating'))}</span>${zones.length||rooms.some(room=>isGarage(room)||room.heat_control==='air_to_air'||this.info.data?.rooms?.[room.id]?.air_control||this.settings.house_heat_source==='air_to_air')?`<span data-cooling-legend><b style="color:#3498DB">■</b> ${escapeHTML(this.t("Cooling"))}</span>`:''}<span data-suggested-heating-legend><b style="display:inline-block;width:24px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#F39C12 0 4px,#f6bf65 4px 6px)"></b> Suggested heating window</span></div>${history&&!values.length?'<p>No electricity prices are available for this period. Recorded thermostat activity is shown below.</p>':''}<div class="price-chart-viewport" style="overflow-x:auto;background:#ffffffb3;border-radius:10px;padding:12px"><svg data-range-start="${start}" data-range-end="${end}" viewBox="0 0 ${viewWidth} ${chartHeight+weather.height}" role="img" aria-label="Electricity prices with heating timelines for rooms and zones" style="width:100%;min-width:0;height:${chartHeight+weather.height}px;max-height:none;display:block"><defs><pattern id="suggested-heating-stripes" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><rect width="8" height="8" fill="#F39C12"/><rect width="2" height="8" fill="#f6bf65"/></pattern></defs>${weather.svg}<g transform="translate(0 ${weather.height})">${visibility.prices?`<text x="20" y="30" fill="#526b75" font-size="12">c/kWh</text>${ticks}${bars}${labelRow(157)}`:labelRow(25)}${ordinaryRooms.length?`<text x="20" y="${roomTop-20}" fill="#253f49" style="font-size:18px;font-weight:600">${escapeHTML(this.t('Rooms'))}</text>`:''}${lanes.slice(0,ordinaryRooms.length).join('')}${zoneHeading}${zoneLanes}${garageHeading}${lanes.slice(ordinaryRooms.length).join('')}${now>start&&now<end?`<line x1="${x(now)}" x2="${x(now)}" y1="${top}" y2="${chartHeight-26}" stroke="#526b75" stroke-dasharray="4 4" stroke-width="1"/><text x="${x(now)}" y="12" text-anchor="middle" fill="#526b75" font-size="11">Now</text>`:''}${labelRow(chartHeight-8)}</g>${dayLines}</svg><div class="chart-tooltip" role="tooltip" hidden></div></div>${dashboard?'':`<details class="retention-help chart-help"><summary>${escapeHTML(this.t('About this chart'))}</summary><small data-chart-notes style="display:block;margin-top:10px;color:#526b75">${["All room timelines share the price chart’s time axis.",...(zones.length?["Zone rows show recorded heating and cooling only; off and standby periods stay empty. Plan adds suggested heating only for tariff-optimized zones."]:[]),...(history?["The selected period controls past history. Today and tomorrow are included when prices are published. Recorded activity is shown before now; future suggestions follow the current plan. Price gaps stay empty."]:[]),"Times align to 15-minute boundaries; wider views show fewer labels. Hover, focus or tap a price bar or heating period for details."].map(note=>escapeHTML(this.t(note))).join(' ')}</small></details>`}${dashboard?'':'</div></details>'}</section>`;
   }
   mountPriceChartSizing(){
     this.priceResizeObserver?.disconnect();
@@ -885,13 +892,21 @@ class ThermalPilotPanel extends HTMLElement {
       box.style.left=Math.max(8,Math.min(x+12,window.innerWidth-bounds.width-8))+'px';
       box.style.top=Math.max(8,Math.min(y+16,window.innerHeight-bounds.height-8))+'px';
     };
+    const openTemperature=event=>{
+      const mark=event.target.closest?.('[data-temperature-history-entity]');
+      const entity=mark?.dataset?.temperatureHistoryEntity;
+      if(!entity)return false;
+      event.preventDefault();event.stopPropagation();hide();
+      this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:entity},bubbles:true,composed:true}));
+      return true;
+    };
     viewport.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')show(event);});
     viewport.addEventListener('pointerleave',hide);
     viewport.addEventListener('focusin',show);
     viewport.addEventListener('focusout',hide);
-    viewport.addEventListener('click',event=>{const box=tooltip(),mark=event.target.closest?.('[data-chart-detail]');if(box&&!box.hidden&&mark&&box.textContent===mark.dataset.chartDetail)hide();else show(event);});
+    viewport.addEventListener('click',event=>{if(openTemperature(event))return;const box=tooltip(),mark=event.target.closest?.('[data-chart-detail]');if(box&&!box.hidden&&mark&&box.textContent===mark.dataset.chartDetail)hide();else show(event);});
     viewport.addEventListener('scroll',hide);
-    viewport.addEventListener('keydown',event=>{if(event.key==='Escape')hide();});
+    viewport.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){openTemperature(event);}else if(event.key==='Escape')hide();});
   }
   statusSparkline(key,color){
     const values=new Map();
@@ -1570,26 +1585,45 @@ demo.data.weather_forecast=Array.from({length:48},(_,hour)=>({datetime:new Date(
 demo.data.warnings=['Offline preview: zone activity, future heating windows and room heat-retention ratings are illustrative examples.'];
 // BEGIN richer preview activity
 // Offline examples only: stagger room demand and include visible cooling periods.
+// Illustrative daily price shape: cheap nights, morning demand and a strong evening peak.
+const previewPrice=time=>{const date=new Date(time),hour=date.getHours()+date.getMinutes()/60;return Math.round((6+4*Math.sin(hour*1.7)**2+23*Math.exp(-(((hour-8)/2.2)**2))+59*Math.exp(-(((hour-18.5)/2.4)**2)))*100)/100;};
+for(const slot of demo.data.price_chart||[])slot.price=previewPrice(new Date(slot.start).getTime());
+
+const previewHour=time=>{const date=new Date(time);return date.getHours()+date.getMinutes()/60;};
+const previewWindows=index=>{const quarters=16+2*(index%7),night=Math.round(quarters*.6),nightStart=.25+(index%3)*.25,dayStart=11.5+(index%2)*.25;return [[nightStart,nightStart+night/4],[dayStart,dayStart+(quarters-night)/4]];};
+const previewWindowActive=(time,index,lag=0)=>previewWindows(index).some(([start,end])=>previewHour(time)>=start+lag&&previewHour(time)<end+lag)&&previewPrice(time)<15;
 const previewRoomIds=new Set(demo.settings.rooms.map(room=>room.id));
 for(let i=previewHistory.length-1;i>=0;i--)if(previewRoomIds.has(previewHistory[i].room_id)&&!previewHistory[i].zone_id)previewHistory.splice(i,1);
 for(const [index,room] of demo.settings.rooms.entries()){
  for(let step=0;step<=576;step++){
   const time=previewNow/1000-(576-step)*300;
-  const phase=((step+index*7)%252)/12;
-  const heating=phase<1.5||(phase>=3.25&&phase<4.25);
-  previewHistory.push({room_id:room.id,time,activity:heating?1:0,suggested_heat:phase<1.25||(phase>=3&&phase<4)?1:0,temperature:room.is_garage?7:20.2+Math.sin(step/24+index)*.5,outdoor:11.8,water:33,pump_mode:heating?'heat':null,pump_basis:'activity',pump_entity:room.thermostat});
+  const suggested=previewWindowActive(time*1000,index);
+  const heating=previewWindowActive(time*1000,index,.25);
+  previewHistory.push({room_id:room.id,time,activity:heating?1:0,suggested_heat:suggested?1:0,temperature:room.is_garage?7:20.2+Math.sin(step/24+index)*.5,outdoor:11.8,water:33,pump_mode:heating?'heat':null,pump_basis:'activity',pump_entity:room.thermostat});
  }
  const plan=demo.data.rooms[room.id]?.plan;
- if(plan){const at=hours=>new Date(previewNow+hours*3600000).toISOString(),offset=(index%4)*.5;
-  plan.commands=[{time:at(0),action:'restore'},...[[6+offset,8.5+offset],[23+offset,25+offset]].flatMap(([start,end])=>[{time:at(start),action:'raise'},{time:at(end),action:'restore'}])];
+ if(plan){
+  const rangeEnd=Math.max(...demo.data.price_chart.map(slot=>new Date(slot.end).getTime()));
+  const commands=[{time:new Date(previewNow).toISOString(),action:'restore'}];
+  for(let day=0;day<4;day++)for(const [start,end] of previewWindows(index)){
+   const begin=new Date(previewNow);begin.setHours(0,0,0,0);begin.setDate(begin.getDate()+day);begin.setMinutes(start*60);
+   const finish=new Date(begin);finish.setMinutes(finish.getMinutes()+(end-start)*60);
+   const from=Math.max(previewNow,begin.getTime()),until=Math.min(rangeEnd,finish.getTime());
+   if(until<=from||from>=rangeEnd)continue;
+   if(from===previewNow)commands.length=0;
+   commands.push({time:new Date(from).toISOString(),action:'raise'},{time:new Date(until).toISOString(),action:'restore'});
+  }
+  plan.commands=commands;
  }
 }
 for(const row of previewHistory.filter(row=>row.zone_id)){
  const index=demo.settings.heating_zones.findIndex(zone=>zone.id===row.zone_id);
- const hoursAgo=(previewNow/1000-row.time)/3600,phase=(hoursAgo+index*1.25)%24;
- row.zone_mode=phase<2.25||(phase>=4&&phase<5.5)?(index===1?'cool':'heat'):null;
+ const hour=previewHour(row.time*1000),cheap=previewPrice(row.time*1000)<15;
+ const active=index===0?previewWindowActive(row.time*1000,0,.25):hour>=12&&hour<13.5&&cheap;
+ row.zone_mode=active?(index===1?'cool':'heat'):null;
 }
 for(const zone of demo.settings.heating_zones){const source=demo.data.rooms[zone.main_room_id]?.plan;if(demo.data.zones[zone.id]?.plan&&source)demo.data.zones[zone.id].plan=structuredClone(source);}
+for(const row of previewHistory)row.price=previewPrice(row.time*1000);
 previewHistory.sort((a,b)=>a.time-b.time);
 demo.data.chart_temperatures={rooms:Object.fromEntries(demo.settings.rooms.map((room,index)=>[room.id,room.is_garage?7:[20.7,19.4,20.1,20.7,19.8,20,20.4,19.6,21.1,20.2][index%10]])),zones:{}};
 for(const zone of demo.settings.heating_zones){
@@ -1598,7 +1632,18 @@ for(const zone of demo.settings.heating_zones){
  demo.data.chart_temperatures.zones[zone.id]=!values.length||values.some(value=>value==null)?null:zone.temperature_policy==='average'?values.reduce((a,b)=>a+b,0)/values.length:zone.temperature_policy==='coldest'?Math.min(...values):main??null;
 }
 demo.data.chart_temperatures.targets={rooms:Object.fromEntries(demo.settings.rooms.map(room=>[room.id,demo.data.rooms[room.id]?.actual_setpoint??room.baseline??null])),zones:Object.fromEntries(demo.settings.heating_zones.map(zone=>[zone.id,zone.source_type==='fireplace'?null:zone.climate_mode==='cool'?zone.cooling_target:demo.settings.air_heat_target]))};
+demo.data.temperature_history_entities={rooms:Object.fromEntries(demo.settings.rooms.map(room=>[room.id,room.temperature_entity])),zones:Object.fromEntries(demo.settings.heating_zones.filter(zone=>zone.source_type!=='fireplace').map(zone=>[zone.id,zone.temperature_policy&&zone.temperature_policy!=='main'?'sensor.preview_zone_'+zone.id:demo.settings.rooms.find(room=>room.id===zone.main_room_id)?.temperature_entity]))};
 // END richer preview activity
+
+
+
+
+
+
+
+
+
+
 
 
 

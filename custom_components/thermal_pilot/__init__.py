@@ -80,6 +80,23 @@ def get_coordinator(hass, connection, msg):
     return coordinator
 
 
+def chart_history_entities(hass, coordinator):
+    """Only entity references needed for the native history action."""
+    registry=er.async_get(hass)
+    settings=coordinator.settings
+    rooms={room['id']:room.get('temperature_entity','') for room in settings['rooms']}
+    zones={}
+    for zone in settings.get('heating_zones',[]):
+        if zone.get('source_type','air_to_air')!='air_to_air':continue
+        if zone.get('temperature_policy','main')=='main':
+            main=next((room for room in settings['rooms'] if room['id']==zone.get('main_room_id') and room.get('heating_zone_id')==zone['id'] and not room.get('is_garage')),None)
+            entity=main.get('temperature_entity') if main else None
+        else:
+            entity=registry.async_get_entity_id('sensor',DOMAIN,f'{coordinator.entry.entry_id}_zone_{zone["id"]}_current_temperature')
+        if entity:zones[zone['id']]=entity
+    return {'rooms':rooms,'zones':zones}
+
+
 @websocket_api.websocket_command({vol.Required('type'):'thermal_pilot/get', vol.Required('entry_id'):str})
 @websocket_api.require_admin
 @callback
@@ -90,7 +107,7 @@ def ws_get(hass, connection, msg):
             'suggested':registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_heat'),
             'actual':room['activity_entity'] or registry.async_get_entity_id('binary_sensor',DOMAIN,f'{c.entry.entry_id}_{room["id"]}_activity'),
         } for room in c.settings['rooms']}
-        connection.send_result(msg['id'], {'settings':c.settings, 'data':{**(c.data or {}),'chart_temperatures':c.chart_temperatures()}, 'room_entities':room_entities,
+        connection.send_result(msg['id'], {'settings':c.settings, 'data':{**(c.data or {}),'chart_temperatures':c.chart_temperatures(),'temperature_history_entities':chart_history_entities(hass,c)}, 'room_entities':room_entities,
             'source_fields':SOURCE_FIELDS, 'room_fields':ROOM_FIELDS, 'room_defaults':ROOM_DEFAULTS, 'zone_defaults':ZONE_DEFAULTS, 'zone_fields':ZONE_FIELDS})
 
 
@@ -152,7 +169,7 @@ async def ws_plan_chart(hass, connection, msg):
         'settings':{'language':settings.get('language','en'),'house_heat_source':settings.get('house_heat_source'),
                     'rooms':[subset(room,room_keys) for room in settings.get('rooms',[])],
                     'heating_zones':[subset(zone,zone_keys) for zone in settings.get('heating_zones',[])]},
-        'data':{'rooms':chart_rooms,'zones':chart_zones,'chart_temperatures':coordinator.chart_temperatures(),'weather_forecast':[subset(row,('datetime','temperature','condition')) for row in data.get('weather_forecast',[])],'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
+        'data':{'rooms':chart_rooms,'zones':chart_zones,'chart_temperatures':coordinator.chart_temperatures(),'temperature_history_entities':chart_history_entities(hass,coordinator),'weather_forecast':[subset(row,('datetime','temperature','condition')) for row in data.get('weather_forecast',[])],'price_chart':[subset(slot,('start','end','price')) for slot in data.get('price_chart',[])]},
         'history':[subset(row,('room_id','time','activity','suggested_heat','pump_mode','pump_basis','pump_entity',
                                'zone_id','zone_mode','zone_basis','zone_entity')) for row in rows]})
 

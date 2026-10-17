@@ -70,7 +70,7 @@ class PlanChartEndpointTests(unittest.IsolatedAsyncioTestCase):
         from datetime import datetime, timezone
         tree=ast.parse(SOURCE.read_text());handler=next(item for item in tree.body if isinstance(item,ast.AsyncFunctionDef) and item.name=='ws_plan_chart')
         self.assertFalse(any(isinstance(item,ast.Attribute) and item.attr=='require_admin' for item in handler.decorator_list))
-        handler.decorator_list=[];namespace={'PilotCoordinator':Coordinator,'DOMAIN':'thermal_pilot','dt_util':types.SimpleNamespace(utcnow=lambda:datetime(2026,10,15,tzinfo=timezone.utc))}
+        handler.decorator_list=[];namespace={'PilotCoordinator':Coordinator,'DOMAIN':'thermal_pilot','chart_history_entities':lambda hass,c:{'rooms':{'room':'sensor.room'},'zones':{'zone':'sensor.zone'}},'dt_util':types.SimpleNamespace(utcnow=lambda:datetime(2026,10,15,tzinfo=timezone.utc))}
         exec(compile(ast.Module(body=[handler],type_ignores=[]),str(SOURCE),'exec'),namespace);self.handler=namespace['ws_plan_chart'];self.connection=Connection();self.coordinator=Coordinator()
         self.coordinator.settings.update(house_heat_source='air_to_water',heating_zones=[{'id':'zone','name':'Zone','thermostat':'climate.secret','heating_strategy':'tariff'}])
         self.coordinator.data['zones']={'zone':{'plan':{'commands':[{'time':'zone-later','action':'raise','setpoint':24}],'slots':[{'end':'zone-end'}]}}}
